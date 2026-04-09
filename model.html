@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Profile | Morgan & Preston Models Bangkok</title>
+  <meta name="description" content="Model profile at Morgan & Preston Models Bangkok.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/model.css">
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="site-header">
+    <a class="site-logo" href="index.html">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
+           alt="Morgan & Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span class="site-logo-text" style="display:none">MP Models BKK</span>
+    </a>
+
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html">About Us</a>
+      <div class="nav-dropdown">
+        <a href="index.html" class="active">Models</a>
+        <div class="nav-dropdown-menu">
+          <a href="index.html?availability=Available+Now">Available Models</a>
+          <a href="index.html">Direct Booking</a>
+        </div>
+      </div>
+      <a href="work.html">Our Work</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <!-- ── Profile ─────────────────────────────────────────── -->
+  <main class="profile-main" id="profile-main">
+    <div class="profile-loading">Loading…</div>
+  </main>
+
+  <!-- ── Other Models ────────────────────────────────────── -->
+  <section class="other-models" id="other-models" style="display:none">
+    <div class="other-models-inner">
+      <h2 class="other-models-title">Check out our other Models</h2>
+      <div class="other-models-grid" id="other-models-grid"></div>
+      <div style="text-align:center;margin-top:32px">
+        <a href="index.html" class="btn-view-all">View All Models</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-heading">Morgan &amp; Preston Models</div>
+        <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
+      </div>
+      <div>
+        <div class="footer-heading">Information</div>
+        <ul class="footer-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="index.html">Models</a></li>
+          <li><a href="work.html">Work</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-contact">
+        <div class="footer-heading">Contact Us</div>
+        <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
+        <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
+        <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
+        <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
+      <span>Bangkok, Thailand</span>
+    </div>
+  </footer>
+
+  <button id="scroll-top" aria-label="Scroll to top">↑</button>
+
+  <script src="js/models-data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/model-profile.js"></script>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Models | Morgan & Preston Models Bangkok</title>
+  <meta name="description" content="Browse all models at Morgan & Preston Models – an international modeling and talent agency in Bangkok, Thailand.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="site-header">
+    <a class="site-logo" href="index.html">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
+           alt="Morgan & Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span class="site-logo-text" style="display:none">MP Models BKK</span>
+    </a>
+
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html">About Us</a>
+      <div class="nav-dropdown">
+        <a href="index.html" class="active">Models</a>
+        <div class="nav-dropdown-menu">
+          <a href="index.html?availability=Available+Now">Available Models</a>
+          <a href="index.html">Direct Booking</a>
+        </div>
+      </div>
+      <a href="work.html">Our Work</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <!-- ── Page Banner ─────────────────────────────────────── -->
+  <div class="page-banner">
+    <h1>All Our Models</h1>
+  </div>
+
+  <!-- ── Main content ────────────────────────────────────── -->
+  <main class="models-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <button class="sidebar-toggle-btn" id="sidebar-toggle">
+        Search Filters
+        <span class="toggle-icon">▴</span>
+      </button>
+
+      <div id="sidebar-inner">
+        <div class="sidebar-title">Search Filters</div>
+
+        <!-- Gender -->
+        <div class="filter-group">
+          <div class="filter-group-title">Gender</div>
+          <div class="filter-options" id="filter-gender"></div>
+        </div>
+
+        <!-- Details -->
+        <div class="filter-group">
+          <div class="filter-group-title">Details</div>
+          <div class="filter-options" id="filter-details"></div>
+        </div>
+
+        <!-- Availability -->
+        <div class="filter-group">
+          <div class="filter-group-title">Availability</div>
+          <div class="filter-options" id="filter-availability"></div>
+        </div>
+
+        <!-- Hair Colors -->
+        <div class="filter-group collapsed">
+          <div class="filter-group-title">Hair Color</div>
+          <div class="filter-options" id="filter-hair"></div>
+        </div>
+
+        <!-- Locations -->
+        <div class="filter-group collapsed">
+          <div class="filter-group-title">Location</div>
+          <div class="filter-options" id="filter-location"></div>
+        </div>
+
+        <!-- Height -->
+        <div class="filter-group">
+          <div class="filter-group-title">Height (cm)</div>
+          <div class="filter-options">
+            <div class="height-range">
+              <input type="number" id="height-min" placeholder="Min" min="140" max="220">
+              <span>to</span>
+              <input type="number" id="height-max" placeholder="Max" min="140" max="220">
+            </div>
+          </div>
+        </div>
+
+        <!-- Eye Colors -->
+        <div class="filter-group collapsed">
+          <div class="filter-group-title">Eye Color</div>
+          <div class="filter-options" id="filter-eye"></div>
+        </div>
+
+        <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
+      </div>
+    </aside>
+
+    <!-- Model Grid -->
+    <section class="models-grid-wrap">
+      <div class="models-grid-header">
+        <p class="models-count" id="models-count"></p>
+      </div>
+      <div class="models-grid" id="models-grid"></div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-heading">Morgan &amp; Preston Models</div>
+        <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
+      </div>
+
+      <div>
+        <div class="footer-heading">Information</div>
+        <ul class="footer-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="index.html">Models</a></li>
+          <li><a href="work.html">Work</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-contact">
+        <div class="footer-heading">Contact Us</div>
+        <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
+        <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
+        <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
+        <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
+        <p style="margin-top:12px">
+          <a href="https://instagram.com/mpmodelsbkk" target="_blank" rel="noopener">Instagram: @mpmodelsbkk</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
+      <span>Bangkok, Thailand</span>
+    </div>
+  </footer>
+
+  <button id="scroll-top" aria-label="Scroll to top">↑</button>
+
+  <script src="js/models-data.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
