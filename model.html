@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Model Profile | Morgan & Preston Models Bangkok</title>
   <meta name="description" content="Model profile at Morgan & Preston Models Bangkok.">
+  <meta property="og:title" content="Model Profile | Morgan &amp; Preston Models Bangkok">
+  <meta property="og:description" content="International model at Morgan &amp; Preston Models Bangkok — available for commercials, fashion, advertising and filming.">
+  <meta property="og:image" content="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png" id="og-image">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -30,8 +35,8 @@
       <div class="nav-dropdown">
         <a href="index.html" class="active">Models</a>
         <div class="nav-dropdown-menu">
-          <a href="index.html?availability=Available+Now">Available Models</a>
-          <a href="index.html">Direct Booking</a>
+          <a href="available.html">Available Models</a>
+          <a href="index.html">Browse All Models</a>
         </div>
       </div>
       <a href="work.html">Our Work</a>
@@ -85,7 +90,28 @@
     </div>
   </footer>
 
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true">
+    <button class="lightbox-close" id="lb-close" aria-label="Close">&#10005;</button>
+    <button class="lightbox-prev" id="lb-prev" aria-label="Previous">&#8249;</button>
+    <img class="lightbox-img" id="lb-img" src="" alt="">
+    <button class="lightbox-next" id="lb-next" aria-label="Next">&#8250;</button>
+  </div>
+
+  <!-- Comp Card Modal -->
+  <div class="compcard-modal" id="compcard-modal">
+    <div class="compcard-inner" id="compcard-inner"></div>
+  </div>
+
   <button id="scroll-top" aria-label="Scroll to top">↑</button>
+
+  <!-- Float contact buttons -->
+  <div class="float-contact">
+    <a href="https://line.me/R/ti/p/@mpmodelsbkk" target="_blank" rel="noopener"
+       class="float-btn float-btn--line" title="Chat on LINE">LINE</a>
+    <a href="https://wa.me/66624455897" target="_blank" rel="noopener"
+       class="float-btn float-btn--wa" title="Chat on WhatsApp">WA</a>
+  </div>
 
   <script src="js/models-data.js"></script>
   <script src="js/main.js"></script>

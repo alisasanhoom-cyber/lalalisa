@@ -8,11 +8,13 @@ const state = {
   eyeColor: new Set(),
   heightMin: 0,
   heightMax: 999,
+  searchTerm: '',
+  sortOrder: 'default',
 };
 
 /* ── Render grid ────────────────────────────────────────── */
 function filterModels() {
-  return models.filter(m => {
+  const filtered = models.filter(m => {
     if (state.gender.size && !state.gender.has(m.gender)) return false;
     if (state.details.size && !m.details.some(d => state.details.has(d))) return false;
     if (state.availability.size && !state.availability.has(m.availability)) return false;
@@ -20,7 +22,14 @@ function filterModels() {
     if (state.hairColor.size && !state.hairColor.has(m.hairColor)) return false;
     if (state.eyeColor.size && !state.eyeColor.has(m.eyeColor)) return false;
     if (m.height < state.heightMin || m.height > state.heightMax) return false;
+    if (state.searchTerm && !m.name.toLowerCase().includes(state.searchTerm)) return false;
     return true;
+  });
+  return filtered.sort((a, b) => {
+    if (state.sortOrder === 'available') return (a.availability === 'Available Now' ? -1 : 1);
+    if (state.sortOrder === 'height-asc') return a.height - b.height;
+    if (state.sortOrder === 'height-desc') return b.height - a.height;
+    return 0;
   });
 }
 
@@ -175,17 +184,58 @@ function initMobileNav() {
   toggle.addEventListener('click', () => nav.classList.toggle('open'));
 }
 
+/* ── Search + Sort ──────────────────────────────────────── */
+function initSearchSort() {
+  const searchInput = document.getElementById('model-search');
+  const sortSelect = document.getElementById('model-sort');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      state.searchTerm = searchInput.value.trim().toLowerCase();
+      renderGrid();
+    });
+  }
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      state.sortOrder = sortSelect.value;
+      renderGrid();
+    });
+  }
+}
+
+/* ── Skeleton loader ────────────────────────────────────── */
+function showSkeleton(count) {
+  const grid = document.getElementById('models-grid');
+  if (!grid) return;
+  grid.innerHTML = Array(count || 12).fill(
+    '<div class="model-card skeleton">' +
+    '<div class="model-card-img skeleton-img"></div>' +
+    '<div class="model-card-footer">' +
+    '<div class="skeleton-line skeleton-line--name"></div>' +
+    '<div class="skeleton-line skeleton-line--meta"></div>' +
+    '</div></div>'
+  ).join('');
+}
+
 /* ── Reset ──────────────────────────────────────────────── */
 function resetFilters() {
   ['gender','details','availability','location','hairColor','eyeColor'].forEach(k => state[k].clear());
   state.heightMin = 0;
   state.heightMax = 999;
+  state.searchTerm = '';
+  state.sortOrder = 'default';
 
   document.querySelectorAll('.filter-option input[type="checkbox"]').forEach(cb => cb.checked = false);
   const minInput = document.getElementById('height-min');
   const maxInput = document.getElementById('height-max');
   if (minInput) minInput.value = '';
   if (maxInput) maxInput.value = '';
+  const searchInput = document.getElementById('model-search');
+  if (searchInput) searchInput.value = '';
+  const sortSelect = document.getElementById('model-sort');
+  if (sortSelect) sortSelect.value = 'default';
+
+  // Re-apply preset if on available page
+  if (window._presetAvailability) state.availability.add(window._presetAvailability);
 
   renderGrid();
 }
@@ -202,11 +252,16 @@ function initScrollTop() {
 
 /* ── Init ───────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply preset availability filter (e.g. on available.html)
+  if (window._presetAvailability) state.availability.add(window._presetAvailability);
+
   buildFilters();
   initHeightFilter();
   initCollapsible();
   initSidebarToggle();
   initMobileNav();
   initScrollTop();
-  renderGrid();
+  initSearchSort();
+  showSkeleton(12);
+  requestAnimationFrame(renderGrid);
 });

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Models | Morgan & Preston Models Bangkok</title>
-  <meta name="description" content="Browse all models at Morgan & Preston Models – an international modeling and talent agency in Bangkok, Thailand.">
-  <meta property="og:title" content="Models | Morgan &amp; Preston Models Bangkok">
-  <meta property="og:description" content="Browse 52+ international models available for commercial, fashion, and advertising work in Bangkok.">
+  <title>Available Models | Morgan &amp; Preston Models Bangkok</title>
+  <meta name="description" content="Browse models available now in Bangkok for immediate booking — commercials, fashion shoots, advertising and filming.">
+  <meta property="og:title" content="Available Models | Morgan &amp; Preston Models Bangkok">
+  <meta property="og:description" content="Models available now in Bangkok for immediate booking.">
   <meta property="og:image" content="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/png" href="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
@@ -21,14 +21,12 @@
   <header class="site-header">
     <a class="site-logo" href="index.html">
       <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
-           alt="Morgan & Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+           alt="Morgan &amp; Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
       <span class="site-logo-text" style="display:none">MP Models BKK</span>
     </a>
-
     <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
-
     <nav class="site-nav" id="site-nav">
       <a href="about.html">About Us</a>
       <div class="nav-dropdown">
@@ -45,7 +43,8 @@
 
   <!-- ── Page Banner ─────────────────────────────────────── -->
   <div class="page-banner">
-    <h1>All Our Models</h1>
+    <h1><span class="available-dot"></span> Available Models</h1>
+    <p style="color:rgba(255,255,255,.7);font-size:13px;margin-top:8px;letter-spacing:.04em">Updated regularly — contact us for same-day availability</p>
   </div>
 
   <!-- ── Main content ────────────────────────────────────── -->
@@ -61,37 +60,26 @@
       <div id="sidebar-inner">
         <div class="sidebar-title">Search Filters</div>
 
-        <!-- Gender -->
         <div class="filter-group">
           <div class="filter-group-title">Gender</div>
           <div class="filter-options" id="filter-gender"></div>
         </div>
 
-        <!-- Details -->
         <div class="filter-group">
           <div class="filter-group-title">Details</div>
           <div class="filter-options" id="filter-details"></div>
         </div>
 
-        <!-- Availability -->
-        <div class="filter-group">
-          <div class="filter-group-title">Availability</div>
-          <div class="filter-options" id="filter-availability"></div>
-        </div>
-
-        <!-- Hair Colors -->
         <div class="filter-group collapsed">
           <div class="filter-group-title">Hair Color</div>
           <div class="filter-options" id="filter-hair"></div>
         </div>
 
-        <!-- Locations -->
         <div class="filter-group collapsed">
           <div class="filter-group-title">Location</div>
           <div class="filter-options" id="filter-location"></div>
         </div>
 
-        <!-- Height -->
         <div class="filter-group">
           <div class="filter-group-title">Height (cm)</div>
           <div class="filter-options">
@@ -103,7 +91,6 @@
           </div>
         </div>
 
-        <!-- Eye Colors -->
         <div class="filter-group collapsed">
           <div class="filter-group-title">Eye Color</div>
           <div class="filter-options" id="filter-eye"></div>
@@ -123,7 +110,6 @@
           </div>
           <select id="model-sort" class="model-sort-select">
             <option value="default">Default</option>
-            <option value="available">Available Now First</option>
             <option value="height-asc">Height ↑</option>
             <option value="height-desc">Height ↓</option>
           </select>
@@ -142,7 +128,6 @@
         <div class="footer-heading">Morgan &amp; Preston Models</div>
         <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
       </div>
-
       <div>
         <div class="footer-heading">Information</div>
         <ul class="footer-links">
@@ -152,19 +137,14 @@
           <li><a href="contact.html">Contact</a></li>
         </ul>
       </div>
-
       <div class="footer-contact">
         <div class="footer-heading">Contact Us</div>
         <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
         <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
         <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
         <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
-        <p style="margin-top:12px">
-          <a href="https://instagram.com/mpmodelsbkk" target="_blank" rel="noopener">Instagram: @mpmodelsbkk</a>
-        </p>
       </div>
     </div>
-
     <div class="footer-bottom">
       <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
       <span>Bangkok, Thailand</span>
@@ -181,6 +161,7 @@
        class="float-btn float-btn--wa" title="Chat on WhatsApp">WA</a>
   </div>
 
+  <script>window._presetAvailability = 'Available Now';</script>
   <script src="js/models-data.js"></script>
   <script src="js/main.js"></script>
 </body>

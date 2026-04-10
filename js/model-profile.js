@@ -1,16 +1,120 @@
 /* ── Model profile page logic ───────────────────────────── */
 
+/* ── Lightbox ───────────────────────────────────────────── */
+let lightboxImages = [];
+let lightboxIndex = 0;
+
+function openLightbox(index) {
+  lightboxIndex = index;
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lb-img');
+  if (!lb || !img) return;
+  img.src = lightboxImages[lightboxIndex];
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  if (lb) lb.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function lightboxNext() {
+  lightboxIndex = (lightboxIndex + 1) % lightboxImages.length;
+  const img = document.getElementById('lb-img');
+  if (img) img.src = lightboxImages[lightboxIndex];
+}
+
+function lightboxPrev() {
+  lightboxIndex = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+  const img = document.getElementById('lb-img');
+  if (img) img.src = lightboxImages[lightboxIndex];
+}
+
+function initLightbox() {
+  document.getElementById('lb-close')?.addEventListener('click', closeLightbox);
+  document.getElementById('lb-next')?.addEventListener('click', lightboxNext);
+  document.getElementById('lb-prev')?.addEventListener('click', lightboxPrev);
+  document.getElementById('lightbox')?.addEventListener('click', function(e) {
+    if (e.target === this) closeLightbox();
+  });
+  document.addEventListener('keydown', function(e) {
+    const lb = document.getElementById('lightbox');
+    if (!lb?.classList.contains('open')) return;
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight') lightboxNext();
+    if (e.key === 'ArrowLeft') lightboxPrev();
+  });
+}
+
+/* ── Comp Card ──────────────────────────────────────────── */
+let currentModel = null;
+
+function openCompCard() {
+  if (!currentModel) return;
+  const m = currentModel;
+  const modal = document.getElementById('compcard-modal');
+  const inner = document.getElementById('compcard-inner');
+  if (!modal || !inner) return;
+  inner.innerHTML = `
+    <div class="compcard-layout">
+      <div class="compcard-photo">
+        <img src="${m.img}" alt="${m.name}">
+      </div>
+      <div class="compcard-details">
+        <div class="compcard-logo">
+          <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
+               alt="Morgan &amp; Preston Models" style="height:32px;width:auto">
+        </div>
+        <h2 class="compcard-name">${m.name}</h2>
+        <p class="compcard-id">ID: MP-${m.slug.toUpperCase().replace(/-/g,'').slice(0,10)}</p>
+        <table class="compcard-stats">
+          <tr><td>Gender</td><td>${m.gender}</td></tr>
+          <tr><td>Height</td><td>${m.height} cm</td></tr>
+          <tr><td>Hair</td><td>${m.hairColor}</td></tr>
+          <tr><td>Eyes</td><td>${m.eyeColor}</td></tr>
+          <tr><td>Location</td><td>${m.location}</td></tr>
+          <tr><td>Details</td><td>${m.details.join(', ')}</td></tr>
+          <tr><td>Status</td><td>${m.availability}</td></tr>
+        </table>
+        <div class="compcard-agency">
+          <p><strong>Morgan &amp; Preston Models Bangkok</strong></p>
+          <p>info@mpmodelsbkk.com · +66 62 445 5897</p>
+          <p>249 Sukhumvit 49, Bangkok 10110</p>
+        </div>
+        <div class="compcard-actions">
+          <button class="btn-print" onclick="window.print()">Print Comp Card</button>
+          <button class="btn-print" style="background:var(--grey-text)" onclick="closeCompCard()">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCompCard() {
+  const modal = document.getElementById('compcard-modal');
+  if (modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 function getSlug() {
   const params = new URLSearchParams(window.location.search);
   return params.get('slug');
 }
 
 function renderProfile(model) {
+  currentModel = model;
   const main = document.getElementById('profile-main');
 
-  // Generate some extra thumbnails from the same model's main image
-  // (In a real app these would be the model's gallery images)
+  // Update og:image meta tag dynamically
+  const ogImg = document.getElementById('og-image');
+  if (ogImg) ogImg.setAttribute('content', model.img);
+
   const thumbImgs = [model.img, model.img, model.img, model.img];
+  lightboxImages = thumbImgs;
 
   main.innerHTML = `
     <nav class="breadcrumb">
@@ -22,12 +126,13 @@ function renderProfile(model) {
     <div class="profile-grid">
       <!-- Gallery -->
       <div class="profile-gallery">
-        <img class="profile-hero" id="profile-hero" src="${model.img}" alt="${model.name}">
+        <img class="profile-hero" id="profile-hero" src="${model.img}" alt="${model.name}"
+             style="cursor:zoom-in" onclick="openLightbox(0)">
         <div class="profile-thumbs" id="profile-thumbs">
           ${thumbImgs.map((src, i) => `
             <img class="profile-thumb${i === 0 ? ' active' : ''}"
                  src="${src}" alt="${model.name}" data-src="${src}"
-                 onclick="setHero(this)">
+                 onclick="setHero(this);openLightbox(${i})">
           `).join('')}
         </div>
       </div>
@@ -74,7 +179,7 @@ function renderProfile(model) {
 
         <div class="profile-actions">
           <button class="btn-primary" onclick="openContact()">Booking</button>
-          <button class="btn-secondary" onclick="openContact()">Comp Card</button>
+          <button class="btn-secondary" onclick="openCompCard()">Comp Card</button>
         </div>
       </div>
     </div>
@@ -144,6 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderProfile(model);
   renderOtherModels(slug);
+  initLightbox();
   initScrollTop();
   initMobileNav();
 });
