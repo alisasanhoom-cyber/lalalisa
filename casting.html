@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit a Casting Brief | Morgan &amp; Preston Models Bangkok</title>
+  <meta name="description" content="Submit your casting brief to Morgan &amp; Preston Models Bangkok. We'll shortlist the perfect models for your project within 4 hours.">
+  <meta property="og:title" content="Submit a Casting Brief | Morgan &amp; Preston Models Bangkok">
+  <meta property="og:description" content="Tell us about your project and we'll shortlist the perfect models within 4 hours.">
+  <meta property="og:image" content="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="site-header">
+    <a class="site-logo" href="index.html">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
+           alt="Morgan &amp; Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span class="site-logo-text" style="display:none">MP Models BKK</span>
+    </a>
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html">About Us</a>
+      <div class="nav-dropdown">
+        <a href="index.html">Models</a>
+        <div class="nav-dropdown-menu">
+          <a href="available.html">Available Models</a>
+          <a href="index.html">Browse All Models</a>
+        </div>
+      </div>
+      <a href="work.html">Our Work</a>
+      <div class="nav-dropdown">
+        <a href="casting.html" class="active">Services</a>
+        <div class="nav-dropdown-menu">
+          <a href="casting.html">Submit a Brief</a>
+          <a href="rates.html">Rates &amp; Packages</a>
+          <a href="workshops.html">Workshops</a>
+          <a href="regions.html">Our Coverage</a>
+        </div>
+      </div>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <!-- ── Page Banner ─────────────────────────────────────── -->
+  <div class="page-banner">
+    <h1>Submit a Casting Brief</h1>
+    <p style="color:rgba(255,255,255,.7);font-size:13px;margin-top:8px;letter-spacing:.04em">Tell us what you need — we'll come back with model options within 4 hours</p>
+  </div>
+
+  <!-- ── Main ────────────────────────────────────────────── -->
+  <main class="casting-main">
+
+    <!-- How it works -->
+    <section class="about-section" style="padding-top:0">
+      <div class="about-inner--centered">
+        <h2 class="section-heading" style="text-align:center;margin-bottom:40px">How It Works</h2>
+        <div class="steps-grid">
+          <div class="why-card">
+            <div class="step-number">1</div>
+            <h3>Fill the Brief</h3>
+            <p>Tell us about your project — type, date, number of models, budget, and any specific requirements.</p>
+          </div>
+          <div class="why-card">
+            <div class="step-number">2</div>
+            <h3>We Shortlist</h3>
+            <p>Our team reviews your brief and selects the best-matched models from our roster for your project.</p>
+          </div>
+          <div class="why-card">
+            <div class="step-number">3</div>
+            <h3>You Choose</h3>
+            <p>Within 4 business hours you receive model comp cards and a quote. Approve and we confirm the booking.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Brief Form -->
+    <section class="about-section" style="background:var(--grey-light)">
+      <div class="about-inner--centered" style="max-width:800px">
+        <h2 class="section-heading" style="text-align:center;margin-bottom:32px">Your Casting Brief</h2>
+        <form class="contact-form" action="https://formspree.io/f/mpmodelsbkk" method="POST">
+          <input type="hidden" name="_subject" value="New Casting Brief">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="brief-name">Your Name <span style="color:var(--teal)">*</span></label>
+              <input type="text" id="brief-name" name="name" required placeholder="Full name">
+            </div>
+            <div class="form-group">
+              <label for="brief-company">Company / Brand</label>
+              <input type="text" id="brief-company" name="company" placeholder="Company name">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="brief-email">Email <span style="color:var(--teal)">*</span></label>
+              <input type="email" id="brief-email" name="email" required placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+              <label for="brief-phone">Phone</label>
+              <input type="tel" id="brief-phone" name="phone" placeholder="+66 XX XXX XXXX">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="brief-type">Project Type <span style="color:var(--teal)">*</span></label>
+              <select id="brief-type" name="project_type" required class="form-select">
+                <option value="" disabled selected>Select type…</option>
+                <option>Commercial</option>
+                <option>Fashion</option>
+                <option>Advertising</option>
+                <option>Filming / TV</option>
+                <option>Event</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="brief-date">Shoot Date <span style="color:var(--teal)">*</span></label>
+              <input type="date" id="brief-date" name="shoot_date" required class="form-select">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="brief-count">Number of Models <span style="color:var(--teal)">*</span></label>
+              <select id="brief-count" name="model_count" required class="form-select">
+                <option value="" disabled selected>Select…</option>
+                <option>1</option>
+                <option>2–3</option>
+                <option>4–6</option>
+                <option>6+</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="brief-budget">Budget Range (per day)</label>
+              <select id="brief-budget" name="budget" class="form-select">
+                <option value="" disabled selected>Select…</option>
+                <option>Under ฿5,000</option>
+                <option>฿5,000–฿10,000</option>
+                <option>฿10,000–฿20,000</option>
+                <option>฿20,000+</option>
+                <option>Prefer to discuss</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Gender Needed</label>
+            <div class="gender-checks">
+              <label class="check-option"><input type="checkbox" name="gender" value="Female"> Female</label>
+              <label class="check-option"><input type="checkbox" name="gender" value="Male"> Male</label>
+              <label class="check-option"><input type="checkbox" name="gender" value="Any"> Any / Open</label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="brief-notes">Additional Notes</label>
+            <textarea id="brief-notes" name="notes" rows="5"
+              placeholder="Nationality preference, height range, specific look, location of shoot, special requirements…"></textarea>
+          </div>
+
+          <button type="submit" class="contact-submit">Submit Brief</button>
+          <p class="form-note">We respond within 4 business hours (9am–6pm ICT, Mon–Sat). For urgent requests call +66 62 445 5897.</p>
+        </form>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="about-section">
+      <div class="about-inner--centered" style="max-width:700px">
+        <h2 class="section-heading" style="text-align:center;margin-bottom:32px">Frequently Asked Questions</h2>
+        <ul class="faq-list">
+          <li class="faq-item">
+            <button class="faq-question">How quickly do you respond to casting briefs?</button>
+            <div class="faq-answer">
+              <p>We aim to respond with model options within 4 business hours of receiving your brief (during Bangkok business hours, 9am–6pm ICT, Monday–Saturday). For urgent same-day bookings, call us directly on +66 62 445 5897.</p>
+            </div>
+          </li>
+          <li class="faq-item">
+            <button class="faq-question">Can I see model videos before booking?</button>
+            <div class="faq-answer">
+              <p>Yes. Many of our models have video reels available. Mention in your brief that you'd like to see video content and we'll include it in the model proposals we send you.</p>
+            </div>
+          </li>
+          <li class="faq-item">
+            <button class="faq-question">Is there a fee just for submitting a casting brief?</button>
+            <div class="faq-answer">
+              <p>No. Submitting a brief and receiving model proposals is completely free. You only pay once you confirm a booking with a model.</p>
+            </div>
+          </li>
+          <li class="faq-item">
+            <button class="faq-question">What if I need models across multiple locations?</button>
+            <div class="faq-answer">
+              <p>We have models based in Bangkok, Phuket, Chiang Mai, and Koh Samui, and many are available to travel. Note your locations in the Additional Notes field and we'll coordinate across regions for you. See our <a href="regions.html" style="color:var(--teal)">coverage page</a> for details.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-heading">Morgan &amp; Preston Models</div>
+        <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
+      </div>
+      <div>
+        <div class="footer-heading">Information</div>
+        <ul class="footer-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="index.html">Models</a></li>
+          <li><a href="work.html">Work</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-contact">
+        <div class="footer-heading">Contact Us</div>
+        <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
+        <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
+        <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
+        <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
+      <span>Bangkok, Thailand</span>
+    </div>
+  </footer>
+
+  <button id="scroll-top" aria-label="Scroll to top">↑</button>
+
+  <div class="float-contact">
+    <a href="https://line.me/R/ti/p/@mpmodelsbkk" target="_blank" rel="noopener"
+       class="float-btn float-btn--line" title="Chat on LINE">LINE</a>
+    <a href="https://wa.me/66624455897" target="_blank" rel="noopener"
+       class="float-btn float-btn--wa" title="Chat on WhatsApp">WA</a>
+  </div>
+
+  <script src="js/models-data.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    document.querySelectorAll('.faq-question').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var item = btn.closest('.faq-item');
+        var isOpen = item.classList.contains('open');
+        document.querySelectorAll('.faq-item.open').forEach(function(el) { el.classList.remove('open'); });
+        if (!isOpen) item.classList.add('open');
+      });
+    });
+  </script>
+</body>
+</html>
