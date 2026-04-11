@@ -2398,6 +2398,70 @@ h3 {
   .team-grid { grid-template-columns: repeat(2, 1fr); gap: 28px 16px; }
 }
 
+/* ── Who We Are section (luxury centered) ───────────────── */
+.who-section {
+  background: var(--black);
+  padding: 120px 24px 100px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.who-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+.who-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  position: relative;
+}
+.who-eyebrow {
+  font-size: 10px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.4);
+  margin-bottom: 28px;
+}
+.who-heading {
+  font-family: var(--serif);
+  font-size: clamp(42px, 7vw, 80px);
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: .04em;
+  line-height: 1;
+  margin: 0;
+}
+.who-rule {
+  width: 48px;
+  height: 1px;
+  background: rgba(255,255,255,.3);
+  margin: 40px auto;
+}
+.who-lead {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(17px, 2.2vw, 22px);
+  color: rgba(255,255,255,.85);
+  line-height: 1.65;
+  margin-bottom: 36px;
+  font-weight: 400;
+}
+.who-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.who-body p {
+  font-size: 14px;
+  color: rgba(255,255,255,.5);
+  line-height: 1.85;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 /* ── Work page external links section ───────────────────── */
 .work-ext-section {
   background: var(--white);
