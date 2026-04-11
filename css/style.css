@@ -2462,6 +2462,86 @@ h3 {
   margin: 0 auto;
 }
 
+/* ── Why Choose Us — luxury redesign ───────────────────── */
+.why-luxury-section {
+  background: var(--white);
+  padding: 120px 24px 120px;
+  position: relative;
+}
+.why-luxury-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.why-luxury-eyebrow {
+  font-size: 10px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-bottom: 20px;
+}
+.why-luxury-heading {
+  font-family: var(--serif);
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 700;
+  color: var(--black);
+  line-height: 1.1;
+  margin-bottom: 80px;
+}
+.why-luxury-heading em {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--grey-text);
+}
+.why-luxury-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--grey-mid);
+}
+.why-luxury-item {
+  padding: 48px 40px 48px 0;
+  border-right: 1px solid var(--grey-mid);
+  padding-right: 40px;
+}
+.why-luxury-item:first-child { padding-left: 0; }
+.why-luxury-item:last-child { border-right: none; padding-right: 0; padding-left: 40px; }
+.why-luxury-item:not(:first-child):not(:last-child) { padding-left: 40px; }
+.why-luxury-num {
+  display: block;
+  font-family: var(--serif);
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--grey-muted);
+  margin-bottom: 24px;
+}
+.why-luxury-line {
+  width: 32px;
+  height: 1px;
+  background: var(--black);
+  margin-bottom: 24px;
+}
+.why-luxury-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--black);
+  margin-bottom: 16px;
+}
+.why-luxury-text {
+  font-size: 13px;
+  color: var(--grey-muted);
+  line-height: 1.8;
+}
+@media (max-width: 900px) {
+  .why-luxury-grid { grid-template-columns: repeat(2, 1fr); }
+  .why-luxury-item { border-right: none; border-bottom: 1px solid var(--grey-mid); padding: 40px 0 !important; }
+  .why-luxury-item:last-child { border-bottom: none; }
+}
+@media (max-width: 560px) {
+  .why-luxury-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Work page external links section ───────────────────── */
 .work-ext-section {
   background: var(--white);
