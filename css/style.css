@@ -1780,8 +1780,17 @@ h1, h2, h3, h4 {
   padding: 100px 24px 80px;
 }
 .apply-form-inner {
-  max-width: 760px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+.apply-form .form-row {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+@media (max-width: 768px) {
+  .apply-form .form-row { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .apply-form .form-row { grid-template-columns: 1fr; }
 }
 .apply-form-eyebrow {
   font-size: 10px;
