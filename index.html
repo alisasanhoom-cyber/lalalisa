@@ -118,19 +118,7 @@
     })();
   </script>
 
-  <!-- ── Featured Models ─────────────────────────────────── -->
-  <section class="featured-section">
-    <div class="featured-inner">
-      <h2 class="section-heading" style="text-align:center;margin-bottom:8px">Featured Talent</h2>
-      <p style="text-align:center;color:var(--grey-muted);font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:32px">Available Now — Based in Bangkok</p>
-      <div class="featured-grid" id="featured-grid"></div>
-      <div style="text-align:center;margin-top:36px">
-        <a href="models.html" class="btn-cta">View Full Roster</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Stats Strip ─────────────────────────────────────── -->
+<!-- ── Stats Strip ─────────────────────────────────────── -->
   <section class="stats-strip">
     <div class="stat-item">
       <div class="stat-number">52+</div>
@@ -219,24 +207,5 @@
 
   <script src="js/models-data.js"></script>
   <script src="js/main.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      var available = models.filter(function(m) { return m.availability === 'Available Now'; });
-      var shuffled = available.sort(function() { return Math.random() - 0.5; }).slice(0, 6);
-      var grid = document.getElementById('featured-grid');
-      if (!grid) return;
-      grid.innerHTML = shuffled.map(function(m) {
-        return '<a class="model-card" href="model.html?slug=' + m.slug + '">' +
-          '<div class="model-card-img">' +
-          '<img src="' + m.img + '" alt="' + m.name + '" loading="lazy">' +
-          '<span class="model-card-tag">Available</span>' +
-          '</div>' +
-          '<div class="model-card-footer">' +
-          '<div class="model-card-name">' + m.name + '</div>' +
-          '<div class="model-card-meta">' + m.gender + ' · ' + m.height + ' cm</div>' +
-          '</div></a>';
-      }).join('');
-    });
-  </script>
 </body>
 </html>
