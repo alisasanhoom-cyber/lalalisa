@@ -2056,6 +2056,124 @@ h3 {
   letter-spacing: .04em;
 }
 
+/* ── Showreel Section ───────────────────────────────────── */
+.showreel-section {
+  position: relative;
+  height: 100vh;
+  min-height: 600px;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+}
+
+/* YouTube iframe covers full viewport */
+.showreel-video-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.showreel-video-wrap iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* Force 16:9 to always cover the container */
+  width: 177.78vh;
+  height: 100vh;
+  min-width: 100%;
+  min-height: 56.25vw;
+}
+
+/* Heavy dark overlay — strong and cinematic */
+.showreel-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.72);
+  z-index: 1;
+}
+
+/* Text content */
+.showreel-content {
+  position: relative;
+  z-index: 2;
+  padding: 0 8%;
+  max-width: 900px;
+}
+
+.showreel-eyebrow {
+  font-size: 10px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.45);
+  margin-bottom: 32px;
+}
+
+.showreel-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(52px, 9vw, 120px);
+  color: var(--white);
+  line-height: .95;
+  letter-spacing: -.01em;
+  margin-bottom: 40px;
+  font-weight: 700;
+}
+
+.showreel-rule {
+  width: 48px;
+  height: 2px;
+  background: var(--white);
+  margin-bottom: 40px;
+  opacity: .4;
+}
+
+.showreel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.5);
+  color: var(--white);
+  padding: 14px 36px;
+  font-size: 11px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  transition: background .25s, border-color .25s;
+}
+
+.showreel-btn:hover {
+  background: rgba(255,255,255,.1);
+  border-color: var(--white);
+}
+
+.showreel-btn-icon {
+  font-size: 14px;
+  opacity: .7;
+}
+
+/* Year stamp — bottom-right */
+.showreel-year {
+  position: absolute;
+  bottom: 32px;
+  right: 7%;
+  z-index: 2;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(80px, 12vw, 160px);
+  color: rgba(255,255,255,.06);
+  line-height: 1;
+  letter-spacing: -.02em;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .showreel-content { padding: 0 5%; }
+  .showreel-title { font-size: clamp(40px, 12vw, 72px); }
+}
+
 /* ── Hero Slider ─────────────────────────────────────────── */
 .hero-slider {
   position: relative;
