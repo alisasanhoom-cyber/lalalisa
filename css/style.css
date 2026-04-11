@@ -2342,10 +2342,20 @@ h3 {
 .team-photo {
   width: 100%;
   aspect-ratio: 3/4;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: #1e1e1e;
+}
+.team-photo img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   object-position: top center;
   display: block;
-  margin-bottom: 16px;
+  transition: transform .4s ease;
+}
+.team-card:hover .team-photo img {
+  transform: scale(1.04);
 }
 
 .team-photo--placeholder {
