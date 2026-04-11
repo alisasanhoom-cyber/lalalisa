@@ -1829,3 +1829,258 @@ h1, h2, h3, h4 {
 .testimonials-grid--dark .testimonial-quote { color: rgba(255,255,255,.75); }
 .testimonials-grid--dark .testimonial-author { color: var(--white); }
 .testimonials-grid--dark .testimonial-company { color: rgba(255,255,255,.4); }
+
+
+/* ╔══════════════════════════════════════════════════════════╗
+   ║  EDITORIAL UPGRADE — High-End Agency Refinements        ║
+   ║  Inspired by IMG Models / Ford Models aesthetic          ║
+   ╚══════════════════════════════════════════════════════════╝ */
+
+/* ── Serif variable ─────────────────────────────────────── */
+:root {
+  --serif: 'Playfair Display', Georgia, serif;
+}
+
+/* ── Display headings → editorial serif ─────────────────── */
+h1, h2 {
+  font-family: var(--serif);
+  text-transform: none;
+  letter-spacing: .01em;
+}
+
+/* h3/h4 stay as compact Open Sans labels */
+h3 {
+  font-family: var(--font);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+/* ── Navigation — refined minimal ───────────────────────── */
+.site-nav a {
+  font-size: 11px;
+  letter-spacing: .14em;
+  font-weight: 600;
+}
+
+.site-nav a:hover,
+.site-nav a.active {
+  color: var(--black);
+  opacity: .4;
+}
+
+.site-header {
+  border-bottom-color: #ebebeb;
+}
+
+/* ── Page Banner — pure cinematic black ─────────────────── */
+.page-banner::before {
+  background: linear-gradient(to bottom, rgba(0,0,0,.25) 0%, transparent 100%);
+}
+
+.page-banner::after {
+  background: rgba(255,255,255,.3);
+  width: 28px;
+  height: 2px;
+}
+
+.page-banner h1 {
+  font-style: italic;
+  letter-spacing: .04em;
+  font-weight: 700;
+}
+
+/* ── Section headings — refined ─────────────────────────── */
+.section-heading {
+  letter-spacing: .02em;
+  line-height: 1.2;
+}
+
+.section-heading--accent::after {
+  background: var(--black);
+  width: 28px;
+  height: 1px;
+  margin-top: 16px;
+}
+
+/* ── CTA button — square, more editorial ────────────────── */
+.btn-cta {
+  border-radius: 0;
+  letter-spacing: .2em;
+  font-size: 11px;
+  padding: 14px 36px;
+}
+
+.btn-cta:hover {
+  background: #222;
+  border-color: #222;
+  transform: none;
+}
+
+/* ── Stats strip — elegant, not loud ────────────────────── */
+.stats-strip {
+  background: #fafafa;
+  border-top: 1px solid #ebebeb;
+  border-bottom: 1px solid #ebebeb;
+}
+
+.stat-number {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--black);
+  font-size: clamp(40px, 5vw, 64px);
+}
+
+.stat-label-sm {
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-top: 4px;
+}
+
+/* ── Model card name — editorial serif ──────────────────── */
+.model-card-name {
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: .01em;
+  font-weight: 700;
+}
+
+.model-card-meta {
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+}
+
+/* ── Model card hover — name-only fade ──────────────────── */
+.model-card-overlay {
+  background: linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 60%);
+}
+
+/* ── Form submit button ──────────────────────────────────── */
+.contact-submit {
+  border-radius: 0;
+  letter-spacing: .16em;
+  font-size: 11px;
+}
+
+.contact-submit:hover { background: #222; }
+
+/* ── Footer — near-black, minimal ───────────────────────── */
+.site-footer {
+  background: #080808;
+}
+
+.footer-bottom {
+  border-top-color: #1a1a1a;
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+/* ── Dark section — deeper black ────────────────────────── */
+.section-dark {
+  background: #0d0d0d;
+}
+
+/* ── Why cards in dark — refined borders ────────────────── */
+.section-dark .why-card {
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 28px;
+}
+
+.section-dark .why-card h3 {
+  font-size: 10px;
+  letter-spacing: .18em;
+  margin-bottom: 10px;
+}
+
+/* ── Testimonial dark hover ──────────────────────────────── */
+.testimonials-grid--dark .testimonial-card:hover {
+  border-color: rgba(255,255,255,.25);
+  box-shadow: 0 4px 24px rgba(0,0,0,.6);
+}
+
+/* ── Work filter buttons — square ───────────────────────── */
+.work-filter-btn {
+  border-radius: 0;
+  letter-spacing: .1em;
+  font-size: 11px;
+}
+
+/* ── Region cards in dark ────────────────────────────────── */
+.section-dark .region-card .region-name {
+  font-family: var(--serif);
+  font-size: 18px;
+  letter-spacing: .01em;
+}
+
+/* ── Hero buttons — square, minimal ─────────────────────── */
+.hero-btn {
+  border-radius: 0;
+  font-size: 11px;
+  letter-spacing: .18em;
+}
+
+/* ── Apply page step numbers ─────────────────────────────── */
+.apply-step-num {
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+/* ── Testimonial quote — larger opening mark ────────────── */
+.testimonial-card::before {
+  font-family: var(--serif);
+  font-size: 80px;
+  color: var(--black);
+  opacity: .06;
+}
+
+.testimonials-grid--dark .testimonial-card::before {
+  color: var(--white);
+  opacity: .08;
+}
+
+/* ── Service tags — minimal borders ─────────────────────── */
+.service-tag {
+  border-radius: 0;
+  letter-spacing: .1em;
+  font-size: 11px;
+}
+
+/* ── Scroll top button ───────────────────────────────────── */
+#scroll-top {
+  border-radius: 0;
+  font-size: 16px;
+  letter-spacing: .04em;
+}
+
+/* ── Editorial services row (homepage) ──────────────────── */
+.services-editorial-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(18px, 3vw, 28px);
+  color: var(--black);
+  letter-spacing: .01em;
+  line-height: 1.4;
+}
+
+.services-divider {
+  color: var(--grey-muted);
+  font-style: normal;
+  font-size: 20px;
+}
+
+/* ── Mobile: keep headings readable ─────────────────────── */
+@media (max-width: 640px) {
+  h1, h2 { letter-spacing: .01em; }
+  .page-banner h1 { font-style: italic; }
+  .services-editorial-row { font-size: 16px; gap: 10px; }
+  .services-divider { display: none; }
+}
