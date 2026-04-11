@@ -51,19 +51,119 @@
     </nav>
   </header>
 
-  <!-- ── Hero ────────────────────────────────────────────── -->
-  <section class="hero">
-    <div class="hero-overlay"></div>
-    <div class="hero-content">
-      <p class="hero-eyebrow">Bangkok · Thailand</p>
-      <h1 class="hero-title">Representing the World's<br>Finest Talent in Bangkok</h1>
-      <p class="hero-sub">International models for commercials, fashion, advertising, and film across Thailand and South East Asia. 52+ nationalities. 15+ years.</p>
-      <div class="hero-cta-group">
-        <a href="index.html" class="hero-btn hero-btn--primary">Discover Our Talent</a>
-        <a href="contact.html" class="hero-btn hero-btn--secondary">Make an Enquiry</a>
+  <!-- ── Hero Slider ─────────────────────────────────────── -->
+  <section class="hero-slider" id="hero-slider">
+
+    <!-- Slide 1: Alena B -->
+    <div class="hero-slide active">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/43-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/43-scaled-e1768456025562-235x300.jpg'"
+           alt="Alena B" loading="eager">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Female &nbsp;·&nbsp; 172 cm</p>
+        <div class="hero-slide-name">Alena B</div>
+        <a href="model.html?slug=alena-b" class="hero-slide-btn">View Profile</a>
       </div>
     </div>
+
+    <!-- Slide 2: Polinakka -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/03/GEOXWOMAN-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/03/GEOXWOMAN-scaled-e1774851782190-238x300.jpg'"
+           alt="Polinakka" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Female &nbsp;·&nbsp; 164 cm</p>
+        <div class="hero-slide-name">Polinakka</div>
+        <a href="model.html?slug=polinakka" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Slide 3: Eva P -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/1-eva-main-book-morgan-preston-models-bangkok.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/1-eva-main-book-morgan-preston-models-bangkok-e1768459647835-223x300.jpg'"
+           alt="Eva P" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">International &nbsp;·&nbsp; Female &nbsp;·&nbsp; 175 cm</p>
+        <div class="hero-slide-name">Eva P</div>
+        <a href="model.html?slug=eva-p" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Slide 4: Ivan G -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/02/A-37-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/02/A-37-scaled-e1770279231508-243x300.jpg'"
+           alt="Ivan G" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Male &nbsp;·&nbsp; 182 cm</p>
+        <div class="hero-slide-name">Ivan G</div>
+        <a href="model.html?slug=ivan-v" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Slide 5: Brooklyn -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2025/09/IMG_5600-2_11zon-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2025/09/IMG_5600-2_11zon-scaled-e1757326577671-231x300.jpg'"
+           alt="Brooklyn" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">International &nbsp;·&nbsp; Female &nbsp;·&nbsp; 174 cm</p>
+        <div class="hero-slide-name">Brooklyn</div>
+        <a href="model.html?slug=brooklyn" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <button class="slider-arrow slider-arrow--prev" id="slider-prev" aria-label="Previous slide">&#8592;</button>
+    <button class="slider-arrow slider-arrow--next" id="slider-next" aria-label="Next slide">&#8594;</button>
+    <div class="slider-dots" id="slider-dots"></div>
+    <div class="slider-counter" id="slider-counter"></div>
+
   </section>
+
+  <script>
+    (function() {
+      var slides = document.querySelectorAll('.hero-slide');
+      var dotsEl  = document.getElementById('slider-dots');
+      var countEl = document.getElementById('slider-counter');
+      var cur = 0, timer;
+
+      slides.forEach(function(_, i) {
+        var d = document.createElement('button');
+        d.className = 'slider-dot' + (i === 0 ? ' active' : '');
+        d.setAttribute('aria-label', 'Slide ' + (i + 1));
+        d.addEventListener('click', function() { goTo(i); });
+        dotsEl.appendChild(d);
+      });
+
+      function setCounter() {
+        countEl.innerHTML = '<strong>' + (cur + 1) + '</strong> / ' + slides.length;
+      }
+
+      function goTo(n) {
+        slides[cur].classList.remove('active');
+        dotsEl.children[cur].classList.remove('active');
+        cur = (n + slides.length) % slides.length;
+        slides[cur].classList.add('active');
+        dotsEl.children[cur].classList.add('active');
+        setCounter();
+        clearInterval(timer);
+        timer = setInterval(function() { goTo(cur + 1); }, 6000);
+      }
+
+      document.getElementById('slider-prev').addEventListener('click', function() { goTo(cur - 1); });
+      document.getElementById('slider-next').addEventListener('click', function() { goTo(cur + 1); });
+
+      setCounter();
+      timer = setInterval(function() { goTo(cur + 1); }, 6000);
+    })();
+  </script>
 
   <!-- ── Featured Models ─────────────────────────────────── -->
   <section class="featured-section">
