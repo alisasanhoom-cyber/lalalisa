@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Models | Morgan & Preston Models Bangkok</title>
-  <meta name="description" content="Browse all models at Morgan & Preston Models – an international modeling and talent agency in Bangkok, Thailand.">
-  <meta property="og:title" content="Models | Morgan &amp; Preston Models Bangkok">
-  <meta property="og:description" content="Browse 52+ international models available for commercial, fashion, and advertising work in Bangkok.">
-  <meta property="og:image" content="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
+  <title>Morgan &amp; Preston Models Bangkok — International Modeling Agency</title>
+  <meta name="description" content="Bangkok's premier international modeling and talent agency. 52+ models available for commercials, fashion shoots, advertising, filming and events.">
+  <meta property="og:title" content="Morgan &amp; Preston Models Bangkok">
+  <meta property="og:description" content="Bangkok's premier international modeling and talent agency. 52+ models available for commercials, fashion, advertising, and filming.">
+  <meta property="og:image" content="https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/43-scaled-e1768456025562-235x300.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/png" href="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,21 +21,19 @@
   <header class="site-header">
     <a class="site-logo" href="index.html">
       <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2020/04/mpmodel-logo-black-270x56.png"
-           alt="Morgan & Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+           alt="Morgan &amp; Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
       <span class="site-logo-text" style="display:none">MP Models BKK</span>
     </a>
-
     <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
-
     <nav class="site-nav" id="site-nav">
       <a href="about.html">About</a>
       <div class="nav-dropdown">
-        <a href="index.html" class="active">Models</a>
+        <a href="models.html">Models</a>
         <div class="nav-dropdown-menu">
           <a href="available.html">Available Models</a>
-          <a href="index.html">Browse All Models</a>
+          <a href="models.html">Browse All Models</a>
           <a href="apply.html">Apply to Join</a>
         </div>
       </div>
@@ -53,97 +51,178 @@
     </nav>
   </header>
 
-  <!-- ── Page Banner ─────────────────────────────────────── -->
-  <div class="page-banner">
-    <h1>All Our Models</h1>
-  </div>
+  <!-- ── Hero Slider ─────────────────────────────────────── -->
+  <section class="hero-slider" id="hero-slider">
 
-  <!-- ── Main content ────────────────────────────────────── -->
-  <main class="models-layout">
-
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <button class="sidebar-toggle-btn" id="sidebar-toggle">
-        Search Filters
-        <span class="toggle-icon">▴</span>
-      </button>
-
-      <div id="sidebar-inner">
-        <div class="sidebar-title">Search Filters</div>
-
-        <!-- Gender -->
-        <div class="filter-group">
-          <div class="filter-group-title">Gender</div>
-          <div class="filter-options" id="filter-gender"></div>
-        </div>
-
-        <!-- Details -->
-        <div class="filter-group">
-          <div class="filter-group-title">Details</div>
-          <div class="filter-options" id="filter-details"></div>
-        </div>
-
-        <!-- Availability -->
-        <div class="filter-group">
-          <div class="filter-group-title">Availability</div>
-          <div class="filter-options" id="filter-availability"></div>
-        </div>
-
-        <!-- Hair Colors -->
-        <div class="filter-group collapsed">
-          <div class="filter-group-title">Hair Color</div>
-          <div class="filter-options" id="filter-hair"></div>
-        </div>
-
-        <!-- Locations -->
-        <div class="filter-group collapsed">
-          <div class="filter-group-title">Location</div>
-          <div class="filter-options" id="filter-location"></div>
-        </div>
-
-        <!-- Height -->
-        <div class="filter-group">
-          <div class="filter-group-title">Height (cm)</div>
-          <div class="filter-options">
-            <div class="height-range">
-              <input type="number" id="height-min" placeholder="Min" min="140" max="220">
-              <span>to</span>
-              <input type="number" id="height-max" placeholder="Max" min="140" max="220">
-            </div>
-          </div>
-        </div>
-
-        <!-- Eye Colors -->
-        <div class="filter-group collapsed">
-          <div class="filter-group-title">Eye Color</div>
-          <div class="filter-options" id="filter-eye"></div>
-        </div>
-
-        <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
+    <!-- Slide 1: Alena B -->
+    <div class="hero-slide active">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/43-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/43-scaled-e1768456025562-235x300.jpg'"
+           alt="Alena B" loading="eager">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Female &nbsp;·&nbsp; 172 cm</p>
+        <div class="hero-slide-name">Alena B</div>
+        <a href="model.html?slug=alena-b" class="hero-slide-btn">View Profile</a>
       </div>
-    </aside>
+    </div>
 
-    <!-- Model Grid -->
-    <section class="models-grid-wrap">
-      <div class="models-grid-header">
-        <div class="models-toolbar">
-          <div class="search-wrap">
-            <input type="search" id="model-search" class="model-search-input" placeholder="Search models…">
-            <span class="search-icon">&#9906;</span>
-          </div>
-          <select id="model-sort" class="model-sort-select">
-            <option value="default">Default</option>
-            <option value="available">Available Now First</option>
-            <option value="height-asc">Height ↑</option>
-            <option value="height-desc">Height ↓</option>
-          </select>
-          <p class="models-count" id="models-count"></p>
-        </div>
+    <!-- Slide 2: Polinakka -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/03/GEOXWOMAN-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/03/GEOXWOMAN-scaled-e1774851782190-238x300.jpg'"
+           alt="Polinakka" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Female &nbsp;·&nbsp; 164 cm</p>
+        <div class="hero-slide-name">Polinakka</div>
+        <a href="model.html?slug=polinakka" class="hero-slide-btn">View Profile</a>
       </div>
-      <div class="models-grid" id="models-grid"></div>
-    </section>
+    </div>
 
-  </main>
+    <!-- Slide 3: Eva P -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/1-eva-main-book-morgan-preston-models-bangkok.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/01/1-eva-main-book-morgan-preston-models-bangkok-e1768459647835-223x300.jpg'"
+           alt="Eva P" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">International &nbsp;·&nbsp; Female &nbsp;·&nbsp; 175 cm</p>
+        <div class="hero-slide-name">Eva P</div>
+        <a href="model.html?slug=eva-p" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Slide 4: Ivan G -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2026/02/A-37-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2026/02/A-37-scaled-e1770279231508-243x300.jpg'"
+           alt="Ivan G" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">Bangkok &nbsp;·&nbsp; Male &nbsp;·&nbsp; 182 cm</p>
+        <div class="hero-slide-name">Ivan G</div>
+        <a href="model.html?slug=ivan-v" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Slide 5: Brooklyn -->
+    <div class="hero-slide">
+      <img src="https://www.mpmodelsbkk.com/wp-content/uploads/2025/09/IMG_5600-2_11zon-scaled.jpg"
+           onerror="this.src='https://www.mpmodelsbkk.com/wp-content/uploads/2025/09/IMG_5600-2_11zon-scaled-e1757326577671-231x300.jpg'"
+           alt="Brooklyn" loading="lazy">
+      <div class="hero-slide-overlay"></div>
+      <div class="hero-slide-content">
+        <p class="hero-slide-tag">International &nbsp;·&nbsp; Female &nbsp;·&nbsp; 174 cm</p>
+        <div class="hero-slide-name">Brooklyn</div>
+        <a href="model.html?slug=brooklyn" class="hero-slide-btn">View Profile</a>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <button class="slider-arrow slider-arrow--prev" id="slider-prev" aria-label="Previous slide">&#8592;</button>
+    <button class="slider-arrow slider-arrow--next" id="slider-next" aria-label="Next slide">&#8594;</button>
+    <div class="slider-dots" id="slider-dots"></div>
+    <div class="slider-counter" id="slider-counter"></div>
+
+  </section>
+
+  <script>
+    (function() {
+      var slides = document.querySelectorAll('.hero-slide');
+      var dotsEl  = document.getElementById('slider-dots');
+      var countEl = document.getElementById('slider-counter');
+      var cur = 0, timer;
+
+      slides.forEach(function(_, i) {
+        var d = document.createElement('button');
+        d.className = 'slider-dot' + (i === 0 ? ' active' : '');
+        d.setAttribute('aria-label', 'Slide ' + (i + 1));
+        d.addEventListener('click', function() { goTo(i); });
+        dotsEl.appendChild(d);
+      });
+
+      function setCounter() {
+        countEl.innerHTML = '<strong>' + (cur + 1) + '</strong> / ' + slides.length;
+      }
+
+      function goTo(n) {
+        slides[cur].classList.remove('active');
+        dotsEl.children[cur].classList.remove('active');
+        cur = (n + slides.length) % slides.length;
+        slides[cur].classList.add('active');
+        dotsEl.children[cur].classList.add('active');
+        setCounter();
+        clearInterval(timer);
+        timer = setInterval(function() { goTo(cur + 1); }, 6000);
+      }
+
+      document.getElementById('slider-prev').addEventListener('click', function() { goTo(cur - 1); });
+      document.getElementById('slider-next').addEventListener('click', function() { goTo(cur + 1); });
+
+      setCounter();
+      timer = setInterval(function() { goTo(cur + 1); }, 6000);
+    })();
+  </script>
+
+  <!-- ── Featured Models ─────────────────────────────────── -->
+  <section class="featured-section">
+    <div class="featured-inner">
+      <h2 class="section-heading" style="text-align:center;margin-bottom:8px">Featured Talent</h2>
+      <p style="text-align:center;color:var(--grey-muted);font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:32px">Available Now — Based in Bangkok</p>
+      <div class="featured-grid" id="featured-grid"></div>
+      <div style="text-align:center;margin-top:36px">
+        <a href="models.html" class="btn-cta">View Full Roster</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Stats Strip ─────────────────────────────────────── -->
+  <section class="stats-strip">
+    <div class="stat-item">
+      <div class="stat-number">52+</div>
+      <div class="stat-label-sm">International Models</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">15+</div>
+      <div class="stat-label-sm">Years Experience</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">30+</div>
+      <div class="stat-label-sm">Nationalities</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">500+</div>
+      <div class="stat-label-sm">Campaigns Produced</div>
+    </div>
+  </section>
+
+  <!-- ── Services Strip ──────────────────────────────────── -->
+  <section class="services-strip">
+    <div class="services-strip-inner">
+      <p style="text-align:center;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--grey-muted);margin-bottom:28px">What We Do</p>
+      <div class="services-editorial-row">
+        <span>Commercials</span>
+        <span class="services-divider">·</span>
+        <span>Fashion Shoots</span>
+        <span class="services-divider">·</span>
+        <span>Advertising</span>
+        <span class="services-divider">·</span>
+        <span>Filming</span>
+        <span class="services-divider">·</span>
+        <span>Events</span>
+        <span class="services-divider">·</span>
+        <span>Runway</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Instagram CTA ───────────────────────────────────── -->
+  <section class="insta-cta">
+    <p class="insta-label">Follow us on Instagram</p>
+    <a href="https://instagram.com/mpmodelsbkk" target="_blank" rel="noopener" class="insta-handle">@mpmodelsbkk</a>
+    <p style="margin-top:12px;font-size:13px;opacity:.7">Daily model updates, behind-the-scenes shoots, and new arrivals</p>
+  </section>
 
   <!-- ── Footer ──────────────────────────────────────────── -->
   <footer class="site-footer">
@@ -152,29 +231,23 @@
         <div class="footer-heading">Morgan &amp; Preston Models</div>
         <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
       </div>
-
       <div>
         <div class="footer-heading">Information</div>
         <ul class="footer-links">
-          <li><a href="index.html">Home</a></li>
-          <li><a href="index.html">Models</a></li>
+          <li><a href="about.html">About</a></li>
+          <li><a href="models.html">Models</a></li>
           <li><a href="work.html">Work</a></li>
           <li><a href="contact.html">Contact</a></li>
         </ul>
       </div>
-
       <div class="footer-contact">
         <div class="footer-heading">Contact Us</div>
         <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
         <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
         <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
         <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
-        <p style="margin-top:12px">
-          <a href="https://instagram.com/mpmodelsbkk" target="_blank" rel="noopener">Instagram: @mpmodelsbkk</a>
-        </p>
       </div>
     </div>
-
     <div class="footer-bottom">
       <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
       <span>Bangkok, Thailand</span>
@@ -193,5 +266,24 @@
 
   <script src="js/models-data.js"></script>
   <script src="js/main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var available = models.filter(function(m) { return m.availability === 'Available Now'; });
+      var shuffled = available.sort(function() { return Math.random() - 0.5; }).slice(0, 6);
+      var grid = document.getElementById('featured-grid');
+      if (!grid) return;
+      grid.innerHTML = shuffled.map(function(m) {
+        return '<a class="model-card" href="model.html?slug=' + m.slug + '">' +
+          '<div class="model-card-img">' +
+          '<img src="' + m.img + '" alt="' + m.name + '" loading="lazy">' +
+          '<span class="model-card-tag">Available</span>' +
+          '</div>' +
+          '<div class="model-card-footer">' +
+          '<div class="model-card-name">' + m.name + '</div>' +
+          '<div class="model-card-meta">' + m.gender + ' · ' + m.height + ' cm</div>' +
+          '</div></a>';
+      }).join('');
+    });
+  </script>
 </body>
 </html>
