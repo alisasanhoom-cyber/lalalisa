@@ -1263,7 +1263,7 @@ h1, h2, h3, h4 {
 .service-icon { font-size: 28px; }
 
 .insta-cta {
-  background: var(--teal);
+  background: var(--black);
   color: var(--white);
   text-align: center;
   padding: 56px 24px;
