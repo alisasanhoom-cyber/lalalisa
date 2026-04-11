@@ -2514,6 +2514,166 @@ h3 {
   margin: 0 auto;
 }
 
+/* ── Available Models — luxury hero banner ──────────────── */
+.avail-hero {
+  background: var(--black);
+  text-align: center;
+  padding: 100px 24px 80px;
+  position: relative;
+  overflow: hidden;
+}
+.avail-hero::after {
+  content: 'AVAILABLE';
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--serif);
+  font-size: clamp(80px, 18vw, 200px);
+  font-weight: 700;
+  color: rgba(255,255,255,.03);
+  white-space: nowrap;
+  pointer-events: none;
+  letter-spacing: .1em;
+}
+.avail-hero-eyebrow {
+  font-size: 10px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.35);
+  margin-bottom: 24px;
+}
+.avail-hero-heading {
+  font-family: var(--serif);
+  font-size: clamp(56px, 10vw, 120px);
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1;
+  letter-spacing: .02em;
+  margin: 0;
+}
+.avail-hero-heading em {
+  font-style: italic;
+  font-weight: 400;
+  color: rgba(255,255,255,.6);
+}
+.avail-hero-rule {
+  width: 40px;
+  height: 1px;
+  background: rgba(255,255,255,.25);
+  margin: 36px auto;
+}
+.avail-hero-sub {
+  font-size: 11px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.4);
+}
+
+/* Available layout — refined sidebar + grid */
+.avail-layout {
+  background: #f9f9f9;
+}
+.avail-layout .sidebar {
+  background: var(--white);
+  border-right: 1px solid var(--grey-mid);
+  padding: 40px 28px;
+}
+.avail-layout .sidebar-title {
+  font-size: 9px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-bottom: 32px;
+  font-weight: 400;
+}
+.avail-layout .filter-group-title {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--black);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.avail-layout .models-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px;
+}
+.avail-layout .model-card {
+  border-radius: 0;
+  box-shadow: none;
+  transform: none !important;
+  background: var(--white);
+}
+.avail-layout .model-card:hover {
+  box-shadow: none;
+}
+.avail-layout .model-card-img img {
+  filter: grayscale(10%);
+  transition: filter .4s ease, transform .5s ease;
+}
+.avail-layout .model-card:hover .model-card-img img {
+  filter: grayscale(0%);
+  transform: scale(1.03);
+}
+.avail-layout .model-card-footer {
+  background: var(--white);
+  border-top: none;
+  padding: 14px 14px 18px;
+}
+.avail-layout .model-card-name {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--black);
+}
+.avail-layout .model-card-meta {
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-top: 4px;
+}
+.avail-layout .model-card-tag {
+  background: var(--black);
+  color: var(--white);
+  font-size: 8px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  border-radius: 0;
+  padding: 4px 8px;
+}
+.avail-layout .models-toolbar {
+  border-bottom: 1px solid var(--grey-mid);
+  padding-bottom: 16px;
+  margin-bottom: 2px;
+}
+.avail-layout .model-search-input {
+  border: none;
+  border-bottom: 1px solid var(--grey-mid);
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: .06em;
+}
+.avail-layout .model-search-input:focus {
+  border-bottom-color: var(--black);
+  outline: none;
+  box-shadow: none;
+}
+.avail-layout .model-sort-select {
+  border: none;
+  border-bottom: 1px solid var(--grey-mid);
+  border-radius: 0;
+  background: transparent;
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+@media (max-width: 640px) {
+  .avail-hero { padding: 72px 24px 56px; }
+}
+
 /* ── Why Choose Us — luxury redesign ───────────────────── */
 .why-luxury-section {
   background: var(--white);
