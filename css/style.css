@@ -313,18 +313,19 @@ h1, h2, h3, h4 {
 /* ── Model Grid ──────────────────────────────────────────── */
 .models-grid-wrap {}
 
-.models-gender-section { margin-bottom: 48px; }
+.models-gender-section { margin-bottom: 64px; }
 
 .models-gender-heading {
   font-family: var(--serif);
-  font-size: 13px;
+  font-size: clamp(24px, 3vw, 36px);
   font-weight: 700;
-  letter-spacing: .2em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--black);
+  border-top: 2px solid var(--black);
   border-bottom: 1px solid var(--grey-mid);
-  padding-bottom: 12px;
-  margin-bottom: 24px;
+  padding: 16px 0 16px;
+  margin-bottom: 28px;
 }
 
 .models-grid-header {
