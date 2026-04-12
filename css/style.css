@@ -451,6 +451,46 @@ h1, h2, h3, h4 {
   font-size: 14px;
 }
 
+/* ── Press Strip ─────────────────────────────────────────── */
+.press-strip {
+  background: var(--white);
+  border-top: 1px solid var(--grey-mid);
+  border-bottom: 1px solid var(--grey-mid);
+  padding: 40px 24px;
+  text-align: center;
+}
+.press-strip-label {
+  font-size: 10px;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-bottom: 24px;
+}
+.press-strip-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+}
+.press-divider {
+  color: var(--grey-mid);
+  font-size: 18px;
+}
+.press-name {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--black);
+  opacity: .65;
+  transition: opacity .2s;
+  letter-spacing: .01em;
+}
+.press-name:hover { opacity: 1; }
+.press-name--bazaar { font-size: 22px; }
+.press-name--elle   { font-size: 28px; font-style: normal; font-weight: 700; letter-spacing: .12em; }
+.press-name--gq     { font-size: 26px; font-style: normal; font-weight: 700; letter-spacing: .08em; }
+.press-name--vogue  { font-size: 22px; font-style: normal; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+
 /* ── Footer ──────────────────────────────────────────────── */
 .site-footer {
   background: var(--teal);
