@@ -3068,8 +3068,8 @@ h3 {
   font-family: var(--serif);
   font-size: clamp(42px, 6vw, 80px);
   font-weight: 700;
-  color: #fff;
-  text-shadow: 0 0 60px rgba(255,255,255,.25), 0 2px 40px rgba(255,255,255,.1);
+  color: #ffffff !important;
+  text-shadow: 0 0 40px rgba(255,255,255,.3);
   letter-spacing: .01em;
   color: var(--black);
   line-height: 1.1;
