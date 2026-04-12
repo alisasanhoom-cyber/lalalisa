@@ -2737,9 +2737,9 @@ h3 {
   margin: 0;
 }
 .avail-hero-heading em {
-  font-style: italic;
-  font-weight: 400;
-  color: rgba(255,255,255,.6);
+  font-style: normal;
+  font-weight: 700;
+  color: var(--white);
 }
 .avail-hero-rule {
   width: 40px;
