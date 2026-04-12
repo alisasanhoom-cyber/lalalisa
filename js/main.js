@@ -33,19 +33,8 @@ function filterModels() {
   });
 }
 
-function renderGrid() {
-  const grid = document.getElementById('models-grid');
-  const countEl = document.getElementById('models-count');
-  const filtered = filterModels();
-
-  countEl.innerHTML = `Showing <strong>${filtered.length}</strong> of <strong>${models.length}</strong> models`;
-
-  if (filtered.length === 0) {
-    grid.innerHTML = '<div class="no-results">No models match your filters. <button onclick="resetFilters()">Reset filters</button></div>';
-    return;
-  }
-
-  grid.innerHTML = filtered.map(m => `
+function renderCard(m) {
+  return `
     <a class="model-card" href="model.html?slug=${m.slug}" title="${m.name}">
       <div class="model-card-img">
         <img src="${m.img}" alt="${m.name}" loading="lazy">
@@ -62,7 +51,38 @@ function renderGrid() {
         <div class="model-card-meta">${m.gender} · ${m.height} cm</div>
       </div>
     </a>
-  `).join('');
+  `;
+}
+
+function renderGrid() {
+  const countEl = document.getElementById('models-count');
+  const filtered = filterModels();
+
+  if (countEl) countEl.innerHTML = `Showing <strong>${filtered.length}</strong> of <strong>${models.length}</strong> models`;
+
+  // Split gender mode (models.html)
+  const gridFemale = document.getElementById('models-grid-female');
+  const gridMale = document.getElementById('models-grid-male');
+  if (gridFemale && gridMale) {
+    const females = filtered.filter(m => m.gender === 'Female');
+    const males = filtered.filter(m => m.gender !== 'Female');
+    const sectionFemale = document.getElementById('section-female');
+    const sectionMale = document.getElementById('section-male');
+    if (sectionFemale) sectionFemale.style.display = females.length ? '' : 'none';
+    if (sectionMale) sectionMale.style.display = males.length ? '' : 'none';
+    gridFemale.innerHTML = females.length ? females.map(renderCard).join('') : '';
+    gridMale.innerHTML = males.length ? males.map(renderCard).join('') : '';
+    return;
+  }
+
+  // Single grid mode (available.html)
+  const grid = document.getElementById('models-grid');
+  if (!grid) return;
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="no-results">No models match your filters. <button onclick="resetFilters()">Reset filters</button></div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(renderCard).join('');
 }
 
 /* ── Build filter sidebar ───────────────────────────────── */
@@ -204,6 +224,17 @@ function initSearchSort() {
 
 /* ── Skeleton loader ────────────────────────────────────── */
 function showSkeleton(count) {
+  const skeletonHtml = Array(count || 12).fill(
+    '<div class="model-card skeleton">' +
+    '<div class="model-card-img skeleton-img"></div>' +
+    '<div class="model-card-footer">' +
+    '<div class="skeleton-line skeleton-line--name"></div>' +
+    '<div class="skeleton-line skeleton-line--meta"></div>' +
+    '</div></div>'
+  ).join('');
+  const gridFemale = document.getElementById('models-grid-female');
+  const gridMale = document.getElementById('models-grid-male');
+  if (gridFemale) { gridFemale.innerHTML = skeletonHtml; return; }
   const grid = document.getElementById('models-grid');
   if (!grid) return;
   grid.innerHTML = Array(count || 12).fill(

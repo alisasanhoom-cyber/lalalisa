@@ -313,6 +313,20 @@ h1, h2, h3, h4 {
 /* ── Model Grid ──────────────────────────────────────────── */
 .models-grid-wrap {}
 
+.models-gender-section { margin-bottom: 48px; }
+
+.models-gender-heading {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--black);
+  border-bottom: 1px solid var(--grey-mid);
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
 .models-grid-header {
   display: flex;
   align-items: center;
@@ -3190,8 +3204,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 16px;
+  flex-wrap: nowrap;
+  gap: 12px;
   font-family: var(--serif);
   font-style: italic;
   font-size: clamp(18px, 3vw, 28px);
