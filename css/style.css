@@ -3061,13 +3061,14 @@ h3 {
   font-size: 10px;
   letter-spacing: .3em;
   text-transform: uppercase;
-  color: var(--grey-muted);
+  color: rgba(255,255,255,.35);
   margin-bottom: 20px;
 }
 .why-luxury-heading {
   font-family: var(--serif);
   font-size: clamp(36px, 5vw, 64px);
   font-weight: 700;
+  color: rgba(255,255,255,.75);
   color: var(--black);
   line-height: 1.1;
   margin-bottom: 80px;
@@ -3075,7 +3076,7 @@ h3 {
 .why-luxury-heading em {
   font-weight: 400;
   font-style: italic;
-  color: var(--grey-text);
+  color: rgba(255,255,255,.4);
 }
 .why-luxury-grid {
   display: grid;
