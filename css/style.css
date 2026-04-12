@@ -3002,14 +3002,30 @@ h3 {
   .clients-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ── Work page external links section ───────────────────── */
-.work-ext-section {
+/* ── Work page combined section ─────────────────────────── */
+.work-combined-section {
   background: var(--white);
   border-top: 1px solid var(--grey-mid);
   padding: 80px 24px;
   text-align: center;
 }
 
+.work-combined-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.work-combined-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--grey-mid);
+  margin: 64px 0;
+}
+
+/* keep old selector working for inner elements */
 .work-ext-inner {
   max-width: 1100px;
   margin: 0 auto;
