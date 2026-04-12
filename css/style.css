@@ -3066,9 +3066,11 @@ h3 {
 }
 .why-luxury-heading {
   font-family: var(--serif);
-  font-size: clamp(36px, 5vw, 64px);
+  font-size: clamp(42px, 6vw, 80px);
   font-weight: 700;
-  color: rgba(255,255,255,.75);
+  color: #fff;
+  text-shadow: 0 0 60px rgba(255,255,255,.25), 0 2px 40px rgba(255,255,255,.1);
+  letter-spacing: .01em;
   color: var(--black);
   line-height: 1.1;
   margin-bottom: 80px;
@@ -3076,7 +3078,7 @@ h3 {
 .why-luxury-heading em {
   font-weight: 400;
   font-style: italic;
-  color: rgba(255,255,255,.4);
+  color: rgba(255,255,255,.7);
 }
 .why-luxury-grid {
   display: grid;
