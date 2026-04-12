@@ -3203,7 +3203,7 @@ h3 {
 
 /* ── Work page combined section ─────────────────────────── */
 .work-combined-section {
-  background: url('../images/model-face-bg.jpg') center 20% / cover no-repeat;
+  background: url('../images/why-bg.jpg?v=3') center top / cover no-repeat;
   padding: 96px 24px;
   text-align: center;
   position: relative;
