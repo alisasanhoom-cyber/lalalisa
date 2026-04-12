@@ -3181,11 +3181,13 @@ h3 {
 }
 .client-logo:hover { background: transparent; }
 .client-logo img {
-  width: 160px;
-  height: 70px;
+  max-width: 180px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   filter: grayscale(100%);
-  opacity: .75;
+  opacity: 1;
   transition: opacity .3s, filter .3s;
 }
 .client-logo:hover img {
