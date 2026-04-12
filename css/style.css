@@ -54,7 +54,7 @@ h1, h2, h3, h4 {
   gap: 24px;
 }
 
-.site-logo img { height: 40px; width: auto; }
+.site-logo img { height: 56px; width: auto; image-rendering: -webkit-optimize-contrast; }
 
 .site-logo-text {
   font-size: 18px;
