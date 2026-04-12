@@ -453,10 +453,11 @@ h1, h2, h3, h4 {
 
 /* ── Editorial Statement ─────────────────────────────────── */
 .editorial-statement {
-  background: var(--white);
+  background: var(--grey-light);
   padding: 80px 24px;
   text-align: center;
   border-top: 1px solid var(--grey-mid);
+  border-bottom: 1px solid var(--grey-mid);
 }
 .editorial-statement-inner {
   max-width: 740px;
