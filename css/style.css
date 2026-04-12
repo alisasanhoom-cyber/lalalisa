@@ -1862,11 +1862,11 @@ h1, h2, h3, h4 {
 
 /* Refined form inputs */
 .apply-form .form-group label {
-  font-size: 9px;
-  letter-spacing: .22em;
+  font-size: 10px;
+  letter-spacing: .18em;
   text-transform: uppercase;
-  font-weight: 400;
-  color: var(--grey-text);
+  font-weight: 700;
+  color: var(--black);
 }
 .apply-form .form-group input,
 .apply-form .form-group textarea,
@@ -1876,7 +1876,9 @@ h1, h2, h3, h4 {
   border-radius: 0;
   background: transparent;
   padding: 10px 0;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--black);
   transition: border-color .2s;
 }
 .apply-form .form-group input:focus,
