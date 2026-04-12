@@ -1096,6 +1096,7 @@ h1, h2, h3, h4 {
 .float-btn:hover { transform: scale(1.1); box-shadow: 0 6px 18px rgba(0,0,0,.3); }
 .float-btn--line { background: #06C755; }
 .float-btn--wa { background: #25D366; }
+.float-btn--fb { background: #1877F2; }
 
 /* ══════════════════════════════════════════════════════════
    SKELETON LOADER
