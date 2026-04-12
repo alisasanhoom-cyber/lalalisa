@@ -1262,31 +1262,63 @@ h1, h2, h3, h4 {
 
 .service-icon { font-size: 28px; }
 
-.insta-cta {
-  background: var(--black);
-  color: var(--white);
+/* ── Latest Work / Press section ────────────────────────── */
+.press-section {
+  background: var(--white);
+  padding: 80px 24px 88px;
+  border-top: 1px solid var(--grey-mid);
+}
+.press-inner {
+  max-width: 1200px;
+  margin: 0 auto;
   text-align: center;
-  padding: 56px 24px;
 }
-
-.insta-label {
-  font-size: 11px;
+.press-eyebrow {
+  font-size: 10px;
+  letter-spacing: .3em;
   text-transform: uppercase;
-  letter-spacing: .15em;
-  opacity: .7;
-  margin-bottom: 8px;
+  color: var(--grey-muted);
+  margin-bottom: 16px;
 }
-
-.insta-handle {
-  display: block;
-  font-size: clamp(24px, 4vw, 40px);
+.press-heading {
+  font-family: var(--serif, 'Playfair Display', serif);
+  font-size: clamp(32px, 5vw, 56px);
   font-weight: 700;
-  color: var(--white);
-  letter-spacing: .06em;
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--black);
+}
+.press-heading em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--grey-text);
+}
+.press-rule {
+  width: 32px;
+  height: 1px;
+  background: var(--black);
+  margin: 24px auto 40px;
+}
+.press-feed-placeholder {
+  border: 1px solid var(--grey-mid);
+  padding: 48px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.press-ig-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--black);
   transition: opacity .2s;
 }
-
-.insta-handle:hover { opacity: .75; }
+.press-ig-link:hover { opacity: .55; }
 
 /* ══════════════════════════════════════════════════════════
    AVAILABLE PAGE — dot indicator
