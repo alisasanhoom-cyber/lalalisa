@@ -889,9 +889,13 @@ h1, h2, h3, h4 {
 }
 
 .contact-grid--single {
-  display: block;
-  max-width: 600px;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+}
+@media (max-width: 700px) {
+  .contact-grid--single { grid-template-columns: 1fr; }
 }
 
 .contact-grid {
