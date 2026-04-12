@@ -3181,10 +3181,8 @@ h3 {
 }
 .client-logo:hover { background: transparent; }
 .client-logo img {
-  max-width: 180px;
-  max-height: 80px;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 64px;
   object-fit: contain;
   filter: grayscale(100%);
   opacity: 1;
