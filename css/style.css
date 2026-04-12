@@ -2637,7 +2637,7 @@ h3 {
 /* ── Who We Are section (luxury centered) ───────────────── */
 .who-section {
   background: var(--black);
-  padding: 120px 24px 100px;
+  padding: 64px 24px 100px;
   text-align: center;
   position: relative;
   overflow: hidden;
