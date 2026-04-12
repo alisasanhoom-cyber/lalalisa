@@ -3208,7 +3208,7 @@ h3 {
   gap: 12px;
   font-family: var(--serif);
   font-style: italic;
-  font-size: clamp(18px, 3vw, 28px);
+  font-size: clamp(14px, 1.8vw, 20px);
   color: var(--black);
   letter-spacing: .01em;
   line-height: 1.4;
