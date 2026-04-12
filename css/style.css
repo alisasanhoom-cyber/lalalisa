@@ -451,6 +451,51 @@ h1, h2, h3, h4 {
   font-size: 14px;
 }
 
+/* ── Editorial Statement ─────────────────────────────────── */
+.editorial-statement {
+  background: var(--white);
+  padding: 80px 24px;
+  text-align: center;
+  border-top: 1px solid var(--grey-mid);
+}
+.editorial-statement-inner {
+  max-width: 740px;
+  margin: 0 auto;
+}
+.editorial-eyebrow {
+  font-size: 10px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--grey-muted);
+  margin-bottom: 28px;
+}
+.editorial-headline {
+  font-family: var(--serif);
+  font-size: clamp(22px, 3.2vw, 36px);
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--black);
+  margin-bottom: 0;
+}
+.editorial-headline em {
+  font-weight: 400;
+  font-style: italic;
+}
+.editorial-rule {
+  width: 36px;
+  height: 1px;
+  background: var(--black);
+  margin: 32px auto;
+  opacity: .25;
+}
+.editorial-body {
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--grey-muted);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
 /* ── Press Strip ─────────────────────────────────────────── */
 .press-strip {
   background: var(--white);
