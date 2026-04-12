@@ -888,6 +888,12 @@ h1, h2, h3, h4 {
   padding: 56px 24px 80px;
 }
 
+.contact-grid--single {
+  display: block;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
 .contact-grid {
   display: grid;
   grid-template-columns: 1fr 420px;
