@@ -15,7 +15,7 @@ body { animation: fadeIn .35s ease; }
   --teal:    #327b87;
   --blue:    #0170b9;
   --font: 'Open Sans', sans-serif;
-  --header-h: 70px;
+  --header-h: 88px;
 }
 
 html { scroll-behavior: smooth; }
@@ -54,7 +54,7 @@ h1, h2, h3, h4 {
   gap: 24px;
 }
 
-.site-logo img { height: 56px; width: auto; image-rendering: -webkit-optimize-contrast; }
+.site-logo img { height: 72px; width: auto; image-rendering: -webkit-optimize-contrast; }
 
 .site-logo-text {
   font-size: 18px;
