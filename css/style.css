@@ -2609,10 +2609,11 @@ h3 {
 
 .team-photo {
   width: 100%;
-  aspect-ratio: 3/4;
+  height: 160px;
   overflow: hidden;
   margin-bottom: 16px;
   background: #1e1e1e;
+  flex-shrink: 0;
 }
 .team-photo img {
   width: 100%;
