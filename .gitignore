@@ -1,0 +1,10 @@
+# Local data (do not commit real client bookings / job ledger)
+data/jobs.json
+data/schedule.json
+data/bookings.json
+data/users.json
+data/activity.json
+
+# Node
+node_modules/
+.DS_Store

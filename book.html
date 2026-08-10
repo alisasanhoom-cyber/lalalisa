@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book a Model | Morgan &amp; Preston Models Bangkok</title>
+  <meta name="description" content="Request a booking for one of our models at Morgan &amp; Preston Models Bangkok.">
+  <meta property="og:image" content="images/mp-logo.png">
+  <link rel="icon" type="image/png" href="images/mp-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .book-model-card{display:flex;gap:18px;align-items:center;background:#fff;border:1px solid #e5e5e5;
+      border-radius:10px;padding:14px 18px;margin-bottom:28px}
+    .book-model-card img{width:64px;height:80px;object-fit:cover;border-radius:6px;background:#eee}
+    .book-model-card .bm-name{font-weight:700;font-size:18px;letter-spacing:.02em}
+    .book-model-card .bm-meta{font-size:13px;color:var(--grey-text);margin-top:2px}
+    .book-model-card .bm-change{margin-left:auto;font-size:13px}
+    .book-success{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:40px;text-align:center}
+    .book-success .tick{font-size:44px;color:var(--teal);line-height:1}
+    .book-error{color:#c0392b;font-size:13px;margin-top:12px;display:none}
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="site-header">
+    <a class="site-logo" href="index.html">
+      <img src="images/mp-logo.png"
+           alt="Morgan &amp; Preston Models" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span class="site-logo-text" style="display:none">MP Models BKK</span>
+    </a>
+    <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html">About</a>
+      <div class="nav-dropdown">
+        <a href="models.html">Models</a>
+        <div class="nav-dropdown-menu">
+          <a href="available.html">Available Models</a>
+          <a href="models.html">Browse All Models</a>
+          <a href="apply.html">Apply to Join</a>
+        </div>
+      </div>
+      <a href="work.html">Our Work</a>
+      <a href="casting.html">Submit a Brief</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </header>
+
+  <!-- ── Page Banner ─────────────────────────────────────── -->
+  <div class="page-banner">
+    <h1>Book a Model</h1>
+    <p style="color:rgba(255,255,255,.7);font-size:13px;margin-top:8px;letter-spacing:.04em">Send us a booking request — we confirm availability fast</p>
+  </div>
+
+  <!-- ── Main ────────────────────────────────────────────── -->
+  <main>
+    <section class="about-section" style="background:var(--grey-light)">
+      <div class="about-inner--centered" style="max-width:800px">
+
+        <!-- Selected model summary -->
+        <div class="book-model-card" id="book-model-card" style="display:none">
+          <img id="bm-img" src="" alt="">
+          <div>
+            <div class="bm-name" id="bm-name"></div>
+            <div class="bm-meta" id="bm-meta"></div>
+          </div>
+          <a class="bm-change" href="models.html">Change model</a>
+        </div>
+
+        <h2 class="section-heading" style="text-align:center;margin-bottom:32px">Booking Request</h2>
+
+        <form class="contact-form" id="book-form">
+          <input type="hidden" id="f-modelSlug" name="modelSlug">
+          <input type="hidden" id="f-modelName" name="modelName">
+
+          <!-- Model picker (shown only when no model preselected) -->
+          <div class="form-group" id="model-picker-group" style="display:none">
+            <label for="f-modelPicker">Choose a Model <span style="color:var(--teal)">*</span></label>
+            <select id="f-modelPicker" class="form-select">
+              <option value="" disabled selected>Select a model…</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="f-clientName">Your Name <span style="color:var(--teal)">*</span></label>
+              <input type="text" id="f-clientName" name="clientName" required placeholder="Full name">
+            </div>
+            <div class="form-group">
+              <label for="f-company">Company / Brand</label>
+              <input type="text" id="f-company" name="company" placeholder="Company name">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="f-email">Email <span style="color:var(--teal)">*</span></label>
+              <input type="email" id="f-email" name="email" required placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+              <label for="f-phone">Phone</label>
+              <input type="tel" id="f-phone" name="phone" placeholder="+66 XX XXX XXXX">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="f-projectType">Project Type <span style="color:var(--teal)">*</span></label>
+              <select id="f-projectType" name="projectType" required class="form-select">
+                <option value="" disabled selected>Select type…</option>
+                <option>Commercial</option>
+                <option>Fashion</option>
+                <option>Advertising</option>
+                <option>Filming / TV</option>
+                <option>Event</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="f-budget">Budget (per day)</label>
+              <select id="f-budget" name="budget" class="form-select">
+                <option value="" selected>Prefer to discuss</option>
+                <option>Under ฿5,000</option>
+                <option>฿5,000–฿10,000</option>
+                <option>฿10,000–฿20,000</option>
+                <option>฿20,000+</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="f-startDate">Start Date <span style="color:var(--teal)">*</span></label>
+              <input type="date" id="f-startDate" name="startDate" required class="form-select">
+            </div>
+            <div class="form-group">
+              <label for="f-endDate">End Date</label>
+              <input type="date" id="f-endDate" name="endDate" class="form-select">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="f-notes">Project Details / Notes</label>
+            <textarea id="f-notes" name="notes" rows="5"
+              placeholder="Shoot location, usage rights, call time, wardrobe, special requirements…"></textarea>
+          </div>
+
+          <button type="submit" class="contact-submit" id="book-submit">Send Booking Request</button>
+          <p class="book-error" id="book-error"></p>
+          <p class="form-note">This sends a request to our booking team. We confirm the model's availability and get back to you — usually within 4 business hours.</p>
+        </form>
+
+        <!-- Success state -->
+        <div class="book-success" id="book-success" style="display:none">
+          <div class="tick">✓</div>
+          <h2 class="section-heading" style="margin:16px 0 8px">Request received</h2>
+          <p style="color:var(--grey-text);max-width:480px;margin:0 auto 20px">
+            Thank you, <span id="success-name"></span>. Your booking request for
+            <strong id="success-model"></strong> has been sent to our team.
+            We'll confirm availability by email shortly.
+          </p>
+          <a href="models.html" class="contact-submit" style="display:inline-block;text-decoration:none;width:auto;padding:12px 28px">Browse more models</a>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-heading">Morgan &amp; Preston Models</div>
+        <p>International Modeling and Talent Agency in Bangkok, Thailand. We work with Brands for Commercials, Fashion Shoots, Advertising, Filming and other projects.</p>
+      </div>
+      <div>
+        <div class="footer-heading">Information</div>
+        <ul class="footer-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="models.html">Models</a></li>
+          <li><a href="work.html">Work</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-contact">
+        <div class="footer-heading">Contact Us</div>
+        <p>Leo Classic Place, 249 Sukhumvit 49,<br>Khlong Tan Nuea, Watthana,<br>Bangkok 10110</p>
+        <p><a href="tel:+6602130357">+66 02 130 0357</a></p>
+        <p><a href="tel:+66624455897">+66 62 445 5897</a></p>
+        <p><a href="mailto:info@mpmodelsbkk.com">info@mpmodelsbkk.com</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>Copyright 2017–2025 Morgan &amp; Preston Models Bangkok</span>
+      <span>Bangkok, Thailand</span>
+    </div>
+  </footer>
+
+  <button id="scroll-top" aria-label="Scroll to top">↑</button>
+
+  <div class="float-contact">
+    <a href="https://line.me/R/ti/p/@mpmodelsbkk" target="_blank" rel="noopener"
+       class="float-btn float-btn--line" title="Chat on LINE">LINE</a>
+    <a href="https://wa.me/66624455897" target="_blank" rel="noopener"
+       class="float-btn float-btn--wa" title="Chat on WhatsApp">WA</a>
+  </div>
+
+  <script src="js/models-data.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/booking.js"></script>
+</body>
+</html>

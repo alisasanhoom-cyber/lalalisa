@@ -178,7 +178,7 @@ function renderProfile(model) {
         </div>
 
         <div class="profile-actions">
-          <button class="btn-primary" onclick="openContact()">Booking</button>
+          <button class="btn-primary" onclick="bookModel('${model.slug}')">Book This Model</button>
           <button class="btn-secondary" onclick="openCompCard()">Comp Card</button>
         </div>
       </div>
@@ -219,6 +219,10 @@ function renderOtherModels(currentSlug) {
 
 function openContact() {
   window.location.href = 'contact.html';
+}
+
+function bookModel(slug) {
+  window.location.href = 'book.html?slug=' + encodeURIComponent(slug);
 }
 
 /* ── Init ───────────────────────────────────────────────── */

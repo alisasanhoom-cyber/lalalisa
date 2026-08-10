@@ -1,0 +1,12 @@
+{
+  "name": "mpmodels-booking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MP Models booking & job tracker (zero-dependency Node server)",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
