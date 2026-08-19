@@ -35,6 +35,17 @@ const DATA_DIR      = process.env.DATA_DIR || path.join(__dirname, 'data');
 const JOBS_FILE     = path.join(DATA_DIR, 'jobs.json');
 const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
 const MODELS_FILE   = path.join(DATA_DIR, 'models.json');   // model directory (operational contacts only — NO money)
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json'); // exchange rates etc.
+const INCOME_FILE   = path.join(DATA_DIR, 'income.json');   // other income / commission (Director+Admin ONLY — never sent to bookers)
+const CLIENTS_FILE  = path.join(DATA_DIR, 'clients.json');  // CRM client records (added directly, not only via jobs)
+const MAC_FILE      = path.join(DATA_DIR, 'mac.json');      // Mother-Agency-Commission ledger (per scouter)
+// Exchange rates → THB (editable by managers). Foreign jobs convert for the THB total.
+const FX_DEFAULT = { USD: 35, EUR: 38, CNY: 5 };
+function loadSettings() {
+  const s = load(SETTINGS_FILE);
+  const fx = (s && s.fxRates) || {};
+  return { fxRates: { ...FX_DEFAULT, ...fx } };
+}
 // Changes every deploy (server restart) → busts Cloudflare's cache of js/css so
 // browsers always load the code that matches the current HTML.
 const ASSET_VERSION = Date.now().toString(36);
@@ -47,7 +58,10 @@ const CLIENT_KEYS = [
   'companyName', 'clientTaxId', 'companyAddress', 'contactPerson', 'contactNumber', 'clientEmail',
   'product', 'role', 'mediaUsage', 'periodOfUsage', 'countryOfUse', 'shootLocation',
   'shootStart', 'shootEnd', 'timeStart', 'timeEnd', 'noOfShoot',
-  'workPackage', 'breakHours', 'overtimeRate', 'overtimeFee', 'paymentTerm', 'remark',
+  'workPackage', 'contractHours', 'breakHours', 'overtimeRate', 'overtimeFee', 'paymentTerm', 'remark',
+  'leadSource',   // CRM: which channel this lead/client came from (LINE, IG, website…)
+  'signedDocUrl', // Drive link to the SIGNED confirmation the client sent back
+  'clientCategory',   // CRM: client industry — Fashion / Commercial / Film & TV / Event organizer…
 ];
 
 // ---- Users & access levels ---------------------------------------
@@ -85,6 +99,17 @@ function seedUsers() {
   fs.mkdirSync(path.dirname(USERS_FILE), { recursive: true });
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
+// Ensure Wolf's SCOUTER login exists (added once to any existing install). A scouter
+// only ever sees their own Mother-Agency ledger + their own models' schedule.
+function ensureExtraUsers() {
+  if (!fs.existsSync(USERS_FILE)) return;
+  const users = load(USERS_FILE);
+  if (!Array.isArray(users)) return;
+  if (!users.some(u => String(u.email || '').toLowerCase() === 'scouter@mpmodelsbkk.com')) {
+    users.push({ email: 'scouter@mpmodelsbkk.com', name: 'Wolf (Scouter)', role: 'scouter', password: hashPassword('WolfMP2026scout') });
+    save(USERS_FILE, users);
+  }
+}
 // Passwords are stored hashed (scrypt, built-in — no dependencies) as
 // "scrypt$<salt>$<hash>". Legacy plaintext is still accepted, then migrated.
 function hashPassword(plain) {
@@ -119,10 +144,10 @@ function findUser(email, password) {
   const users = load(USERS_FILE);
   const wanted = String(email || '').toLowerCase().trim();
   const ok = u => verifyPassword(pw, u.password);
-  // With an email: match email + password. Without: match by password alone.
-  return wanted
-    ? users.find(u => u.email.toLowerCase() === wanted && ok(u)) || null
-    : users.find(u => ok(u)) || null;
+  // Email is required: a password must never act as a global credential
+  // (password-only match would log into whichever account happens to share it).
+  if (!wanted) return null;
+  return users.find(u => u.email.toLowerCase() === wanted && ok(u)) || null;
 }
 function getUser(req) { return sessions[req.headers['x-admin-token']] || null; }
 
@@ -163,7 +188,11 @@ function load(file) {
 }
 function save(file, list) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(list, null, 2));
+  // Crash-safe write: write to a temp file then rename. A crash mid-write can no
+  // longer leave a truncated JSON file (which load() would silently read as []).
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.renameSync(tmp, file);
 }
 
 
@@ -173,6 +202,27 @@ function save(file, list) {
 
 // Build a clean job record from whatever fields were sent.
 // `fromWebsite` = true means a client filled in book.html (limited fields).
+// Per-model fee lines for a job: [{ name, mp:bool, rate, ot }]. A line's fee = rate + ot.
+// Lets ONE job hold several models at different rates + OT (Tawa's multi-model bookings).
+function buildLines(input) {
+  if (!Array.isArray(input.lines)) return null;   // null = caller didn't send lines (don't touch)
+  return input.lines.map(l => ({
+    name: text(l && l.name, 100),
+    mp:   !!(l && l.mp),
+    rate: number(l && l.rate),
+    ot:   number(l && l.ot),
+  })).filter(l => l.name || l.rate || l.ot).slice(0, 30);
+}
+function linesTotal(lines) { return (lines || []).reduce((s, l) => s + number(l.rate) + number(l.ot), 0); }
+function applyLines(job, lines) {
+  job.lines = lines || [];
+  if (job.lines.length) {
+    job.budget = linesTotal(job.lines);                       // total = sum of every model's fee
+    job.model = job.lines.filter(l => l.mp).map(l => l.name).filter(Boolean).join(', ');
+    job.freelance = job.lines.filter(l => !l.mp).map(l => l.name).filter(Boolean).join(', ');
+  }
+}
+
 function buildJob(input, fromWebsite) {
   const jobDate = date(input.jobDate) || date(input.startDate);
   // Jobs in the Tracker are confirmed by default; a booker may set another status.
@@ -189,7 +239,7 @@ function buildJob(input, fromWebsite) {
     shootDays:   Math.max(1, Math.round(number(input.shootDays)) || 1),   // fees are often per shoot day
     jobId:       text(input.jobId, 60),
     jobIdNonTax: text(input.jobIdNonTax, 60),
-    currency:    ['THB', 'USD', 'CNY'].includes(input.currency) ? input.currency : 'THB',
+    currency:    ['THB', 'USD', 'CNY', 'EUR'].includes(input.currency) ? input.currency : 'THB',
     jobTitle:    text(input.jobTitle) || text(input.projectType),
     model:       text(input.model) || text(input.modelName),
     modelSlug:   text(input.modelSlug, 80),
@@ -197,6 +247,11 @@ function buildJob(input, fromWebsite) {
     // Graphic designer's photo/video sourcing status (bookers never see this):
     materials:     ['searching', 'found', 'done'].includes(input.materials) ? input.materials : '',
     materialsNote: text(input.materialsNote, 500),
+    collected:     !!input.collected,   // graphic ticks this once the work is collected/done
+    confirmationMade: !!input.confirmationMade,   // set when the job confirmation has been generated
+    whtMode: ['on', 'off'].includes(input.whtMode) ? input.whtMode : '',   // WHT on the confirmation: '' auto (THB only) | on | off
+    // Shooting date(s) — the days the shoot happens; auto-placed on the Schedule.
+    shootDates:    Array.isArray(input.shootDates) ? input.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [],
     // Team-only scratch note — never printed on the client confirmation:
     internalNote:  text(input.internalNote, 2000),
     client:      text(input.client) || text(input.company) || text(input.clientName),
@@ -216,6 +271,7 @@ function buildJob(input, fromWebsite) {
     job.contactNumber = job.contactNumber || text(input.phone);
     job.clientEmail  = job.clientEmail  || text(input.email);
   }
+  applyLines(job, buildLines(input) || []);   // multi-model per-rate breakdown (if provided)
   return job;
 }
 
@@ -227,14 +283,19 @@ function updateJob(id, changes) {
 
   const editable = ['status', 'confirmed', 'bookingDate', 'jobDate', 'budget', 'currency',
     'jobId', 'jobIdNonTax', 'jobTitle', 'model', 'freelance', 'client',
-    'booker', 'notes', 'month', 'materials', 'materialsNote', 'internalNote', ...CLIENT_KEYS];
+    'booker', 'notes', 'month', 'materials', 'materialsNote', 'collected', 'confirmationMade', 'shootDates', 'shootDays', 'whtMode', 'internalNote', ...CLIENT_KEYS];
 
   for (const key of editable) {
     if (changes[key] === undefined) continue;
     if (key === 'budget')         job.budget = number(changes.budget);
     else if (key === 'materials') job.materials = ['searching', 'found', 'done'].includes(changes.materials) ? changes.materials : '';
+    else if (key === 'collected') job.collected = !!changes.collected;
+    else if (key === 'confirmationMade') job.confirmationMade = !!changes.confirmationMade;
+    else if (key === 'shootDates') job.shootDates = Array.isArray(changes.shootDates) ? changes.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [];
+    else if (key === 'shootDays') job.shootDays = Math.max(1, Math.round(number(changes.shootDays)) || 1);
+    else if (key === 'whtMode') job.whtMode = ['on', 'off'].includes(changes.whtMode) ? changes.whtMode : '';
     else if (key === 'internalNote') job.internalNote = text(changes.internalNote, 2000);
-    else if (key === 'currency')  job.currency = ['THB', 'USD', 'CNY'].includes(changes.currency) ? changes.currency : 'THB';
+    else if (key === 'currency')  job.currency = ['THB', 'USD', 'CNY', 'EUR'].includes(changes.currency) ? changes.currency : 'THB';
     else if (key === 'confirmed') job.confirmed = !!changes.confirmed;
     else if (key === 'status') {
       if (!STATUSES.includes(changes.status)) continue;
@@ -243,6 +304,9 @@ function updateJob(id, changes) {
     }
     else job[key] = text(changes[key], key === 'notes' ? 2000 : 500);
   }
+  // Multi-model fee lines — recompute budget + model/freelance from them.
+  const newLines = buildLines(changes);
+  if (newLines !== null) applyLines(job, newLines);
   // keep month in sync if the job date changed
   if (changes.jobDate !== undefined) job.month = monthOf(job.jobDate) || job.month;
 
@@ -260,15 +324,29 @@ function deleteJob(id) {
 
 // Work out the next running codes, continuing your existing numbering:
 //   C#### = taxed jobs,  B#### = non-tax jobs.
+// Next running code. If a code was recently freed (its job was moved to the other
+// invoice type or deleted), REUSE it instead of skipping — e.g. free B1110 → the
+// next B is B1110 again, not B1113. We only reuse a gap within 40 of the current
+// max (a genuinely-recent free), never the old reserved ranges far below.
+const CODE_REUSE_WINDOW = 40;
+function nextCode(prefix, jobs) {
+  const used = new Set();
+  const re = new RegExp(prefix + '\\s?(\\d{3,})', 'i');
+  for (const j of jobs) {
+    const m = `${j.jobId || ''} ${j.jobIdNonTax || ''}`.match(re);
+    if (m) used.add(+m[1]);
+  }
+  if (!used.size) return prefix + '1';
+  const max = Math.max(...used);
+  // Highest freed number just below the max (a recent free) → reuse it.
+  for (let n = max - 1; n >= max - CODE_REUSE_WINDOW && n > 0; n--) {
+    if (!used.has(n)) return prefix + n;
+  }
+  return prefix + (max + 1);
+}
 function nextCodes() {
   const jobs = load(JOBS_FILE);
-  let maxC = 0, maxB = 0;
-  for (const j of jobs) {
-    const both = `${j.jobId || ''} ${j.jobIdNonTax || ''}`;
-    const c = both.match(/C\s?(\d{3,})/i); if (c) maxC = Math.max(maxC, +c[1]);
-    const b = both.match(/B\s?(\d{3,})/i); if (b) maxB = Math.max(maxB, +b[1]);
-  }
-  return { tax: 'C' + (maxC + 1), nonTax: 'B' + (maxB + 1) };
+  return { tax: nextCode('C', jobs), nonTax: nextCode('B', jobs) };
 }
 
 
@@ -301,8 +379,14 @@ function buildScheduleEntry(input) {
     stage:   SCHED_STAGES.includes(input.stage) ? input.stage : '',   // Board pipeline stage
     postponeDate: text(input.postponeDate, 40),      // new date when postponed (optional / free text)
     internalNote: text(input.internalNote, 2000),   // team-only; never in the model notify message
+    jobRef:  text(input.jobRef, 40),                 // links a shoot-date entry back to its job
+    planGroup: text(input.planGroup, 40),            // links casting/fitting/shooting of ONE booking
     notified: input.notified ? String(input.notified).slice(0, 30) : '',  // 'YYYY-MM-DD' when the model was told, else ''
     shootDays: input.shootDays ? Math.max(1, Math.round(number(input.shootDays)) || 1) : '',  // 1 or 2 shoot days
+    leadSource: text(input.leadSource, 40),          // CRM: which channel this lead came from
+    clientType: (input.clientType === 'new' || input.clientType === 'old') ? input.clientType : '',  // new vs returning client
+    clientContact: text(input.clientContact, 300),   // client's contact (name / phone / LINE / email)
+    clientCategory: text(input.clientCategory, 40),  // CRM: client industry
   };
 }
 function updateScheduleEntry(id, changes) {
@@ -329,26 +413,129 @@ function updateScheduleEntry(id, changes) {
   if (changes.jobCreated !== undefined) entry.jobCreated = !!changes.jobCreated;
   if (changes.notified !== undefined) entry.notified = changes.notified ? String(changes.notified).slice(0, 30) : '';
   if (changes.shootDays !== undefined) entry.shootDays = changes.shootDays ? Math.max(1, Math.round(number(changes.shootDays)) || 1) : '';
+  if (changes.leadSource !== undefined) entry.leadSource = text(changes.leadSource, 40);
+  if (changes.clientType !== undefined) entry.clientType = (changes.clientType === 'new' || changes.clientType === 'old') ? changes.clientType : '';
+  if (changes.clientContact !== undefined) entry.clientContact = text(changes.clientContact, 300);
+  if (changes.clientCategory !== undefined) entry.clientCategory = text(changes.clientCategory, 40);
+  // Link fields — the client re-links entries to jobs/plans/holds via PATCH
+  // (e.g. syncShootDates converting a casting into the job's shoot entry).
+  if (changes.jobRef !== undefined) entry.jobRef = text(changes.jobRef, 40);
+  if (changes.planGroup !== undefined) entry.planGroup = text(changes.planGroup, 40);
+  if (changes.holdGroup !== undefined) entry.holdGroup = text(changes.holdGroup, 40);
+  if (changes.holdStart !== undefined) entry.holdStart = date(changes.holdStart);
+  if (changes.holdEnd !== undefined) entry.holdEnd = date(changes.holdEnd);
   save(SCHEDULE_FILE, list);
   return entry;
 }
 // ---- Model directory (operational contacts only — NEVER money) ---
 const MODEL_FIELDS = ['name', 'nickname', 'sex', 'country', 'status', 'agency', 'category',
   'motherAgency', 'phone', 'whatsapp', 'line', 'email', 'ig', 'visaType', 'visaExpiry',
-  'workPermit', 'arrival', 'departure', 'compCard', 'note'];
+  'workPermit', 'arrival', 'departure', 'compCard', 'note', 'age', 'location', 'modelCode', 'scouter'];
+// The REAL model code (MP-YY-MM-###) from the master Google Sheet — the same code
+// Aim uses as the product code in FlowAccount. One-time seed maps our models to it.
+const MODEL_CODE_SEED = path.join(__dirname, 'model_code_seed.json');
 const MODEL_LONG = { note: 1000, motherAgency: 600 };
-function buildModel(input) {
+// Running Model ID — a unique sequential number per model (tells duplicate names apart).
+function nextModelNo(list) {
+  const max = (list || []).reduce((m, x) => Math.max(m, parseInt(x.modelNo, 10) || 0), 0);
+  return max + 1;
+}
+function buildModel(input, list) {
   const m = { id: crypto.randomUUID() };
   MODEL_FIELDS.forEach(k => { m[k] = text(input[k], MODEL_LONG[k] || 200); });
+  m.modelNo = nextModelNo(list || load(MODELS_FILE));
   return m;
+}
+// CRM client record (managers only). Contact/marketing data — never money.
+const CLIENT_REC_FIELDS = ['name', 'company', 'taxId', 'address', 'contactPerson',
+  'phone', 'email', 'leadSource', 'clientCategory', 'clientType', 'note'];
+function buildClient(input) {
+  const c = { id: input.id || crypto.randomUUID(), created: input.created || new Date().toISOString() };
+  CLIENT_REC_FIELDS.forEach(k => { c[k] = text(input[k], k === 'note' || k === 'address' ? 800 : 200); });
+  return c;
+}
+
+// Mother-Agency-Commission ledger record (a scouter's own management sheet).
+function buildMacRecord(input) {
+  return {
+    id: input.id || crypto.randomUUID(),
+    owner: text(input.owner, 120),          // scouter's email (who owns this record)
+    ownerName: text(input.ownerName, 80),
+    year: text(input.year, 9),
+    period: text(input.period, 60),         // work period, free text
+    model: text(input.model, 100),
+    agency: text(input.agency, 100),
+    amount: number(input.amount),           // what the MODEL earned abroad
+    gross: number(input.gross),             // MP's gross mother-agency commission (10% of amount)
+    commission: number(input.commission),   // the scouter's (Wolf's) share (5% = half the gross)
+    expense: number(input.expense),
+    advanceCost: number(input.advanceCost),
+    status: text(input.status, 40),         // PAID / To be paid / Postponed / OFF / In town…
+    paymentInfo: text(input.paymentInfo, 300),
+    note: text(input.note, 500),
+    created: input.created || new Date().toISOString(),
+  };
+}
+
+// One-time import of Wolf's historical MAC ledger from the bundled seed. Runs only
+// until the ledger has seeded rows, so it never re-imports or overwrites live data.
+const MAC_SEED = path.join(__dirname, 'mac_seed.json');
+function seedMacRecords() {
+  if (!fs.existsSync(MAC_SEED)) return;
+  const cur = load(MAC_FILE);
+  if (Array.isArray(cur) && cur.some(r => r.fromSeed)) return;   // already imported
+  let seed = [];
+  try { seed = JSON.parse(fs.readFileSync(MAC_SEED, 'utf8')); } catch (_) { return; }
+  if (!Array.isArray(seed) || !seed.length) return;
+  save(MAC_FILE, seed.map(s => ({ ...buildMacRecord(s), fromSeed: true })));
+}
+
+// Other income / commission entry (managers only). Amount stored as a number.
+const INCOME_KINDS = ['sale', 'commission', 'referral', 'rental', 'mac', 'other'];
+function buildIncome(input) {
+  const kind = INCOME_KINDS.includes(String(input.kind)) ? input.kind : 'commission';
+  const cur = ['THB', 'USD', 'EUR', 'CNY'].includes(String(input.currency)) ? input.currency : 'THB';
+  return {
+    id: input.id || crypto.randomUUID(),
+    date: text(input.date, 10),           // YYYY-MM-DD
+    kind,
+    amount: number(input.amount),          // the income (for MAC = the commission MP earns)
+    currency: cur,
+    source: text(input.source, 200),      // who / which deal
+    note: text(input.note, 1000),
+    // Mother-Agency-Commission ledger fields (only used when kind === 'mac').
+    model: text(input.model, 100),
+    agency: text(input.agency, 100),
+    period: text(input.period, 60),        // work period, free text (e.g. "10th Oct 2024 - 13th Jan 2025")
+    modelAmount: number(input.modelAmount),// what the model earned abroad
+    expense: number(input.expense),
+    advanceCost: number(input.advanceCost),
+    status: text(input.status, 30),        // PAID / Pending / OFF / Postponed
+    paymentInfo: text(input.paymentInfo, 300),
+    created: input.created || new Date().toISOString(),
+  };
 }
 function updateModel(id, changes) {
   const list = load(MODELS_FILE);
   const m = list.find(x => x.id === id);
   if (!m) return null;
+  // Renames get the same duplicate guard as adding (no two models with one name).
+  if (changes.name !== undefined) {
+    const wanted = String(changes.name || '').trim().toLowerCase();
+    const clash = wanted && list.find(x => x.id !== id && String(x.name || '').trim().toLowerCase() === wanted);
+    if (clash) return { __duplicate: text(changes.name) };
+  }
   MODEL_FIELDS.forEach(k => { if (changes[k] !== undefined) m[k] = text(changes[k], MODEL_LONG[k] || 200); });
   save(MODELS_FILE, list);
   return m;
+}
+// Give every existing model a running number (once), in current order.
+function backfillModelNos() {
+  const list = load(MODELS_FILE);
+  if (!Array.isArray(list) || !list.length) return;
+  let next = nextModelNo(list), changed = false;
+  list.forEach(m => { if (!m.modelNo) { m.modelNo = next++; changed = true; } });
+  if (changed) save(MODELS_FILE, list);
 }
 // Seed the directory from the model names bookers ALREADY use in the Job Tracker,
 // tagging MP vs Freelance, so it's linked to bookings from day one — the designer
@@ -399,19 +586,53 @@ async function handleApi(req, res) {
     return reply(res, 200, { ok: true, token, email: user.email, name: user.name, role: user.role,
       bookerName: user.bookerName || '' });
   }
+  // --- LOGOUT: invalidate the session server-side ----------------
+  if (resource === 'logout' && method === 'POST') {
+    const t = req.headers['x-admin-token'];
+    if (t && sessions[t]) delete sessions[t];
+    return reply(res, 200, { ok: true });
+  }
 
   // --- READ-ONLY EXPORT for the separate Finance app --------------
   // One-way: the Finance app reads revenue + models with a shared service key.
   // Nothing financial ever flows back; no user session involved.
+  // --- FULL BACKUP (service-key gated) — pulled nightly by Lisa's Mac ---
+  // Returns every data file so a complete off-Railway copy always exists.
+  if (resource === 'backup' && method === 'GET') {
+    if (!SERVICE_KEY || req.headers['x-service-key'] !== SERVICE_KEY) {
+      return reply(res, 403, { error: 'Forbidden' });
+    }
+    const files = {};
+    for (const f of fs.readdirSync(DATA_DIR)) {
+      if (!f.endsWith('.json')) continue;
+      try { files[f] = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8')); } catch (_) {}
+    }
+    return reply(res, 200, { when: new Date().toISOString(), app: 'booking', files });
+  }
+
   if (resource === 'export' && method === 'GET') {
     if (!SERVICE_KEY || req.headers['x-service-key'] !== SERVICE_KEY) {
       return reply(res, 403, { error: 'Forbidden' });
     }
-    const jobs = load(JOBS_FILE).map(j => ({
-      model: j.model, freelance: j.freelance, budget: j.budget, currency: j.currency,
-      jobDate: j.jobDate, jobId: j.jobId, jobIdNonTax: j.jobIdNonTax, jobTitle: j.jobTitle, client: j.client,
-    }));
-    return reply(res, 200, { jobs, models: load(MODELS_FILE) });
+    // A job with per-model fee lines is EXPANDED into one row per model, each carrying
+    // that model's own fee — so the finance app credits every model correctly with no
+    // changes on its side. Single-model jobs pass through unchanged.
+    const jobs = [];
+    load(JOBS_FILE).forEach(j => {
+      const base = { currency: j.currency, jobDate: j.jobDate, jobId: j.jobId, jobIdNonTax: j.jobIdNonTax,
+        jobTitle: j.jobTitle, client: j.client, leadSource: j.leadSource };
+      if (Array.isArray(j.lines) && j.lines.length) {
+        j.lines.forEach(l => {
+          const fee = number(l.rate) + number(l.ot);
+          jobs.push({ ...base, model: l.mp ? l.name : '', freelance: l.mp ? '' : l.name, budget: fee });
+        });
+      } else {
+        jobs.push({ ...base, model: j.model, freelance: j.freelance, budget: j.budget });
+      }
+    });
+    // fx: current exchange rates so the Finance app can convert foreign-currency
+    // budgets to THB (a €500 job must not be read as ฿500).
+    return reply(res, 200, { jobs, models: load(MODELS_FILE), schedule: load(SCHEDULE_FILE), fx: loadSettings().fxRates });
   }
 
   // --- CLIENT booking from the website (no login) ----------------
@@ -453,12 +674,72 @@ async function handleApi(req, res) {
     }
   }
 
+  // A SCOUTER (external) is tightly sandboxed: only their own Mother-Agency ledger,
+  // plus READ-ONLY access to their own models + those models' schedule. Nothing else.
+  const isScouter = user.role === 'scouter';
+  if (isScouter) {
+    const allowed = resource === 'mac'
+      || (resource === 'schedule' && method === 'GET')
+      || (resource === 'models' && method === 'GET')
+      || (resource === 'settings' && method === 'GET');
+    if (!allowed) return reply(res, 403, { error: 'Not allowed.' });
+  }
+  // The set of model names this scouter owns (for filtering models + schedule).
+  const scouterModelNames = () => new Set(
+    load(MODELS_FILE)
+      .filter(m => String(m.scouter || '').toLowerCase() === String(user.email || '').toLowerCase())
+      .map(m => String(m.name || '').trim().toLowerCase()).filter(Boolean));
+
   // --- MODEL DIRECTORY (contacts only, NO money) ----------------
   if (resource === 'models') {
-    if (method === 'GET') return reply(res, 200, { models: load(MODELS_FILE) });
+    if (method === 'GET') {
+      let list = load(MODELS_FILE);
+      if (isScouter) { const mine = scouterModelNames(); list = list.filter(m => mine.has(String(m.name || '').trim().toLowerCase())); }
+      return reply(res, 200, { models: list });
+    }
+    // One-time import: stamp each model with its REAL code from the master sheet
+    // (matched by email/IG/phone/name). Managers only. Never overwrites a code
+    // already set by hand. Backs up the directory first.
+    if (method === 'POST' && body && body.__applyCodes) {
+      if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+      let seed = {};
+      try { seed = JSON.parse(fs.readFileSync(MODEL_CODE_SEED, 'utf8')); } catch (_) {}
+      const models = load(MODELS_FILE);
+      try { fs.writeFileSync(MODELS_FILE + '.bak', JSON.stringify(models)); } catch (_) {}
+      let applied = 0, already = 0;
+      models.forEach(m => {
+        if (!seed[m.id]) return;
+        if (m.modelCode) { already++; return; }   // never clobber a hand-set code
+        m.modelCode = seed[m.id]; applied++;
+      });
+      save(MODELS_FILE, models);
+      logActivity(user, 'imported model codes', `${applied} set, ${already} already had one`);
+      return reply(res, 200, { ok: true, applied, already, total: models.length, seeded: Object.keys(seed).length });
+    }
     // Create / edit / delete: managers + the graphic designer. Bookers view only.
     const canEditModels = isManager || user.role === 'designer';
     if (!canEditModels) return reply(res, 403, { error: 'View only — ask Admin or the designer to edit contacts.' });
+    // Bulk update (Ploy's cleanup): set status and/or category on MANY models in one
+    // write. POST { __bulk:true, ids:[...], set:{ status?, category? } }.
+    if (method === 'POST' && body && body.__bulk) {
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 500) : [];
+      const set = body.set || {};
+      const ALLOWED_STATUS = ['In town', 'Out of town', 'Direct booking', 'Left', ''];
+      const patch = {};
+      if (set.status !== undefined && ALLOWED_STATUS.includes(set.status)) patch.status = set.status;
+      if (set.category !== undefined) {
+        patch.category = text(set.category, 40);
+        patch.agency = patch.category === 'MP Models' ? 'MP' : (patch.category ? 'Freelance' : '');
+      }
+      if (!ids.length || !Object.keys(patch).length) return reply(res, 400, { error: 'Nothing to update.' });
+      const list = load(MODELS_FILE);
+      const idSet = new Set(ids);
+      let n = 0;
+      list.forEach(m => { if (idSet.has(m.id)) { Object.assign(m, patch); n++; } });
+      save(MODELS_FILE, list);
+      logActivity(user, 'bulk-updated models', `${n} models → ${Object.entries(patch).filter(([k]) => k !== 'agency').map(([k, v]) => k + ': ' + (v || '(cleared)')).join(', ')}`);
+      return reply(res, 200, { ok: true, updated: n });
+    }
     if (method === 'POST') {
       const list = load(MODELS_FILE);
       // Stop accidental duplicates: no two models with the same name.
@@ -467,7 +748,7 @@ async function handleApi(req, res) {
         const clash = list.find(x => String(x.name || '').trim().toLowerCase() === wanted);
         if (clash) return reply(res, 409, { error: `A model named “${text(body.name)}” is already on the list.`, duplicate: true, existingId: clash.id });
       }
-      const m = buildModel(body);
+      const m = buildModel(body, list);
       list.push(m); save(MODELS_FILE, list);
       logActivity(user, 'added model', m.name);
       return reply(res, 201, { ok: true, model: m });
@@ -475,6 +756,7 @@ async function handleApi(req, res) {
     if (method === 'PATCH' && id) {
       const m = updateModel(id, body);
       if (!m) return reply(res, 404, { error: 'Model not found.' });
+      if (m.__duplicate) return reply(res, 409, { error: `A model named “${m.__duplicate}” is already on the list.`, duplicate: true });
       return reply(res, 200, { ok: true, model: m });
     }
     if (method === 'DELETE' && id) {
@@ -488,28 +770,151 @@ async function handleApi(req, res) {
   // Financial Management app which pulls revenue via /api/export (above).
 
   // --- ACTIVITY LOG (visible to the whole team) -----------------
+  // Money-bearing entries (income amounts, MAC commissions, FX rates, restores)
+  // are manager-only: their detail text carries figures bookers/designer must
+  // never see, so those rows are filtered out for non-managers.
   if (resource === 'activity' && method === 'GET') {
-    return reply(res, 200, { activity: load(ACTIVITY_FILE).slice().reverse() });  // newest first
+    const MONEY_ACTIONS = ['added other income', 'edited other income', 'deleted other income',
+      'added MAC record', 'updated FX rates', 'restored data'];
+    let list = load(ACTIVITY_FILE).slice().reverse();   // newest first
+    if (!isManager) {
+      list = list.filter(a => !MONEY_ACTIONS.some(m => String(a.action || '').startsWith(m)));
+      // The designer never sees money at all — scrub budget figures from job-edit diffs.
+      if (user.role === 'designer') list = list.map(a => ({ ...a, detail: String(a.detail || '').replace(/budget → [^,]*/g, 'budget changed') }));
+    }
+    return reply(res, 200, { activity: list });
+  }
+
+  // Settings (exchange rates). Everyone can read (for display); managers can edit.
+  if (resource === 'settings') {
+    if (method === 'GET') return reply(res, 200, loadSettings());
+    if (method === 'PUT') {
+      if (!isManager) return reply(res, 403, { error: 'Only Director/Admin can change rates.' });
+      const s = loadSettings();
+      if (body.fxRates && typeof body.fxRates === 'object') {
+        ['USD', 'EUR', 'CNY'].forEach(c => { if (body.fxRates[c] !== undefined) s.fxRates[c] = number(body.fxRates[c]); });
+      }
+      save(SETTINGS_FILE, s);
+      logActivity(user, 'updated FX rates', ['USD', 'EUR', 'CNY'].map(c => `${c} ${s.fxRates[c]}`).join(', '));
+      return reply(res, 200, { ok: true, ...s });
+    }
   }
 
   // --- RESTORE (manager only) — one-time data transfer to production -----
   // Lets a Director push the local jobs/schedule straight to the server
   // (used once after deploy, so data never has to go through GitHub).
   if (resource === 'restore' && method === 'POST') {
-    if (!isManager) return reply(res, 403, { error: 'Not allowed.' });
-    if (Array.isArray(body.jobs)) save(JOBS_FILE, body.jobs);
-    if (Array.isArray(body.schedule)) save(SCHEDULE_FILE, body.schedule);
-    // Passwords in an incoming users list are already hashed (scrypt$...); only
-    // accept a non-empty array so we never wipe logins by mistake.
-    if (Array.isArray(body.users) && body.users.length) save(USERS_FILE, body.users);
-    if (Array.isArray(body.models) && body.models.length) save(MODELS_FILE, body.models);
+    // Director ONLY — a restore replaces whole data files. It must never touch the
+    // user table (that would let an admin mint a master account or reset passwords).
+    if (user.role !== 'master') return reply(res, 403, { error: 'Director only.' });
+    // Keep a backup of whatever is being replaced, so a bad restore is recoverable.
+    const backup = f => { try { fs.copyFileSync(f, f + '.pre-restore'); } catch (_) {} };
+    if (Array.isArray(body.jobs)) { backup(JOBS_FILE); save(JOBS_FILE, body.jobs); }
+    if (Array.isArray(body.schedule)) { backup(SCHEDULE_FILE); save(SCHEDULE_FILE, body.schedule); }
+    if (Array.isArray(body.models) && body.models.length) { backup(MODELS_FILE); save(MODELS_FILE, body.models); }
     logActivity(user, 'restored data', `${(body.jobs || []).length} jobs, ${(body.schedule || []).length} leads`);
-    return reply(res, 200, { ok: true, jobs: (body.jobs || []).length, schedule: (body.schedule || []).length, users: (body.users || []).length, models: (body.models || []).length });
+    return reply(res, 200, { ok: true, jobs: (body.jobs || []).length, schedule: (body.schedule || []).length, models: (body.models || []).length });
   }
 
   // --- NEXT RUNNING CODE (team) ---------------------------------
   if (resource === 'next-code' && method === 'GET') {
     return reply(res, 200, nextCodes());
+  }
+
+  // --- OTHER INCOME / COMMISSION (Director + Admin ONLY) --------
+  // Sales, commission, net income the agency earns outside the model bookings.
+  // This is money data: gated to managers on EVERY method, so bookers/designer
+  // never even receive it in a response.
+  if (resource === 'income') {
+    if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+    if (method === 'GET') return reply(res, 200, { income: load(INCOME_FILE) });
+    if (method === 'POST') {
+      const list = load(INCOME_FILE);
+      const rec = buildIncome(body);
+      list.unshift(rec); save(INCOME_FILE, list);
+      logActivity(user, 'added other income', `${rec.kind} ${rec.amount} ${rec.currency}${rec.source ? ' — ' + rec.source : ''}`);
+      return reply(res, 201, { ok: true, income: rec });
+    }
+    if (method === 'PATCH' && id) {
+      const list = load(INCOME_FILE);
+      const rec = list.find(x => x.id === id);
+      if (!rec) return reply(res, 404, { error: 'Entry not found.' });
+      Object.assign(rec, buildIncome({ ...rec, ...body }), { id: rec.id, created: rec.created });
+      save(INCOME_FILE, list);
+      logActivity(user, 'edited other income', `${rec.kind} ${rec.amount} ${rec.currency}`);
+      return reply(res, 200, { ok: true, income: rec });
+    }
+    if (method === 'DELETE' && id) {
+      save(INCOME_FILE, load(INCOME_FILE).filter(x => x.id !== id));
+      logActivity(user, 'deleted other income', id);
+      return reply(res, 200, { ok: true });
+    }
+  }
+
+  // --- CRM CLIENT RECORDS (Director + Admin ONLY) --------------
+  // Clients added directly (not only via jobs). Merged with job history in the UI.
+  if (resource === 'clients') {
+    if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+    if (method === 'GET') return reply(res, 200, { clients: load(CLIENTS_FILE) });
+    if (method === 'POST') {
+      if (!text(body.name)) return reply(res, 400, { error: 'Client name is required.' });
+      const list = load(CLIENTS_FILE);
+      const rec = buildClient(body);
+      list.push(rec); save(CLIENTS_FILE, list);
+      logActivity(user, 'added client', rec.name);
+      return reply(res, 201, { ok: true, client: rec });
+    }
+    if (method === 'PATCH' && id) {
+      const list = load(CLIENTS_FILE);
+      const rec = list.find(x => x.id === id);
+      if (!rec) return reply(res, 404, { error: 'Client not found.' });
+      Object.assign(rec, buildClient({ ...rec, ...body }), { id: rec.id, created: rec.created });
+      save(CLIENTS_FILE, list);
+      logActivity(user, 'edited client', rec.name);
+      return reply(res, 200, { ok: true, client: rec });
+    }
+    if (method === 'DELETE' && id) {
+      save(CLIENTS_FILE, load(CLIENTS_FILE).filter(x => x.id !== id));
+      logActivity(user, 'deleted client', id);
+      return reply(res, 200, { ok: true });
+    }
+  }
+
+  // --- MOTHER AGENCY (MAC) LEDGER — scouters + managers --------
+  // A scouter sees & edits ONLY their own records; managers see all scouters'.
+  if (resource === 'mac') {
+    if (!isManager && !isScouter) return reply(res, 403, { error: 'Not allowed.' });
+    const mine = r => String(r.owner || '').toLowerCase() === String(user.email || '').toLowerCase();
+    if (method === 'GET') {
+      let list = load(MAC_FILE);
+      if (isScouter) list = list.filter(mine);
+      return reply(res, 200, { mac: list });
+    }
+    if (method === 'POST') {
+      const list = load(MAC_FILE);
+      const owner = isScouter ? user.email : (body.owner || user.email);
+      const ownerName = isScouter ? user.name : (body.ownerName || '');
+      const rec = buildMacRecord({ ...body, owner, ownerName });
+      list.push(rec); save(MAC_FILE, list);
+      logActivity(user, 'added MAC record', `${rec.model || ''} ${rec.agency || ''} ${rec.commission || ''}`);
+      return reply(res, 201, { ok: true, mac: rec });
+    }
+    if (method === 'PATCH' && id) {
+      const list = load(MAC_FILE);
+      const rec = list.find(x => x.id === id);
+      if (!rec) return reply(res, 404, { error: 'Record not found.' });
+      if (isScouter && !mine(rec)) return reply(res, 403, { error: 'Not your record.' });
+      Object.assign(rec, buildMacRecord({ ...rec, ...body }), { id: rec.id, owner: rec.owner, ownerName: rec.ownerName, created: rec.created });
+      save(MAC_FILE, list);
+      return reply(res, 200, { ok: true, mac: rec });
+    }
+    if (method === 'DELETE' && id) {
+      const list = load(MAC_FILE);
+      const rec = list.find(x => x.id === id);
+      if (rec && isScouter && !mine(rec)) return reply(res, 403, { error: 'Not your record.' });
+      save(MAC_FILE, list.filter(x => x.id !== id));
+      return reply(res, 200, { ok: true });
+    }
   }
 
   // --- JOBS (team) ----------------------------------------------
@@ -521,7 +926,12 @@ async function handleApi(req, res) {
       let jobs = load(JOBS_FILE);
       // Graphic designer browses jobs to source photos/videos — never sees money.
       // Strip the fee server-side so it isn't even in the response.
-      if (user.role === 'designer') jobs = jobs.map(({ budget, currency, ...rest }) => rest);
+      // Strip ALL money for the designer — including the per-model fee lines
+      // (each line carries rate/ot; keep only the names so she can still browse).
+      if (user.role === 'designer') jobs = jobs.map(({ budget, currency, lines, ...rest }) => ({
+        ...rest,
+        lines: Array.isArray(lines) ? lines.map(l => ({ name: l.name, mp: l.mp })) : lines,
+      }));
       return reply(res, 200, { jobs });
     }
     if (method === 'POST') {                       // team adds a job by hand
@@ -536,9 +946,9 @@ async function handleApi(req, res) {
       return reply(res, 201, { ok: true, job });
     }
     if (method === 'PATCH' && id) {
-      // The graphic designer may change ONLY the materials status — nothing else.
+      // The graphic designer may change ONLY the materials status + collected tick.
       const patch = user.role === 'designer'
-        ? { materials: body.materials, materialsNote: body.materialsNote }
+        ? { materials: body.materials, materialsNote: body.materialsNote, collected: body.collected }
         : body;
       const before = load(JOBS_FILE).find(j => j.id === id) || {};
       const job = updateJob(id, patch);
@@ -552,10 +962,18 @@ async function handleApi(req, res) {
                  : reply(res, 404, { error: 'Job not found.' });
     }
     if (method === 'DELETE' && id) {
-      if (!isManager) return reply(res, 403, { error: 'Bookers cannot delete jobs.' });
+      // Bookers manage their own jobs fully (create/edit/delete). The designer stays read-only.
+      if (user.role === 'designer') return reply(res, 403, { error: 'View only — the graphic designer cannot delete jobs.' });
       const target = load(JOBS_FILE).find(j => j.id === id);
       const ok = deleteJob(id);
-      if (ok) logActivity(user, 'deleted job', target ? target.jobTitle : id);
+      if (ok) {
+        // Cascade: remove the schedule entries this job auto-created for its shoot
+        // dates (jobRef-linked) so no orphan green "shooting" cards linger.
+        const sched = load(SCHEDULE_FILE);
+        const remaining = sched.filter(e => e.jobRef !== id);
+        if (remaining.length !== sched.length) save(SCHEDULE_FILE, remaining);
+        logActivity(user, 'deleted job', target ? target.jobTitle : id);
+      }
       return ok ? reply(res, 200, { ok: true })
                 : reply(res, 404, { error: 'Job not found.' });
     }
@@ -564,7 +982,15 @@ async function handleApi(req, res) {
   // --- SCHEDULE (team) ------------------------------------------
   if (resource === 'schedule') {
     if (method === 'GET') {
-      const { list } = autoDeclinePastOptions();   // keep expired holds tidy on every load
+      let { list } = autoDeclinePastOptions();   // keep expired holds tidy on every load
+      if (isScouter) {
+        // Only entries for THIS scouter's models. Match whole names (the models field
+        // is a free-text list) — a substring match would leak other models' bookings
+        // when a scouter owns a short name (e.g. "An" matching "Joanna").
+        const mine = scouterModelNames();
+        const tokens = s => String(s || '').toLowerCase().split(/[,\/\n•·&+]| and /).map(t => t.trim()).filter(Boolean);
+        list = list.filter(e => tokens(e.models).some(t => mine.has(t)));
+      }
       return reply(res, 200, { schedule: list });
     }
     if (method === 'POST') {
@@ -632,7 +1058,17 @@ function serveFile(req, res) {
     return res.end();
   }
   const filePath = path.normalize(path.join(__dirname, name));
-  if (!filePath.startsWith(__dirname)) return reply(res, 403, { error: 'Forbidden' });
+  if (!filePath.startsWith(__dirname + path.sep)) return reply(res, 403, { error: 'Forbidden' });
+
+  // Only ever serve real front-end assets: the .html pages at the root, and files
+  // under js/ css/ images/. Never the backend source, configs, data, docs, or the
+  // model-code seed — those live at the root too and must NOT be publicly readable.
+  const rel = filePath.slice(__dirname.length + 1).replace(/\\/g, '/');
+  const isPublicAsset = (rel.endsWith('.html') && !rel.includes('/')) || /^(js|css|images)\//.test(rel);
+  if (!isPublicAsset) {
+    res.writeHead(404, { 'Content-Type': 'text/html' });
+    return res.end('<h1>404 — Page not found</h1>');
+  }
 
   fs.readFile(filePath, (err, contents) => {
     if (err) {
@@ -667,9 +1103,15 @@ function reply(res, code, data) {
 }
 function readJson(req) {
   return new Promise(resolve => {
-    let data = '';
-    req.on('data', c => { data += c; });
-    req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); } });
+    let data = '', dead = false;
+    req.on('error', () => { if (!dead) { dead = true; resolve({}); } });   // client dropped mid-body — never crash
+    const MAX = 2 * 1024 * 1024;   // 2 MB — plenty for any real payload, blocks memory-exhaustion posts
+    req.on('data', c => {
+      if (dead) return;
+      data += c;
+      if (data.length > MAX) { dead = true; data = ''; try { req.destroy(); } catch (_) {} resolve({}); }
+    });
+    req.on('end', () => { if (!dead) { try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); } } });
   });
 }
 function text(v, max = 300)  { return String(v == null ? '' : v).trim().slice(0, max); }
@@ -709,18 +1151,80 @@ function autoDeclinePastOptions() {
    7. START THE SERVER
    =================================================================== */
 
-http.createServer((req, res) => {
-  if (req.url.startsWith('/api/')) {
-    handleApi(req, res).catch(() => reply(res, 400, { error: 'Something went wrong.' }));
-  } else {
-    serveFile(req, res);
+// ---- CRASH-PROOFING ------------------------------------------------
+// One request must never take down the whole app (a crash logs everyone out).
+// 1. Every request/response stream gets an error listener — a phone dropping
+//    the connection mid-request otherwise raises an unhandled stream error
+//    that KILLS the process (the likely cause of the repeated crashes).
+// 2. API errors are LOGGED with a stack (they were swallowed silently before).
+// 3. Last-resort process guards log the stack instead of dying quietly.
+process.on('uncaughtException', err => {
+  console.error('[uncaughtException]', err && err.stack || err);
+});
+process.on('unhandledRejection', err => {
+  console.error('[unhandledRejection]', err && err.stack || err);
+});
+// Daily on-volume snapshot: copies every data file to DATA_DIR/backups/YYYY-MM-DD/
+// once per day (idempotent), keeping the last 14 days. Protects against a bad
+// write or an accidental in-app deletion — the OFF-Railway copy is the Mac pull.
+function dailySnapshot() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const root = path.join(DATA_DIR, 'backups');
+    const dir = path.join(root, today);
+    if (fs.existsSync(dir)) return;
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of fs.readdirSync(DATA_DIR)) {
+      if (f.endsWith('.json')) fs.copyFileSync(path.join(DATA_DIR, f), path.join(dir, f));
+    }
+    fs.readdirSync(root).sort().slice(0, -14).forEach(d => {
+      try { fs.rmSync(path.join(root, d), { recursive: true, force: true }); } catch (_) {}
+    });
+    console.log('[backup] snapshot ' + today + ' written');
+  } catch (e) { console.error('[backup]', e.message); }
+}
+
+const server = http.createServer((req, res) => {
+  req.on('error', e => { console.error('[req error]', req.url, e.code || e.message); try { res.destroy(); } catch (_) {} });
+  res.on('error', e => { console.error('[res error]', req.url, e.code || e.message); });
+  try {
+    if (req.url.startsWith('/api/')) {
+      handleApi(req, res).catch(err => {
+        console.error('[api error]', req.method, req.url, err && err.stack || err);
+        if (!res.headersSent) reply(res, 500, { error: 'Something went wrong — please try again.' });
+        else try { res.end(); } catch (_) {}
+      });
+    } else {
+      serveFile(req, res);
+    }
+  } catch (err) {
+    console.error('[handler error]', req.method, req.url, err && err.stack || err);
+    if (!res.headersSent) { try { reply(res, 500, { error: 'Something went wrong.' }); } catch (_) {} }
   }
-}).listen(PORT, () => {
+});
+
+// Graceful shutdown: Railway sends SIGTERM when it replaces the container on
+// every deploy. Without this, Node dies with a non-zero code and Railway mails
+// a "Deployment crashed" alert for a perfectly normal deploy.
+process.on('SIGTERM', () => {
+  console.log('[shutdown] SIGTERM received — closing server');
+  server.close(() => { console.log('[shutdown] closed cleanly'); process.exit(0); });
+  if (server.closeIdleConnections) server.closeIdleConnections();
+  // If a request hangs past 8s, leave anyway — deliberate shutdown, exit 0.
+  setTimeout(() => { console.log('[shutdown] timeout — forcing exit'); process.exit(0); }, 8000).unref();
+});
+
+server.listen(PORT, () => {
   seedUsers();          // create data/users.json on first run
+  ensureExtraUsers();   // add Wolf's scouter login if missing
+  seedMacRecords();     // import Wolf's historical MAC ledger once
   migratePasswords();   // hash any plaintext passwords still on disk
   seedModels();         // build the model directory from booking names on first run
+  backfillModelNos();   // give every model a running number
   autoDeclinePastOptions();   // tidy expired option holds on boot
   setInterval(autoDeclinePastOptions, 6 * 3600 * 1000);   // …and every 6 hours
+  dailySnapshot();            // on-volume daily backup (14 days kept)
+  setInterval(dailySnapshot, 6 * 3600 * 1000);   // idempotent — one snapshot per day
   console.log(`\n  MP Models booking & job tracker is running.`);
   console.log(`  → Website:   http://localhost:${PORT}/`);
   console.log(`  → Dashboard: http://localhost:${PORT}/admin.html`);
