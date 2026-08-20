@@ -550,7 +550,9 @@
       <div class="stat"><div class="n">${castings}</div><div class="l">Castings (leads)</div></div>
       <div class="stat"><div class="n">${options}</div><div class="l">Options (leads)</div></div>
       ${mySalesTile}
-      <div class="stat money"><div class="n">${money(totalBudget)}</div><div class="l">Team total (THB)${foreignCount ? ' · incl. ' + foreignCount + ' foreign' : ''}</div></div>
+      ${(canSeeMoney() || month !== 'all')
+        ? `<div class="stat money"><div class="n">${money(totalBudget)}</div><div class="l">Team total (THB)${foreignCount ? ' · incl. ' + foreignCount + ' foreign' : ''}</div></div>`
+        : `<div class="stat money"><div class="n">🔒</div><div class="l">Year total — Director &amp; Admin only · pick a month</div></div>`}
       <div class="stat money revenue-only"><div class="n">${money(taxBudget)}</div><div class="l">Tax invoice · KBank</div></div>
       <div class="stat money nontax revenue-only"><div class="n">${money(nonTaxBudget)}</div><div class="l">Non-Tax · SCB</div></div>
       ${foreignTiles}`;
@@ -1138,10 +1140,9 @@
         .then(() => { const jj = jobs.find(x => x.id === data.id); if (jj) jj.confType = type; })
         .catch(() => {});
     }
-    const doc = MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
-    // PDF/Word buttons + auto-save to the Drive folder — never for the designer's
-    // money-hidden copy (it must not overwrite the real document in Drive).
-    if (doc && role !== 'designer') addConfDocTools(doc, data, type);
+    // Ploy sees money like the bookers now (Lisa 2026-08-20) — full form for all.
+    const doc = MPConfirmation.open(data, type, {});
+    if (doc) addConfDocTools(doc, data, type);
   }
   // The confirmation as spreadsheet rows [label, value] — Aim keys jobs into her
   // system from a Google SHEET in Chrome (old workflow); numbers via the SAME
@@ -1180,7 +1181,7 @@
   // POST the confirmation to Lisa's Apps Script → Google SHEET + PDF copy filed
   // under JOB CONFIRMATION → <year> → <n.MONTH>, overwriting older versions.
   function driveUploadConfirmation(job, type, html, onStatus) {
-    if (!appSettings.driveUploadUrl || role === 'designer') return;
+    if (!appSettings.driveUploadUrl) return;
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
@@ -1197,7 +1198,7 @@
   // Tawa: editing a job must overwrite its Drive copies right away.
   function autoDriveSave(jobRec) {
     try {
-      if (!jobRec || !jobRec.confirmationMade || !appSettings.driveUploadUrl || role === 'designer') return;
+      if (!jobRec || !jobRec.confirmationMade || !appSettings.driveUploadUrl) return;
       const { data, type } = confirmationDocData({ ...jobRec });
       const html = MPConfirmation.render(data, type);
       driveUploadConfirmation(data, type, html, ok => { if (ok) toast('☁ Confirmation updated in Drive'); });

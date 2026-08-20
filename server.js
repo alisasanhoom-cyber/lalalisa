@@ -792,21 +792,13 @@ async function handleApi(req, res) {
     let list = load(ACTIVITY_FILE).slice().reverse();   // newest first
     if (!isManager) {
       list = list.filter(a => !MONEY_ACTIONS.some(m => String(a.action || '').startsWith(m)));
-      // The designer never sees money at all — scrub budget figures from job-edit diffs.
-      if (user.role === 'designer') list = list.map(a => ({ ...a, detail: String(a.detail || '').replace(/budget → [^,]*/g, 'budget changed') }));
     }
     return reply(res, 200, { activity: list });
   }
 
   // Settings (exchange rates). Everyone can read (for display); managers can edit.
   if (resource === 'settings') {
-    if (method === 'GET') {
-      const s = loadSettings();
-      // The Drive webhook URL lets its holder ADD files to Lisa's Drive folder —
-      // only roles that generate confirmations (managers + bookers) receive it.
-      if (!isManager && user.role !== 'booker') delete s.driveUploadUrl;
-      return reply(res, 200, s);
-    }
+    if (method === 'GET') return reply(res, 200, loadSettings());   // whole team (Lisa 2026-08-20)
     if (method === 'PUT') {
       if (!isManager) return reply(res, 403, { error: 'Only Director/Admin can change rates.' });
       const s = loadSettings();
@@ -946,14 +938,8 @@ async function handleApi(req, res) {
   if (resource === 'jobs') {
     if (method === 'GET') {
       let jobs = load(JOBS_FILE);
-      // Graphic designer browses jobs to source photos/videos — never sees money.
-      // Strip the fee server-side so it isn't even in the response.
-      // Strip ALL money for the designer — including the per-model fee lines
-      // (each line carries rate/ot; keep only the names so she can still browse).
-      if (user.role === 'designer') jobs = jobs.map(({ budget, currency, lines, overtimeFee, overtimeRate, ...rest }) => ({
-        ...rest,
-        lines: Array.isArray(lines) ? lines.map(l => ({ name: l.name, mp: l.mp })) : lines,
-      }));
+      // Graphic designer sees monthly money like the bookers (Lisa 2026-08-20);
+      // only the manager year-total/billing views stay hidden (client-side gates).
       return reply(res, 200, { jobs });
     }
     if (method === 'POST') {                       // team adds a job by hand
@@ -980,13 +966,7 @@ async function handleApi(req, res) {
           : diffSummary(before, job, body, JOB_DIFF_FIELDS);
         logActivity(user, 'edited job', `${job.jobTitle}${what ? ' — ' + what : ''}`);
       }
-      // The designer's PATCH response must be money-stripped like the jobs GET —
-      // the full job object was leaking budget/lines rates in DevTools.
-      const jobOut = (job && user.role === 'designer')
-        ? (({ budget, currency, lines, overtimeFee, overtimeRate, ...rest }) =>
-            ({ ...rest, lines: Array.isArray(lines) ? lines.map(l => ({ name: l.name, mp: l.mp })) : lines }))(job)
-        : job;
-      return job ? reply(res, 200, { ok: true, job: jobOut })
+      return job ? reply(res, 200, { ok: true, job })
                  : reply(res, 404, { error: 'Job not found.' });
     }
     if (method === 'DELETE' && id) {
