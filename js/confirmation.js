@@ -20,8 +20,16 @@
   function calc(job, type) {
     const v = VARIANTS[type] || VARIANTS.tax;
     const num = x => { const n = parseFloat(String(x == null ? '' : x).replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
-    const fee = num(job.budget);
-    const otIsNumber = /^[\d,]+(\.\d+)?$/.test(String(job.overtimeFee || '').trim());
+    // Lines-jobs already fold each model's OT into budget; legacy shared-code
+    // groups carry the real total only in modelFees — never in this record's
+    // budget. Either way, a job-level numeric overtimeFee must NOT add again.
+    const hasLines = Array.isArray(job.lines) && job.lines.length > 0;
+    const feesMulti = Array.isArray(job.modelFees) && job.modelFees.length > 1;
+    const fee = feesMulti ? job.modelFees.reduce((s, mf) => s + num(mf.fee), 0) : num(job.budget);
+    // Strict thousands format: "12,50" (European decimal comma) is condition
+    // text, not ฿1,250 — ambiguous strings never become money.
+    const otNumeric = /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.test(String(job.overtimeFee || '').trim());
+    const otIsNumber = otNumeric && !hasLines && !feesMulti;
     const ot = otIsNumber ? num(job.overtimeFee) : 0;      // only add overtime to the total if it's a number
     const subtotal = fee + ot;                             // fee + overtime, before VAT
     const vat = v.vat ? subtotal * 0.07 : 0;
@@ -38,8 +46,10 @@
     // Overtime display: incurred amount → condition text → hourly rate (Ness:
     // clients should always see the OT price per hour, like the old form).
     const otRate = num(job.overtimeRate);
-    const otDisplay = otIsNumber ? cash(ot)
-      : (String(job.overtimeFee || '').trim() || (otRate ? cash(otRate) + '/Hour' : ''));
+    // Display: incurred amount → condition text → hourly rate. A stale NUMBER on
+    // a lines/multi job is hidden (its OT already sits inside the model fees).
+    const otText = otNumeric && !otIsNumber ? '' : String(job.overtimeFee || '').trim();
+    const otDisplay = otIsNumber ? cash(ot) : (otText || (otRate ? cash(otRate) + '/Hour' : ''));
     return { v, num, fee, otIsNumber, ot, subtotal, vat, total, whtOn, wht, netPay, sym, cash, otDisplay };
   }
 
@@ -169,6 +179,7 @@
         ${rows}
         <tr class="mf-total"><td>TOTAL (${multi.length} models)</td><td class="mf-num">${cash(sumFee)}</td>${v.vat ? `<td class="mf-num">${cash(sumVat)}</td>` : ''}<td class="mf-num"><b>${cash(grand)}</b></td></tr>
       </table>
+      ${otDisplay ? `<p class="pay"><b>Overtime:</b> ${esc(otDisplay)}</p>` : ''}
       ${whtOn ? `<div class="row cols2 wht-row">${field('Less withholding tax 3%', '− ' + cash(sumWht))}${field('Net amount to transfer', cash(netGrand))}</div>
       <p class="wht-note">If you withhold tax (companies), transfer the <b>net amount ${cash(netGrand)}</b> and issue us a 3% withholding-tax certificate. Otherwise transfer the full total ${cash(grand)}.</p>`
       : (v.vat ? `<p class="wht-note">Please transfer the <b>full total ${cash(grand)}</b>.</p>` : '')}`;

@@ -256,7 +256,9 @@
   // condition is printed on the confirmation and becomes a number once known.
   function otNum(v) {
     const s = String(v == null ? '' : v).trim();
-    if (!s || !/^[\d,]+(\.\d+)?$/.test(s)) return 0;
+    // Commas must be real thousands groups: "12,50" (European decimal comma)
+    // is NOT ฿1,250 — ambiguous strings count as condition text, never money.
+    if (!s || !/^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.test(s)) return 0;
     return Number(s.replace(/,/g, '')) || 0;
   }
   // A job's full amount = budget + overtime fee. Lines-jobs already fold each
@@ -1099,6 +1101,9 @@
   // Enrich a job for the confirmation (per-model fee table, legacy code-grouping)
   // and resolve the form type — shared by the 👁 preview and the silent Drive save.
   function confirmationDocData(data, type) {
+    // The last form type used (incl. International) is remembered on the job so
+    // silent Drive re-uploads can't downgrade an intl confirmation to Tax form.
+    if (!type && ['tax', 'nontax', 'intl'].includes(data.confType)) type = data.confType;
     if (!type) type = (data.jobId && !/b\s?\d/i.test(data.jobId)) ? 'tax' : (data.jobIdNonTax || /b\s?\d/i.test(data.jobId || '') ? 'nontax' : 'tax');
     // ONE job holding several models with their own rate/OT → per-model fee table.
     if (Array.isArray(data.lines) && data.lines.length > 1) {
@@ -1127,6 +1132,12 @@
   }
   function openConfirmationDoc(rawData, rawType) {
     const { data, type } = confirmationDocData(rawData, rawType);
+    // Remember the chosen form type on the job (see confirmationDocData).
+    if (data.id && data.confType !== type && role !== 'designer') {
+      api('/api/jobs/' + data.id, { method: 'PATCH', body: JSON.stringify({ confType: type }) })
+        .then(() => { const jj = jobs.find(x => x.id === data.id); if (jj) jj.confType = type; })
+        .catch(() => {});
+    }
     const doc = MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
     // PDF/Word buttons + auto-save to the Drive folder — never for the designer's
     // money-hidden copy (it must not overwrite the real document in Drive).
@@ -1155,7 +1166,7 @@
     add('Booker', job.booker || '');
     rows.push(['PAYMENT', '']);
     if (Array.isArray(job.modelFees) && job.modelFees.length > 1)
-      job.modelFees.forEach(mf => add('   ' + (mf.model || ''), c.cash(mf.fee)));
+      job.modelFees.forEach(mf => add('   ' + (mf.model || ''), c.cash(c.num(mf.fee))));
     add('Fee (excl. VAT)', c.cash(c.fee));
     add('Overtime', c.otDisplay || '—');
     add('Subtotal', c.cash(c.subtotal));
@@ -2894,9 +2905,9 @@
         // The chosen type sets the stage on NEW entries too — so a fresh Option
         // can't land with a blank/mismatched stage and drift categories later.
         const addType = base._activeType; delete base._activeType;
-        if (addType) base.stage = addType === 'priority' ? 'priority'
-          : base.status === 'confirmed' ? 'shooting'
-          : ({ job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' })[addType];
+        // The chosen type decides the column — a Confirmed status must not turn
+        // a Shortlist/Fitting into a Job (only the 'job' type maps to shooting).
+        if (addType) base.stage = ({ job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' })[addType];
         if (!(base.models || base.casting || base.fitting || base.option || base.job || base.shortlist || base.priority || base.note)) { alert('Add something first.'); return; }
         if (!passesDuplicateGuard(base, dates)) return;
         if (!passesConflictGuard(getAddDates, null)) return;
@@ -3048,8 +3059,8 @@
         data.stage = activeType === 'priority' ? 'priority'                       // an admin block is never a shoot
           : data.status === 'confirmed' ? 'shooting'                              // confirmed booking → Confirmed/Shooting
           : (activeType ? TYPE2STAGE[activeType] : '');
-      } else if (becameConfirmed && activeType !== 'priority') {
-        data.stage = 'shooting';                                                  // newly confirmed → Shooting column
+      } else if (becameConfirmed && (activeType || prevPrimary) && activeType !== 'priority' && e.stage !== 'goandsee') {
+        data.stage = 'shooting';                                                  // newly confirmed booking → Shooting column
       } else {
         data.stage = e.stage || '';                                               // LOCKED — category stays put
       }

@@ -44,7 +44,9 @@ const FX_DEFAULT = { USD: 35, EUR: 38, CNY: 5 };
 function loadSettings() {
   const s = load(SETTINGS_FILE);
   const fx = (s && s.fxRates) || {};
-  return { fxRates: { ...FX_DEFAULT, ...fx } };
+  // Keep EVERY stored setting — dropping keys here meant a rates-only save
+  // erased driveUploadUrl from disk and the client never received it at all.
+  return { ...(s || {}), fxRates: { ...FX_DEFAULT, ...fx }, driveUploadUrl: (s && s.driveUploadUrl) || '' };
 }
 // Changes every deploy (server restart) → busts Cloudflare's cache of js/css so
 // browsers always load the code that matches the current HTML.
@@ -59,6 +61,7 @@ const CLIENT_KEYS = [
   'product', 'role', 'mediaUsage', 'periodOfUsage', 'countryOfUse', 'shootLocation',
   'shootStart', 'shootEnd', 'timeStart', 'timeEnd', 'noOfShoot',
   'workPackage', 'contractHours', 'breakHours', 'overtimeRate', 'overtimeFee', 'paymentTerm', 'remark',
+  'confType',     // last confirmation form type used (tax/nontax/intl) — Drive re-uploads must keep it
   'leadSource',   // CRM: which channel this lead/client came from (LINE, IG, website…)
   'signedDocUrl', // Drive link to the SIGNED confirmation the client sent back
   'clientCategory',   // CRM: client industry — Fashion / Commercial / Film & TV / Event organizer…
@@ -216,9 +219,11 @@ function buildLines(input) {
 function linesTotal(lines) { return (lines || []).reduce((s, l) => s + number(l.rate) + number(l.ot), 0); }
 // overtimeFee may be a CONDITION text ("1,250/hour after 13 hours") — only a
 // clean number counts toward totals (number() would wrongly grab the leading 1250).
+// Commas must be REAL thousands groups: "12,50" (European decimal comma) is NOT
+// 1250 baht — anything ambiguous is treated as condition text, never money.
 function otAmount(v) {
   const s = String(v == null ? '' : v).trim();
-  return /^[\d,]+(\.\d+)?$/.test(s) ? number(s) : 0;
+  return /^(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.test(s) ? number(s) : 0;
 }
 function applyLines(job, lines) {
   job.lines = lines || [];
@@ -795,7 +800,13 @@ async function handleApi(req, res) {
 
   // Settings (exchange rates). Everyone can read (for display); managers can edit.
   if (resource === 'settings') {
-    if (method === 'GET') return reply(res, 200, loadSettings());
+    if (method === 'GET') {
+      const s = loadSettings();
+      // The Drive webhook URL lets its holder ADD files to Lisa's Drive folder —
+      // only roles that generate confirmations (managers + bookers) receive it.
+      if (!isManager && user.role !== 'booker') delete s.driveUploadUrl;
+      return reply(res, 200, s);
+    }
     if (method === 'PUT') {
       if (!isManager) return reply(res, 403, { error: 'Only Director/Admin can change rates.' });
       const s = loadSettings();
@@ -969,7 +980,13 @@ async function handleApi(req, res) {
           : diffSummary(before, job, body, JOB_DIFF_FIELDS);
         logActivity(user, 'edited job', `${job.jobTitle}${what ? ' — ' + what : ''}`);
       }
-      return job ? reply(res, 200, { ok: true, job })
+      // The designer's PATCH response must be money-stripped like the jobs GET —
+      // the full job object was leaking budget/lines rates in DevTools.
+      const jobOut = (job && user.role === 'designer')
+        ? (({ budget, currency, lines, overtimeFee, overtimeRate, ...rest }) =>
+            ({ ...rest, lines: Array.isArray(lines) ? lines.map(l => ({ name: l.name, mp: l.mp })) : lines }))(job)
+        : job;
+      return job ? reply(res, 200, { ok: true, job: jobOut })
                  : reply(res, 404, { error: 'Job not found.' });
     }
     if (method === 'DELETE' && id) {

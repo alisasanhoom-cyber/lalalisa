@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Job Tracker | MP Models</title>
+  <title>MP Models</title>
+  <meta name="description" content="MP Models — Morgan &amp; Preston Models Bangkok">
+  <meta property="og:title" content="MP Models">
+  <meta property="og:description" content="Morgan &amp; Preston Models Bangkok">
+  <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/png" sizes="180x180" href="images/mp-mark-180.png?v=3">
   <link rel="icon" type="image/png" sizes="64x64" href="images/mp-mark-64.png?v=3">
@@ -16,7 +20,12 @@
       --pending:#d98a00; --confirmed:#1b998b; --declined:#c0392b; --completed:#555; --web:#7b5ea7;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:'Open Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+    /* No up/down spinner arrows on number inputs anywhere — just type */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield;appearance:textfield}
+    body{margin:0;font-family:'Open Sans',system-ui,sans-serif;color:var(--ink);
+         background:linear-gradient(180deg, rgba(27,153,139,.11) 0, rgba(27,153,139,.05) 130px, rgba(27,153,139,0) 400px) no-repeat, var(--bg)}
     a{color:var(--teal)}
     button{font-family:inherit}
 
@@ -73,8 +82,11 @@
     /* Manager-only features (activity log) — hidden from bookers */
     body.role-booker .manager-only{display:none !important}
     /* Graphic designer: sees jobs/schedule to find shoots, but NO money anywhere */
+    body.role-scouter .hide-scouter{display:none !important}
+    body.role-booker .mac-tab, body.role-designer .mac-tab{display:none !important}
     body.role-designer .revenue-only,
     body.role-designer .manager-only,
+    body.role-designer .hide-designer,
     body.role-designer .money{display:none !important}
     /* Photos/videos status is for the graphic team + managers — bookers never see it */
     body.role-booker .materials-box,
@@ -105,7 +117,64 @@
     td{padding:10px 12px;border-bottom:1px solid #f2f2f2;vertical-align:top}
     tr:last-child td{border-bottom:none}
     .th-sub{font-weight:400;font-size:9px;color:var(--grey);text-transform:none;letter-spacing:0}
+    .fx-tag{font-size:10.5px;font-weight:600;color:var(--web);background:#f0ecfb;border:1px solid #ddd3f5;border-radius:5px;padding:1px 5px;margin-left:5px;white-space:nowrap}
+    .fx-edit{font-size:10px;color:var(--teal);text-decoration:underline;margin-left:4px}
+    tr.month-head td{background:#16211d;color:#fff;font-weight:700;font-size:12px;letter-spacing:.03em;padding:8px 12px;position:sticky;top:0}
+    tr.gap-row td{background:#fafafa;color:#b06a1a;font-size:11.5px;font-style:italic;padding:5px 12px;border-bottom:1px dashed #eadfcf}
+    tr.gap-free{cursor:pointer} tr.gap-free:hover td{background:#fff4e6;color:#8a4f10}
+    tr.in-row{cursor:pointer} tr.in-row:hover td{background:#f6faf9}
+    .yo-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+    .yo-row{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;cursor:pointer;flex-wrap:wrap}
+    .yo-row:hover{border-color:var(--teal);box-shadow:0 2px 10px rgba(27,153,139,.08)}
+    .yo-mon{font-weight:700;font-size:15px;min-width:130px}
+    .yo-pills{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+    .yo-pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#555}
+    .yo-pill b{font-size:14px;color:var(--ink)}
+    .in-kind{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.03em}
+    .in-kind.k-sale{background:#e6f5ee;color:#1c7a4d} .in-kind.k-commission{background:#eef0fb;color:#3b46a8}
+    .in-kind.k-referral{background:#fdf0e6;color:#b06a1a} .in-kind.k-rental{background:#e7f1fb;color:#1f6aa8} .in-kind.k-mac{background:#f1ecfb;color:#5a3e8a} .in-kind.k-other{background:#f0f0f0;color:#555}
+    .in-note{color:#666;font-size:12px;max-width:320px}
+    .src-badge{display:inline-block;font-size:10.5px;font-weight:600;color:#4a5a7a;background:#eef1f8;border:1px solid #dbe1ef;border-radius:20px;padding:1px 8px;white-space:nowrap}
+    .src-badge.none{color:#a05a2c;background:#fdf3e7;border-color:#f0dcb0}
+    .src-badge.cat{color:#5a3e8a;background:#f1ecfb;border-color:#ddd0f2}
+    .mac-st{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+    .mac-st.ok{background:#e6f5ee;color:#1c7a4d} .mac-st.wait{background:#fdf3e7;color:#a05a2c} .mac-st.off{background:#fbe8e6;color:#c0392b}
+    tr.mac-row{cursor:pointer} tr.mac-row:hover td{background:#f6faf9}
+    .client-block{background:#f7fbfa;border:1px solid #cfe3dd;border-radius:12px;padding:14px 16px;margin-bottom:16px}
+    .cb-head{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--teal);text-transform:uppercase;margin-bottom:10px}
+    .cb-seg{display:flex;gap:8px;margin-bottom:12px}
+    .cbt{flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#555}
+    .cbt.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+    .cb-lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--grey);margin:10px 0 4px}
+    .cb-lbl span{text-transform:none;letter-spacing:0;font-size:11px;font-weight:400}
+    .client-block select,.client-block input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-family:inherit;background:#fff}
+    tr.cl-row{cursor:pointer} tr.cl-row:hover td{background:#f6faf9}
+    .cl-ago{font-size:10.5px;color:#8a8a8a;margin-top:1px} .cl-ago.stale{color:#c0392b;font-weight:600}
+    .cd-line{display:flex;gap:12px;padding:5px 0;border-bottom:1px solid #eef2f0;font-size:13px}
+    .cd-line:last-child{border-bottom:none}
+    .cd-l{min-width:120px;color:var(--grey);font-size:11.5px;text-transform:uppercase;letter-spacing:.02em}
+    .cd-v{flex:1;font-weight:600;word-break:break-word}
+    .sect-h{font-weight:700;font-size:13px;margin:16px 0 8px}
+    .cd-jobs{width:100%;border-collapse:collapse;font-size:12.5px}
+    .cd-jobs th{text-align:left;color:#8a8a8a;font-size:10.5px;text-transform:uppercase;padding:5px 8px;border-bottom:1px solid var(--line)}
+    .cd-jobs td{padding:6px 8px;border-bottom:1px solid #f3f3f3}
+    .conf-icon{cursor:pointer;font-size:12px;opacity:.32;filter:grayscale(1);margin-right:2px;user-select:none}
+    .conf-icon.done{opacity:1;filter:none}
+    .col-collected{width:34px;text-align:center}
+    .col-collected input{cursor:pointer;width:16px;height:16px}
+    tr.row.collected{background:#f2f8f4}
+    tr.row.collected .title-cell{color:var(--grey)}
     .code-dash{color:var(--line2)}
+    /* Per-model fee rows on a job (multi-model, different rate/OT) */
+    .line-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+    .line-row .ln-name{flex:1;min-width:0}
+    .line-row input,.line-row select{padding:8px 10px;border:1px solid var(--line2);border-radius:8px;font-size:13px}
+    .line-row .ln-rate,.line-row .ln-ot{width:88px}
+    .line-row .ln-type{width:104px}
+    .line-row .ln-del{background:none;border:none;color:var(--declined);font-size:20px;cursor:pointer;line-height:1;padding:0 4px}
+    .line-add{background:#eef5f3;border:1px solid #cfe3dd;color:var(--confirmed);border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+    .job-lines{display:block;font-size:11.5px;color:var(--grey);margin-top:3px;line-height:1.5}
+    .job-lines b{color:var(--ink);font-weight:600}
     td.code-b{color:var(--web)}
     tr.row{cursor:pointer}
     tr.row:hover{background:#fbfbfb}
@@ -117,6 +186,7 @@
     .badge.pending{background:var(--pending)} .badge.confirmed{background:var(--confirmed)}
     .badge.declined{background:var(--declined)} .badge.completed{background:var(--completed)}
     .badge.web{background:var(--web)}
+    .badge.usage{background:#a9701a;text-transform:none;letter-spacing:0}
     .status-select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;cursor:pointer}
     .empty{padding:44px;text-align:center;color:var(--grey)}
 
@@ -153,6 +223,7 @@
     .bcard .b-book{background:#eef2f0;border-radius:999px;padding:1px 7px;font-weight:600}
     .bcard .b-time{font-weight:700;color:var(--ink)}
     .bcard .b-pp{font-size:11px;color:#a9701a;font-weight:600;margin-top:3px}
+    .bcard .b-plan{font-size:11px;color:#6366f1;font-weight:600;margin-top:3px}
     .bcard .b-hold{color:var(--web);font-weight:700}
     .board-empty{color:var(--faint,#9aa19d);font-size:11px;text-align:center;padding:10px 0}
     .board-hint{font-size:11.5px;color:var(--grey);margin:0 0 10px}
@@ -228,6 +299,14 @@
     .cal-nav .cal-title{margin:0;min-width:150px;text-align:center}
     .cal-nav .cal-prev,.cal-nav .cal-next{font-size:22px;line-height:1;padding:0 8px;font-weight:700}
     .cal-nav .cal-today{margin-left:6px;font-size:12px}
+    .cal-stats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+    .cal-stat{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:6px 12px;font-size:13px;color:var(--grey)}
+    .cal-stat b{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+    .cal-stat-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+    .cal-stat-dot.lg-job{background:var(--teal)} .cal-stat-dot.lg-short{background:#d33}
+    .cal-stat-dot.lg-fit{background:#6366f1} .cal-stat-dot.lg-cast{background:#b8860b}
+    .cal-stat-dot.lg-gosee{background:#0d9488} .cal-stat-dot.lg-opt{background:var(--web)}
+    .cal-stat-dot.lg-prio{background:#e67e22}
     .cal-title{font-weight:700;font-size:15px;margin:0 0 12px}
     .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
     .cal-dow{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grey);text-align:center;padding:4px 0;font-weight:700}
@@ -325,12 +404,28 @@
     }
     /* Models directory — lined-up list */
     #m-grid{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .m-bulkbar{position:sticky;top:46px;z-index:4;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#16211d;color:#fff;border-radius:10px;padding:9px 14px;margin:0 0 10px;font-size:13px}
+    .m-bulkbar select{padding:7px 10px;border:none;border-radius:8px;font-size:13px;background:#fff;color:#1a1a1a}
+    .m-bulkbar .link{color:#9fd6cd}
+    .m-sel{width:16px;height:16px;accent-color:var(--teal);cursor:pointer;flex:0 0 auto}
+    .prev-icon{cursor:pointer;font-size:12px;margin-left:4px;opacity:.55}
+    .prev-icon:hover{opacity:1}
+    .signed-link{text-decoration:none;font-size:13px;cursor:pointer}
+    .signed-link:hover{filter:brightness(1.2)}
+    .brush-move-hint{background:#fdf3e7;border:1px solid #f0dcb0;color:#8a5a12;border-radius:8px;padding:8px 12px;font-size:12.5px;margin:8px 0}
+    .m-year-div{display:flex;align-items:center;gap:10px;background:#12100f;color:#fff;font-weight:700;font-size:12.5px;letter-spacing:.06em;padding:7px 16px;border-radius:7px;margin:14px 0 4px}
+    .m-year-div:first-child{margin-top:0}
+    .m-year-n{margin-left:auto;font-size:11px;font-weight:600;color:#bbb;background:rgba(255,255,255,.12);border-radius:20px;padding:1px 9px}
     .m-row{display:flex;align-items:center;gap:16px;padding:11px 16px;border-bottom:1px solid var(--line);cursor:pointer;flex-wrap:wrap}
     .m-row:last-child{border-bottom:none}
     .m-row:hover{background:#f6f9f8}
     .m-r-id{display:flex;align-items:center;gap:9px;min-width:210px;flex-wrap:wrap}
     .m-name{font-weight:700;font-size:14.5px}
     .m-nick{color:var(--grey);font-size:12.5px}
+    .m-no{font-size:11px;font-weight:700;color:var(--teal);background:#eef5f3;border:1px solid #cfe3dd;border-radius:5px;padding:1px 6px;font-variant-numeric:tabular-nums}
+    .m-no.m-no-tmp{color:#b06a1a;background:#fdf4e7;border-color:#f0dcb0}
+    .md-idtag{font-size:13px;color:var(--grey);margin-bottom:12px}
+    .md-idtag b{color:var(--teal);font-variant-numeric:tabular-nums}
     .m-badge{font-size:10px;font-weight:800;color:#fff;border-radius:4px;padding:2px 6px}
     .m-badge.mp{background:var(--teal)} .m-badge.free{background:#8a8a8a}
     .m-r-meta{display:flex;align-items:center;gap:15px;flex:1;flex-wrap:wrap;font-size:12.5px;color:#444;justify-content:flex-end}
@@ -340,7 +435,11 @@
     .m-visa-soon{color:var(--declined);font-weight:600}
     body.role-booker .m-editor{display:none}
     @media (max-width:640px){.m-r-meta{justify-content:flex-start}}
-    .m-chips{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+    .m-chips{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px;position:sticky;top:0;z-index:5;background:var(--bg,#eef2f1);padding:6px 0}
+    .m-chip.drop-hot{outline:2px dashed var(--teal);outline-offset:2px;background:#dff1ec;color:var(--teal);transform:scale(1.06)}
+    .m-row.m-dragging{opacity:.45}
+    .m-row[draggable="true"]{cursor:grab}
+    .m-drag-hint{font-size:11.5px;color:var(--grey);margin:0 0 8px;display:flex;align-items:center;gap:6px}
     .m-chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;
       font-weight:600;color:var(--grey);cursor:pointer}
     .m-chip:hover{border-color:var(--teal);color:var(--teal)}
@@ -371,7 +470,7 @@
   <div class="login-wrap" id="login">
     <form class="login-card" id="login-form">
       <img src="images/mp-logo.png" alt="MP Models" onerror="this.style.display='none'">
-      <h1>Job Tracker</h1>
+      <h1>MP Models</h1>
       <p>Internal access only</p>
       <input type="email" id="email" placeholder="Email" autocomplete="username"
              autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" autofocus>
@@ -389,10 +488,13 @@
   <div class="app" id="app">
     <div class="topbar">
       <img class="brand-logo" src="images/mp-mark-white-120.png?v=3" alt="MP Models" title="MP Models">
-      <button class="tab active" data-view="jobs">Job Tracker</button>
+      <button class="tab active hide-scouter" data-view="jobs">Job Tracker</button>
       <button class="tab" data-view="schedule">Schedule</button>
-      <button class="tab" data-view="models">Models</button>
-      <button class="tab" data-view="activity">Activity</button>
+      <button class="tab hide-scouter" data-view="models">Models</button>
+      <button class="tab revenue-only manager-only hide-scouter" data-view="clients">Clients</button>
+      <button class="tab revenue-only manager-only hide-scouter" data-view="income">Other Income</button>
+      <button class="tab mac-tab" data-view="mac">Mother Agency</button>
+      <button class="tab hide-scouter" data-view="activity">Activity</button>
       <div class="spacer"></div>
       <span id="whoami" style="color:#ccc;font-size:13px;margin-right:14px"></span>
       <button class="logout" id="logout">Sign out</button>
@@ -410,6 +512,7 @@
         </select>
         <input type="search" id="j-search" placeholder="Search title, model, client, job ID…">
         <div class="right">
+          <button class="link hide-designer" id="j-export" title="Download the Job Tracker as an Excel file (for billing / ส่งเบิก)">⬇ Excel</button>
           <button class="btn" id="j-add">+ Add job</button>
           <button class="link" id="j-refresh">↻ Refresh</button>
         </div>
@@ -421,6 +524,7 @@
         <table>
           <thead>
             <tr>
+              <th class="col-collected" title="Tick when photos/videos are collected">✓</th>
               <th>Job Date</th><th>Job ID<br><span class="th-sub">Tax · C</span></th><th>Job ID<br><span class="th-sub">Non-Tax · B</span></th><th>Title</th><th>Model / Freelance</th>
               <th>Client</th><th>Booker</th><th class="num money">Budget</th>
             </tr>
@@ -436,14 +540,14 @@
       <div class="controls">
         <div class="seg">
           <button class="seg-btn active" id="s-cal-btn">Month</button>
-          <button class="seg-btn" id="s-board-btn">Board</button>
-          <button class="seg-btn manager-only" id="s-sum-btn">Summary</button>
+          <button class="seg-btn hide-scouter" id="s-board-btn">Board</button>
+          <button class="seg-btn manager-only hide-scouter" id="s-sum-btn">Summary</button>
         </div>
         <select id="s-month"></select>
-        <select id="s-booker"><option value="">All bookers</option></select>
+        <select id="s-booker" class="hide-scouter"><option value="">All bookers</option></select>
         <input type="search" id="s-search" placeholder="Search model or note…">
         <div class="right">
-          <button class="btn" id="s-add">+ Add entry</button>
+          <button class="btn hide-scouter" id="s-add">+ Add entry</button>
           <button class="link" id="s-refresh">↻ Refresh</button>
         </div>
       </div>
@@ -480,6 +584,8 @@
         <button class="m-chip" data-st="Direct booking">⚡ Direct booking</button>
         <button class="m-chip" data-st="Left">Left</button>
       </div>
+      <p class="m-drag-hint" id="m-drag-hint" style="display:none">✋ Tip: tick several models then use the bar below (or drag any ticked row onto a status) — no need to open each one.</p>
+      <div id="m-bulkbar" style="display:none"></div>
       <p id="m-count" style="color:var(--grey);font-size:12.5px;margin:2px 0 12px"></p>
       <div id="m-cats"></div>
       <div id="m-grid" style="display:none"></div>
@@ -506,6 +612,100 @@
           <tbody id="a-rows"></tbody>
         </table>
         <div class="empty" id="a-empty" style="display:none">No activity yet.</div>
+      </div>
+    </div>
+
+    <!-- CLIENTS CRM (Director + Admin only) -->
+    <div class="wrap revenue-only" id="view-clients" style="display:none">
+      <div class="controls">
+        <input type="search" id="cl-search" placeholder="Search client…" style="min-width:190px">
+        <select id="cl-cat"><option value="">All types</option></select>
+        <select id="cl-source"><option value="">All sources</option></select>
+        <select id="cl-year"><option value="">All time</option></select>
+        <select id="cl-follow">
+          <option value="">All clients</option>
+          <option value="3">⚠ Not booked 3+ months</option>
+          <option value="6">⚠ Not booked 6+ months</option>
+          <option value="12">⚠ Not booked 12+ months</option>
+        </select>
+        <select id="cl-sort">
+          <option value="value">Sort: Highest value (top spenders)</option>
+          <option value="jobs">Sort: Most bookings</option>
+          <option value="recent">Sort: Most recent</option>
+          <option value="dormant">Sort: Longest since booking</option>
+          <option value="name">Sort: Name A–Z</option>
+        </select>
+        <div class="right">
+          <button class="btn" id="cl-add">+ Add client</button>
+          <button class="link" id="cl-export" title="Download the client list (with company, tax ID, contacts) as CSV / Excel">⬇ Export CSV</button>
+          <button class="link" id="cl-refresh">↻ Refresh</button>
+        </div>
+      </div>
+      <p style="margin:-4px 0 10px;font-size:12px;color:var(--grey)">Click a client to see full details &amp; job history. Export downloads exactly what's shown (respects the filters).</p>
+      <div class="stats" id="cl-srcstats"></div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Client</th><th>Source(s)</th><th class="num">Jobs</th><th>First</th><th>Last</th><th class="num money">Total value</th><th>Contact</th></tr>
+          </thead>
+          <tbody id="cl-rows"></tbody>
+        </table>
+        <div class="empty" id="cl-empty" style="display:none">No clients match.</div>
+      </div>
+    </div>
+
+    <!-- MOTHER AGENCY (MAC) LEDGER — scouter + managers -->
+    <div class="wrap" id="view-mac" style="display:none">
+      <div class="controls">
+        <select id="mac-year"><option value="">All years</option></select>
+        <select id="mac-owner" class="manager-only hide-scouter"><option value="">All scouters</option></select>
+        <input type="search" id="mac-search" placeholder="Search model, agency, note…" style="min-width:190px">
+        <div class="right">
+          <button class="btn" id="mac-add">+ Add record</button>
+          <button class="link" id="mac-export">⬇ Export CSV</button>
+          <button class="link" id="mac-refresh">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="stats" id="mac-stats"></div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Period</th><th>Model</th><th>Agency</th><th class="num">Model amt</th><th class="num">Gross 10%</th><th class="num">Wolf 5%</th><th class="num">Expense</th><th>Status</th><th>Payment info</th><th></th></tr>
+          </thead>
+          <tbody id="mac-rows"></tbody>
+        </table>
+        <div class="empty" id="mac-empty" style="display:none">No records yet. Click “+ Add record”.</div>
+      </div>
+    </div>
+
+    <!-- OTHER INCOME / COMMISSION (Director + Admin only) -->
+    <div class="wrap revenue-only" id="view-income" style="display:none">
+      <div class="controls">
+        <select id="in-year"><option value="">All time</option></select>
+        <select id="in-kind">
+          <option value="">All types</option>
+          <option value="sale">Sale</option>
+          <option value="commission">Commission</option>
+          <option value="referral">Referral</option>
+          <option value="rental">Studio rental</option>
+          <option value="mac">Mother agency commission</option>
+          <option value="other">Other</option>
+        </select>
+        <input type="search" id="in-search" placeholder="Search source or note…">
+        <div class="right">
+          <button class="btn" id="in-add">+ Add income</button>
+          <button class="link" id="in-refresh">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="stats" id="in-stats"></div>
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Type</th><th>Source / deal</th><th class="num">Amount</th><th class="num">In THB</th><th>Note</th><th></th></tr>
+          </thead>
+          <tbody id="in-rows"></tbody>
+        </table>
+        <div class="empty" id="in-empty" style="display:none">No income logged yet. Click “+ Add income”.</div>
       </div>
     </div>
   </div>
