@@ -15,6 +15,34 @@
   const baht = n => '฿' + Math.round(Number(n || 0)).toLocaleString('en-US');
 
   /* ---- What differs between the three forms ---- */
+  // Money math for a confirmation — ONE place, used by build() and exposed to
+  // admin.js so the Drive spreadsheet shows exactly the same numbers.
+  function calc(job, type) {
+    const v = VARIANTS[type] || VARIANTS.tax;
+    const num = x => { const n = parseFloat(String(x == null ? '' : x).replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
+    const fee = num(job.budget);
+    const otIsNumber = /^[\d,]+(\.\d+)?$/.test(String(job.overtimeFee || '').trim());
+    const ot = otIsNumber ? num(job.overtimeFee) : 0;      // only add overtime to the total if it's a number
+    const subtotal = fee + ot;                             // fee + overtime, before VAT
+    const vat = v.vat ? subtotal * 0.07 : 0;
+    const total = subtotal + vat;                          // invoice total (incl VAT)
+    // Corporate THAI clients withhold 3% tax on the service fee. FOREIGN clients
+    // cannot issue a Thai withholding certificate (Aim's rule) — showing "−3%"
+    // just tempts them to underpay, so it auto-hides for foreign-currency jobs.
+    // job.whtMode overrides: 'on' = always show, 'off' = always hide, '' = auto.
+    const whtOn = job.whtMode === 'on' || (job.whtMode !== 'off' && v.vat && (job.currency || 'THB') === 'THB');
+    const wht = whtOn ? subtotal * 0.03 : 0;
+    const netPay = total - wht;                            // what a withholding client transfers
+    const sym = { THB: '฿', USD: '$', EUR: '€', CNY: '¥' }[job.currency] || '฿';
+    const cash = n => sym + Math.round(Number(n || 0)).toLocaleString('en-US');
+    // Overtime display: incurred amount → condition text → hourly rate (Ness:
+    // clients should always see the OT price per hour, like the old form).
+    const otRate = num(job.overtimeRate);
+    const otDisplay = otIsNumber ? cash(ot)
+      : (String(job.overtimeFee || '').trim() || (otRate ? cash(otRate) + '/Hour' : ''));
+    return { v, num, fee, otIsNumber, ot, subtotal, vat, total, whtOn, wht, netPay, sym, cash, otDisplay };
+  }
+
   const VARIANTS = {
     tax: {
       title: 'Tax Invoice Form',
@@ -106,28 +134,18 @@
     const codeShort = (String(code).match(/[CB]\s?\d+/i) || [String(code)])[0].replace(/\s/g, '');
     const fileTitle = [codeShort, clean(job.jobTitle), clean(models)].filter(Boolean).join(' - ') || ('Job Confirmation ' + codeShort);
     build.lastTitle = fileTitle;   // exposed so admin.js can name the Word/Drive copy
-    // Robust number parse — the fee comes in as "15,000" (with commas), which
-    // Number() would turn into NaN. Strip anything that isn't a digit or dot.
-    const num = x => { const n = parseFloat(String(x == null ? '' : x).replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
-    const fee = num(job.budget);
-    const otIsNumber = /^[\d,]+(\.\d+)?$/.test(String(job.overtimeFee || '').trim());
-    const ot = otIsNumber ? num(job.overtimeFee) : 0;      // only add overtime to the total if it's a number
-    const subtotal = fee + ot;                             // fee + overtime, before VAT
-    const vat = v.vat ? subtotal * 0.07 : 0;
-    const total = subtotal + vat;                          // invoice total (incl VAT)
-    // Corporate THAI clients withhold 3% tax on the service fee. FOREIGN clients
-    // cannot issue a Thai withholding certificate (Aim's rule) — showing "−3%"
-    // just tempts them to underpay, so it auto-hides for foreign-currency jobs.
-    // job.whtMode overrides: 'on' = always show, 'off' = always hide, '' = auto.
-    const whtOn = job.whtMode === 'on' || (job.whtMode !== 'off' && v.vat && (job.currency || 'THB') === 'THB');
-    const wht = whtOn ? subtotal * 0.03 : 0;
-    const netPay = total - wht;                            // what a withholding client transfers
+    // All money math lives in calc() — shared with admin.js (Drive spreadsheet).
+    const pay = calc(job, type);
+    const num = pay.num, fee = pay.fee, otIsNumber = pay.otIsNumber, ot = pay.ot,
+      subtotal = pay.subtotal, vat = pay.vat, total = pay.total,
+      whtOn = pay.whtOn, wht = pay.wht, netPay = pay.netPay;
     const logo = location.origin + '/images/mp-logo.png';
     const sig = location.origin + '/images/lisa-signature.jpg';
     // Money in the job's currency (THB ฿ / USD $ / EUR € / CNY ¥).
-    const sym = { THB: '฿', USD: '$', EUR: '€', CNY: '¥' }[job.currency] || '฿';
-    const cash = n => sym + Math.round(Number(n || 0)).toLocaleString('en-US');
-    const otDisplay = otIsNumber ? cash(ot) : (job.overtimeFee || '');
+    const sym = pay.sym, cash = pay.cash;
+    // Overtime shows: the incurred amount → the booker's condition text → or the
+    // plain hourly rate ("฿1,250/Hour") so the client always sees the OT price.
+    const otDisplay = pay.otDisplay;
 
     // Multiple models on one job (each their own fee) → a per-model fee table.
     const multi = Array.isArray(job.modelFees) && job.modelFees.length > 1 ? job.modelFees : null;
@@ -325,6 +343,10 @@ ${feeBlock}
 
   window.MPConfirmation = {
     defaultType,
+    calc,
+    // Render the confirmation HTML without opening a window (silent Drive save).
+    render(job, type, opts) { return build(job, type || defaultType(job), opts || {}); },
+    lastTitle() { return build.lastTitle; },
     types: [
       { key: 'tax', label: 'Tax Invoice' },
       { key: 'nontax', label: 'Non-Tax' },

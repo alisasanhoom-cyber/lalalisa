@@ -1096,7 +1096,9 @@
   // button AND the per-row 👁 preview in the tracker. Handles the per-model fee
   // lines and the legacy shared-code grouping. Type ('tax'/'nontax') is inferred
   // from the job's codes when not given.
-  function openConfirmationDoc(data, type) {
+  // Enrich a job for the confirmation (per-model fee table, legacy code-grouping)
+  // and resolve the form type — shared by the 👁 preview and the silent Drive save.
+  function confirmationDocData(data, type) {
     if (!type) type = (data.jobId && !/b\s?\d/i.test(data.jobId)) ? 'tax' : (data.jobIdNonTax || /b\s?\d/i.test(data.jobId || '') ? 'nontax' : 'tax');
     // ONE job holding several models with their own rate/OT → per-model fee table.
     if (Array.isArray(data.lines) && data.lines.length > 1) {
@@ -1121,10 +1123,74 @@
         }
       }
     }
+    return { data, type };
+  }
+  function openConfirmationDoc(rawData, rawType) {
+    const { data, type } = confirmationDocData(rawData, rawType);
     const doc = MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
-    // Word download + auto-save to the Drive folder — never for the designer's
+    // PDF/Word buttons + auto-save to the Drive folder — never for the designer's
     // money-hidden copy (it must not overwrite the real document in Drive).
-    if (doc && role !== 'designer') addConfDocTools(doc, data);
+    if (doc && role !== 'designer') addConfDocTools(doc, data, type);
+  }
+  // The confirmation as spreadsheet rows [label, value] — Aim keys jobs into her
+  // system from a Google SHEET in Chrome (old workflow); numbers via the SAME
+  // calc() the printed form uses, so they can never disagree.
+  function confSheetRows(job, type) {
+    const c = MPConfirmation.calc(job, type);
+    const rows = [];
+    const add = (a, b) => { rows.push([a, b == null ? '' : String(b)]); };
+    rows.push(['JOB DETAILS', '']);
+    add('Job Code', job.jobId || job.jobIdNonTax || '');
+    add('Assignment Title', job.jobTitle || '');
+    add('Client / Company', job.companyName || job.client || '');
+    add('Model Name(s)', (Array.isArray(job.lines) && job.lines.length
+      ? job.lines.map(l => l.name) : [job.model, job.freelance]).filter(Boolean).join(', '));
+    add('Media Usage', job.mediaUsage || '');
+    add('Period of Usage', job.periodOfUsage || '');
+    add('Country/ies of Use', job.countryOfUse || '');
+    add('Shooting Location', job.shootLocation || '');
+    add('Date of Shoot', (job.shootStart || '') + (job.shootEnd && job.shootEnd !== job.shootStart ? ' → ' + job.shootEnd : ''));
+    add('Time of Shoot', (job.timeStart || '') + (job.timeEnd ? ' – ' + job.timeEnd : ''));
+    add('Contracted Hours', job.contractHours || '');
+    add('Booker', job.booker || '');
+    rows.push(['PAYMENT', '']);
+    if (Array.isArray(job.modelFees) && job.modelFees.length > 1)
+      job.modelFees.forEach(mf => add('   ' + (mf.model || ''), c.cash(mf.fee)));
+    add('Fee (excl. VAT)', c.cash(c.fee));
+    add('Overtime', c.otDisplay || '—');
+    add('Subtotal', c.cash(c.subtotal));
+    if (c.v.vat) add('VAT 7%', c.cash(c.vat));
+    add('TOTAL PAYMENT AMOUNT', c.cash(c.total));
+    if (c.whtOn) { add('Less Withholding Tax 3%', '-' + c.cash(c.wht)); add('NET AMOUNT TO TRANSFER', c.cash(c.netPay)); }
+    add('Payment Term', job.paymentTerm || '');
+    add('Remark', job.remark || '');
+    return rows;
+  }
+  // POST the confirmation to Lisa's Apps Script → Google SHEET + PDF copy filed
+  // under JOB CONFIRMATION → <year> → <n.MONTH>, overwriting older versions.
+  function driveUploadConfirmation(job, type, html, onStatus) {
+    if (!appSettings.driveUploadUrl || role === 'designer') return;
+    fetch(appSettings.driveUploadUrl, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        filename: driveDocName(job) || (job.jobTitle || 'Job Confirmation'),
+        jobDate: job.jobDate || '',
+        code: job.jobId || job.jobIdNonTax || '',
+        html: html || '',
+        sheet: confSheetRows(job, type),
+      }),
+    }).then(r => r.json())
+      .then(r => onStatus && onStatus(!!(r && r.ok)))
+      .catch(() => onStatus && onStatus(false));
+  }
+  // Tawa: editing a job must overwrite its Drive copies right away.
+  function autoDriveSave(jobRec) {
+    try {
+      if (!jobRec || !jobRec.confirmationMade || !appSettings.driveUploadUrl || role === 'designer') return;
+      const { data, type } = confirmationDocData({ ...jobRec });
+      const html = MPConfirmation.render(data, type);
+      driveUploadConfirmation(data, type, html, ok => { if (ok) toast('☁ Confirmation updated in Drive'); });
+    } catch (_) {}
   }
   // Drive filename in the team's own convention: <code>-<Title>_<Model, Model>.
   function driveDocName(job) {
@@ -1141,7 +1207,7 @@
   // The Drive save posts the rendered HTML to Lisa's Apps Script webhook, which
   // stores it as a GOOGLE DOC in the confirmations folder (Admin opens it right
   // in Chrome — no PDF, no copy-paste). Skips silently until the URL is set up.
-  function addConfDocTools(doc, job) {
+  function addConfDocTools(doc, job, type) {
     try {
       const d = doc.win.document;
       const bar = d.createElement('div');
@@ -1152,6 +1218,9 @@
         b.style.cssText = 'padding:6px 12px;border:1px solid #bbb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.18)';
         bar.appendChild(b); return b;
       };
+      // Browser print dialog → "Save as PDF"; the tab title is already the
+      // code-first filename, so the saved PDF is named right automatically.
+      mk('⬇ PDF').onclick = () => doc.win.print();
       mk('⬇ Word').onclick = () => {
         const blob = new Blob(['﻿' + doc.html], { type: 'application/msword' });
         const a = d.createElement('a');
@@ -1161,19 +1230,8 @@
       };
       if (appSettings.driveUploadUrl) {
         const st = mk('☁ saving to Drive…'); st.disabled = true;
-        fetch(appSettings.driveUploadUrl, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({
-            // Drive filename follows the team's hand-made convention:
-            // "C3019-Photoshoot_Parker Pens Campaign_Emily C" (code-Title_Models)
-            filename: driveDocName(job) || doc.title, html: doc.html,
-            // jobDate → filed into the matching month folder (8.AUGUST …)
-            jobDate: (job && job.jobDate) || '',
-            code: (job && (job.jobId || job.jobIdNonTax)) || '',
-          }),
-        }).then(r => r.json())
-          .then(r => { st.textContent = r && r.ok ? '☁ in Drive ✓' : '☁ Drive failed'; })
-          .catch(() => { st.textContent = '☁ Drive failed'; });
+        driveUploadConfirmation(job, type, doc.html,
+          ok => { st.textContent = ok ? '☁ in Drive ✓' : '☁ Drive failed'; });
       }
       const style = d.createElement('style');
       style.textContent = '@media print{.conf-tools{display:none!important}}';
@@ -1317,6 +1375,8 @@
         if (j) {
           const r = await api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify(data) });
           Object.assign(j, r.job); saved = j;
+          // Tawa: an edited job overwrites its confirmation copies in Drive.
+          autoDriveSave(saved);
         } else {
           const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(data) });
           jobs.unshift(r.job); saved = r.job;
