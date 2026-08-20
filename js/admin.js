@@ -1124,13 +1124,24 @@
     const doc = MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
     // Word download + auto-save to the Drive folder — never for the designer's
     // money-hidden copy (it must not overwrite the real document in Drive).
-    if (doc && role !== 'designer') addConfDocTools(doc);
+    if (doc && role !== 'designer') addConfDocTools(doc, data);
+  }
+  // Drive filename in the team's own convention: <code>-<Title>_<Model, Model>.
+  function driveDocName(job) {
+    if (!job) return '';
+    const clean = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const code = clean(job.jobId || job.jobIdNonTax).replace(/\s+/g, '');
+    const models = (Array.isArray(job.lines) && job.lines.length
+      ? job.lines.map(l => l.name) : [job.model || job.freelance])
+      .filter(Boolean).map(clean).join(', ');
+    const title = clean(job.jobTitle) || 'Job';
+    return [code, title].filter(Boolean).join('-') + (models ? '_' + models : '');
   }
   // Floating toolbar inside the confirmation window: ⬇ Word file + ☁ Drive status.
   // The Drive save posts the rendered HTML to Lisa's Apps Script webhook, which
   // stores it as a GOOGLE DOC in the confirmations folder (Admin opens it right
   // in Chrome — no PDF, no copy-paste). Skips silently until the URL is set up.
-  function addConfDocTools(doc) {
+  function addConfDocTools(doc, job) {
     try {
       const d = doc.win.document;
       const bar = d.createElement('div');
@@ -1152,7 +1163,14 @@
         const st = mk('☁ saving to Drive…'); st.disabled = true;
         fetch(appSettings.driveUploadUrl, {
           method: 'POST', headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ filename: doc.title, html: doc.html }),
+          body: JSON.stringify({
+            // Drive filename follows the team's hand-made convention:
+            // "C3019-Photoshoot_Parker Pens Campaign_Emily C" (code-Title_Models)
+            filename: driveDocName(job) || doc.title, html: doc.html,
+            // jobDate → filed into the matching month folder (8.AUGUST …)
+            jobDate: (job && job.jobDate) || '',
+            code: (job && (job.jobId || job.jobIdNonTax)) || '',
+          }),
         }).then(r => r.json())
           .then(r => { st.textContent = r && r.ok ? '☁ in Drive ✓' : '☁ Drive failed'; })
           .catch(() => { st.textContent = '☁ Drive failed'; });
