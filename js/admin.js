@@ -148,14 +148,14 @@
       const b = await api('/api/schedule').catch(() => ({ schedule: [] }));
       schedule = b.schedule || [];
       api('/api/models').then(r => { models = r.models || []; }).catch(() => {});
-      api('/api/settings').then(s => { if (s && s.fxRates) fxRates = s.fxRates; }).catch(() => {});
+      api('/api/settings').then(s => { appSettings = s || {}; if (s && s.fxRates) fxRates = s.fxRates; }).catch(() => {});
       buildFilters(); renderSchedule();
       return;
     }
     const [a, b] = await Promise.all([api('/api/jobs'), api('/api/schedule')]);
     jobs = a.jobs || [];
     schedule = b.schedule || [];
-    api('/api/settings').then(s => { if (s && s.fxRates) fxRates = s.fxRates; renderJobs(); }).catch(() => {});
+    api('/api/settings').then(s => { appSettings = s || {}; if (s && s.fxRates) fxRates = s.fxRates; renderJobs(); }).catch(() => {});
     buildFilters();
     renderJobs();
     renderSchedule();
@@ -250,10 +250,19 @@
   }
   const CUR_SYM = { THB: '฿', USD: '$', CNY: '¥', EUR: '€' };
   let fxRates = { USD: 35, EUR: 38, CNY: 5 };   // → THB, updated from /api/settings
+  let appSettings = {};                          // full /api/settings (driveUploadUrl etc.)
+  // overtimeFee can be a NUMBER ("9375" / "9,375") or a CONDITION the booker wrote
+  // ("1,250/hour after 13 hours"). Only a clean number counts in totals — the
+  // condition is printed on the confirmation and becomes a number once known.
+  function otNum(v) {
+    const s = String(v == null ? '' : v).trim();
+    if (!s || !/^[\d,]+(\.\d+)?$/.test(s)) return 0;
+    return Number(s.replace(/,/g, '')) || 0;
+  }
   // A job's full amount = budget + overtime fee. Lines-jobs already fold each
   // model's OT into budget (linesTotal), so only single-model jobs add the field.
   function jobAmount(j) {
-    const ot = (Array.isArray(j.lines) && j.lines.length) ? 0 : Number(j.overtimeFee || 0);
+    const ot = (Array.isArray(j.lines) && j.lines.length) ? 0 : otNum(j.overtimeFee);
     return Number(j.budget || 0) + ot;
   }
   // Convert any job's full amount to THB (THB stays as-is; foreign × its rate).
@@ -267,8 +276,11 @@
   function budgetCell(j) {
     if (!jobAmount(j)) return '—';
     const cur = j.currency || 'THB';
-    const otTag = (!Array.isArray(j.lines) || !j.lines.length) && Number(j.overtimeFee || 0)
-      ? ` <span class="fx-tag" title="includes overtime ${money(j.overtimeFee, cur)} (base fee ${money(j.budget, cur)})">⏱ OT</span>` : '';
+    const singleJob = !Array.isArray(j.lines) || !j.lines.length;
+    const otTag = singleJob && otNum(j.overtimeFee)
+      ? ` <span class="fx-tag" title="includes overtime ${money(otNum(j.overtimeFee), cur)} (base fee ${money(j.budget, cur)})">⏱ OT</span>`
+      : (singleJob && String(j.overtimeFee || '').trim()
+        ? ` <span class="fx-tag" title="OT condition: ${esc(j.overtimeFee)} — not in total until a number is entered">⏱ cond.</span>` : '');
     if (cur === 'THB') return money(jobAmount(j), 'THB') + otTag;
     return `${money(toThb(j))} <span class="fx-tag" title="Converted from ${cur} at ฿${fxRates[cur] || '?'}/${CUR_SYM[cur] || cur}">🌐 ${money(jobAmount(j), cur)}</span>${otTag}`;
   }
@@ -750,7 +762,7 @@
         const total = jobAmount(j); grand += (j.currency || 'THB') === 'THB' ? total : 0;
         const row = base.slice();
         row[5] = j.model || j.freelance || ''; row[6] = j.model ? 'MP' : (j.freelance ? 'Freelance' : '');
-        row[15] = +j.budget || 0; row[16] = +j.overtimeFee || 0; row[17] = total;
+        row[15] = +j.budget || 0; row[16] = otNum(j.overtimeFee) || (j.overtimeFee || ''); row[17] = total;
         lines.push(row.map(cell).join(','));
       }
     });
@@ -959,8 +971,8 @@
       </div>
       <div class="ot-box" id="ot-summary">Choose a work package and enter times to calculate overtime.</div>
       <div class="field two">
-        <div class="field" style="margin:0"><label>Overtime Fee (THB)</label>
-          <input id="d-overtimeFee" type="number" min="0" value="${val('overtimeFee')}"></div>
+        <div class="field" style="margin:0"><label>Overtime Fee — amount or condition</label>
+          <input id="d-overtimeFee" type="text" value="${val('overtimeFee')}" placeholder="e.g. 9375 — or 1,250/hour after 13 hours"></div>
         ${fld('Payment Term', `<input id="d-paymentTerm" value="${val('paymentTerm')}">`)}
       </div>
       <div class="field"><label>Remark</label><input id="d-remark" value="${val('remark')}"></div>`;
@@ -992,8 +1004,12 @@
     const rate = parseFloat(el('d-overtimeRate').value) || 0;
     const fee = otHours * rate;
 
-    if (otHours > 0 && rate > 0) el('d-overtimeFee').value = fee;
-    else if (otHours === 0) el('d-overtimeFee').value = '';
+    // Fill the fee only from real numbers — never overwrite a CONDITION the
+    // booker typed ("1,250/hour after 13 hours") unless we computed a fee.
+    const feeBox = el('d-overtimeFee');
+    const feeIsCondition = feeBox.value.trim() && !/^[\d,]+(\.\d+)?$/.test(feeBox.value.trim());
+    if (otHours > 0 && rate > 0) feeBox.value = fee;
+    else if (otHours === 0 && !feeIsCondition) feeBox.value = '';
 
     box.className = 'ot-box' + (otHours > 0 ? ' has-ot' : '');
     box.innerHTML = `On set <b>${elapsed.toFixed(1)}h</b> · allowed <b>${allowed}h</b> `
@@ -1105,7 +1121,47 @@
         }
       }
     }
-    MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
+    const doc = MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
+    // Word download + auto-save to the Drive folder — never for the designer's
+    // money-hidden copy (it must not overwrite the real document in Drive).
+    if (doc && role !== 'designer') addConfDocTools(doc);
+  }
+  // Floating toolbar inside the confirmation window: ⬇ Word file + ☁ Drive status.
+  // The Drive save posts the rendered HTML to Lisa's Apps Script webhook, which
+  // stores it as a GOOGLE DOC in the confirmations folder (Admin opens it right
+  // in Chrome — no PDF, no copy-paste). Skips silently until the URL is set up.
+  function addConfDocTools(doc) {
+    try {
+      const d = doc.win.document;
+      const bar = d.createElement('div');
+      bar.className = 'conf-tools';
+      bar.style.cssText = 'position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:9999;font-family:system-ui';
+      const mk = label => {
+        const b = d.createElement('button'); b.textContent = label;
+        b.style.cssText = 'padding:6px 12px;border:1px solid #bbb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.18)';
+        bar.appendChild(b); return b;
+      };
+      mk('⬇ Word').onclick = () => {
+        const blob = new Blob(['﻿' + doc.html], { type: 'application/msword' });
+        const a = d.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (doc.title || 'Job Confirmation') + '.doc';
+        d.body.appendChild(a); a.click(); a.remove();
+      };
+      if (appSettings.driveUploadUrl) {
+        const st = mk('☁ saving to Drive…'); st.disabled = true;
+        fetch(appSettings.driveUploadUrl, {
+          method: 'POST', headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ filename: doc.title, html: doc.html }),
+        }).then(r => r.json())
+          .then(r => { st.textContent = r && r.ok ? '☁ in Drive ✓' : '☁ Drive failed'; })
+          .catch(() => { st.textContent = '☁ Drive failed'; });
+      }
+      const style = d.createElement('style');
+      style.textContent = '@media print{.conf-tools{display:none!important}}';
+      d.head.appendChild(style);
+      d.body.appendChild(bar);
+    } catch (_) {}
   }
 
   // openJob(id)            → edit an existing job

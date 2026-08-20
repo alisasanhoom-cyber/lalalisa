@@ -214,6 +214,12 @@ function buildLines(input) {
   })).filter(l => l.name || l.rate || l.ot).slice(0, 30);
 }
 function linesTotal(lines) { return (lines || []).reduce((s, l) => s + number(l.rate) + number(l.ot), 0); }
+// overtimeFee may be a CONDITION text ("1,250/hour after 13 hours") — only a
+// clean number counts toward totals (number() would wrongly grab the leading 1250).
+function otAmount(v) {
+  const s = String(v == null ? '' : v).trim();
+  return /^[\d,]+(\.\d+)?$/.test(s) ? number(s) : 0;
+}
 function applyLines(job, lines) {
   job.lines = lines || [];
   if (job.lines.length) {
@@ -629,7 +635,7 @@ async function handleApi(req, res) {
       } else {
         // budget + overtime: the finance app must see the full job amount
         // (lines-jobs already carry OT inside each line's fee above).
-        jobs.push({ ...base, model: j.model, freelance: j.freelance, budget: number(j.budget) + number(j.overtimeFee) });
+        jobs.push({ ...base, model: j.model, freelance: j.freelance, budget: number(j.budget) + otAmount(j.overtimeFee) });
       }
     });
     // fx: current exchange rates so the Finance app can convert foreign-currency
@@ -796,6 +802,9 @@ async function handleApi(req, res) {
       if (body.fxRates && typeof body.fxRates === 'object') {
         ['USD', 'EUR', 'CNY'].forEach(c => { if (body.fxRates[c] !== undefined) s.fxRates[c] = number(body.fxRates[c]); });
       }
+      // Apps Script webhook that files each generated confirmation into the
+      // Google Drive confirmations folder as a Google Doc (Aim reads in Chrome).
+      if (body.driveUploadUrl !== undefined) s.driveUploadUrl = text(body.driveUploadUrl, 300);
       save(SETTINGS_FILE, s);
       logActivity(user, 'updated FX rates', ['USD', 'EUR', 'CNY'].map(c => `${c} ${s.fxRates[c]}`).join(', '));
       return reply(res, 200, { ok: true, ...s });
