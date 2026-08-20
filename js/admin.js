@@ -31,14 +31,29 @@
   const CLIENT_KEYS = [
     ...CLIENT_SECTIONS.flatMap(([, fields]) => fields.map(([k]) => k)),
     'shootStart', 'shootEnd', 'timeStart', 'timeEnd', 'noOfShoot',
-    'workPackage', 'breakHours', 'overtimeRate', 'overtimeFee', 'paymentTerm', 'remark',
+    'workPackage', 'contractHours', 'breakHours', 'overtimeRate', 'overtimeFee', 'paymentTerm', 'remark',
+    'leadSource', 'clientCategory', 'signedDocUrl',
   ];
 
-  // Standard on-set hours for each work package (break is added on top).
+  // CRM — where a lead/client came from. Bookers pick one on every new job.
+  const LEAD_SOURCES = ['Website', 'LINE', 'Instagram', 'Facebook', 'Email', 'Phone call',
+    'WhatsApp', 'Referral', 'Repeat client', 'Agency', 'Walk-in', 'Other'];
+  // CRM — client industry, for marketing segmentation.
+  const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
+    'Magazine / Editorial', 'Agency', 'Other'];
+  const CAT_ICON = { 'Fashion': '👗', 'Commercial': '📺', 'Film & TV': '🎬', 'Event organizer': '🎪',
+    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•' };
+  const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
+    'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
+    'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•' };
+
+  // Work packages. Presets pre-fill the contracted hours; "Custom" lets the booker
+  // type ANY hours (shoots aren't always 4/8 anymore — flexible per job).
   const PACKAGES = {
     photo4:  { label: 'Photoshoot – 4 hours',        hours: 4,  brk: 0 },
     photo8:  { label: 'Photoshoot – 8 hours',        hours: 8,  brk: 0 },
     video12: { label: 'Video – 12 hours (1h break)', hours: 12, brk: 1 },
+    custom:  { label: 'Custom hours…',               hours: null, brk: 0 },
   };
   const isISODate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 
@@ -48,8 +63,8 @@
   let schedule = [];
 
   const el = id => document.getElementById(id);
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // Only master/admin see money (budgets, prices, revenue). Bookers do not.
   const canSeeMoney = () => role === 'master' || role === 'admin';
@@ -57,11 +72,13 @@
     document.body.classList.toggle('role-booker', role === 'booker');
     // Graphic designer: browses jobs/schedule to source photos & videos, sees NO money at all.
     document.body.classList.toggle('role-designer', role === 'designer');
+    // Scouter (external): only their own Mother-Agency ledger + their models' schedule.
+    document.body.classList.toggle('role-scouter', role === 'scouter');
     const who = el('whoami');
     if (who) {
       const name = sessionStorage.getItem('mp_admin_name') || '';
       const roleLabel = role === 'master' ? 'Director' : role === 'admin' ? 'Admin'
-        : role === 'designer' ? 'Graphic Designer' : 'Booker';
+        : role === 'designer' ? 'Graphic Designer' : role === 'scouter' ? 'Scouter' : 'Booker';
       who.textContent = name ? `${name} · ${roleLabel}` : roleLabel;
     }
   }
@@ -96,6 +113,8 @@
     pwToggle.textContent = show ? 'Hide' : 'Show';
   });
   el('logout').addEventListener('click', () => {
+    // Invalidate the session server-side too, so the token can't be replayed.
+    fetch('/api/logout', { method: 'POST', headers: { 'x-admin-token': token } }).catch(() => {});
     ['mp_admin_token', 'mp_admin_role', 'mp_admin_name', 'mp_admin_bookername'].forEach(k => sessionStorage.removeItem(k));
     token = ''; role = ''; showLogin();
   });
@@ -108,7 +127,15 @@
       headers: { 'Content-Type': 'application/json', 'x-admin-token': token, ...(opts.headers || {}) },
     });
     if (res.status === 401) { sessionStorage.removeItem(STORE_KEY); showLogin(); throw new Error('unauthorized'); }
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    // A rejected write must NOT look like success — throw so callers' catch blocks
+    // actually run (rollbacks, error messages) instead of silently "saving".
+    if (!res.ok) {
+      const err = new Error(data.error || ('Request failed (' + res.status + ')'));
+      err.status = res.status; err.body = data;
+      throw err;
+    }
+    return data;
   }
 
   /* ================= 2. LOAD DATA ================= */
@@ -116,9 +143,19 @@
   // (not because the server returned the same items in a different order).
   const fingerprint = arr => (arr || []).map(x => JSON.stringify(x)).sort().join('|');
   async function loadAll() {
+    if (role === 'scouter') {
+      // Scouter: no jobs access — just their models' schedule + their MAC ledger.
+      const b = await api('/api/schedule').catch(() => ({ schedule: [] }));
+      schedule = b.schedule || [];
+      api('/api/models').then(r => { models = r.models || []; }).catch(() => {});
+      api('/api/settings').then(s => { if (s && s.fxRates) fxRates = s.fxRates; }).catch(() => {});
+      buildFilters(); renderSchedule();
+      return;
+    }
     const [a, b] = await Promise.all([api('/api/jobs'), api('/api/schedule')]);
     jobs = a.jobs || [];
     schedule = b.schedule || [];
+    api('/api/settings').then(s => { if (s && s.fxRates) fxRates = s.fxRates; renderJobs(); }).catch(() => {});
     buildFilters();
     renderJobs();
     renderSchedule();
@@ -130,6 +167,7 @@
   // background and re-render when anything changed — no more manual Refresh. We stay
   // out of the way while someone is actively editing (drawer open / typing in a field).
   async function silentRefresh() {
+    if (role === 'scouter') return;   // scouter has no jobs feed; uses its own refresh
     if (document.hidden) return;
     if (el('drawer').classList.contains('open')) return;
     const a = document.activeElement;
@@ -169,6 +207,20 @@
     btn.style.cssText = 'margin-left:10px;background:#2f8f83;color:#fff;border:none;border-radius:7px;padding:5px 14px;cursor:pointer;font-weight:600';
     btn.addEventListener('click', () => location.reload());
   }
+  let updatePending = false;
+  // Safe to reload = nobody is mid-edit (no drawer open, not typing in a field).
+  function safeReloadNow() {
+    if (el('drawer') && el('drawer').classList.contains('open')) return false;
+    const a = document.activeElement;
+    if (a && ['INPUT', 'SELECT', 'TEXTAREA'].includes(a.tagName)) return false;
+    return true;
+  }
+  function reloadOnce() {
+    let last = 0; try { last = +(sessionStorage.getItem('mp_reload_at') || 0); } catch (_) {}
+    if (new Date().getTime() - last < 60000) return;   // loop guard
+    try { sessionStorage.setItem('mp_reload_at', String(new Date().getTime())); } catch (_) {}
+    location.reload();
+  }
   async function checkVersion() {
     try {
       const r = await fetch('/api/version', { cache: 'no-store' });
@@ -176,20 +228,19 @@
       if (!v) return;
       if (loadedVersion === null) { loadedVersion = v; return; }   // first read = our version
       if (v === loadedVersion) return;                             // unchanged — do nothing
-      // New version live. Only a hidden (background) tab reloads itself, and only if we
-      // haven't just reloaded (prevents any reload loop). A visible tab just shows the bar.
-      let last = 0; try { last = +(sessionStorage.getItem('mp_reload_at') || 0); } catch (_) {}
-      const now = new Date().getTime();
-      if (document.hidden && now - last > 180000) {
-        try { sessionStorage.setItem('mp_reload_at', String(now)); } catch (_) {}
-        location.reload();
-      } else {
-        showUpdateBar();
-      }
+      updatePending = true;                                        // a newer version is live
+      // Reload as soon as it's safe (background tab, or foreground with nothing being
+      // edited) so stale tabs can't keep sending old messages. Otherwise show the bar.
+      if (document.hidden || safeReloadNow()) reloadOnce();
+      else showUpdateBar();
     } catch (_) { /* offline — try again next tick */ }
   }
   setInterval(checkVersion, 60000);
   checkVersion();   // establish/confirm version right away
+  // When the booker comes back to the tab, or finishes editing, apply a pending update.
+  const applyIfPending = () => { if (updatePending && !document.hidden && safeReloadNow()) reloadOnce(); };
+  window.addEventListener('focus', applyIfPending);
+  document.addEventListener('visibilitychange', applyIfPending);
 
   /* ================= 3. HELPERS ================= */
   const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -197,9 +248,42 @@
     const [y, mm] = (m || '').split('-');
     return mm ? `${MONTH_NAMES[+mm - 1]} ${y}` : m;
   }
-  const CUR_SYM = { THB: '฿', USD: '$', CNY: '¥' };
+  const CUR_SYM = { THB: '฿', USD: '$', CNY: '¥', EUR: '€' };
+  let fxRates = { USD: 35, EUR: 38, CNY: 5 };   // → THB, updated from /api/settings
+  // A job's full amount = budget + overtime fee. Lines-jobs already fold each
+  // model's OT into budget (linesTotal), so only single-model jobs add the field.
+  function jobAmount(j) {
+    const ot = (Array.isArray(j.lines) && j.lines.length) ? 0 : Number(j.overtimeFee || 0);
+    return Number(j.budget || 0) + ot;
+  }
+  // Convert any job's full amount to THB (THB stays as-is; foreign × its rate).
+  function toThb(j) {
+    const cur = j.currency || 'THB', amt = jobAmount(j);
+    return cur === 'THB' ? amt : amt * (fxRates[cur] || 0);
+  }
+  // Budget cell: THB jobs plain; foreign jobs show the THB equivalent + a tag with
+  // the original foreign amount (so you know it was converted). OT is included
+  // in the figure, marked with ⏱ so the base fee is still traceable.
+  function budgetCell(j) {
+    if (!jobAmount(j)) return '—';
+    const cur = j.currency || 'THB';
+    const otTag = (!Array.isArray(j.lines) || !j.lines.length) && Number(j.overtimeFee || 0)
+      ? ` <span class="fx-tag" title="includes overtime ${money(j.overtimeFee, cur)} (base fee ${money(j.budget, cur)})">⏱ OT</span>` : '';
+    if (cur === 'THB') return money(jobAmount(j), 'THB') + otTag;
+    return `${money(toThb(j))} <span class="fx-tag" title="Converted from ${cur} at ฿${fxRates[cur] || '?'}/${CUR_SYM[cur] || cur}">🌐 ${money(jobAmount(j), cur)}</span>${otTag}`;
+  }
   function money(n, cur) { return (CUR_SYM[cur] || '฿') + Math.round(Number(n || 0)).toLocaleString('en-US'); }
-  const withCommas = v => { const r = String(v || '').replace(/[^\d]/g, ''); return r ? Number(r).toLocaleString('en-US') : ''; };
+  // Thousands separators that PRESERVE decimals — stripping the dot corrupted
+  // amounts like 1234.50 → 123450 (10× per decimal place).
+  const withCommas = v => {
+    let s = String(v == null ? '' : v).replace(/[^\d.]/g, '');
+    if (!s) return '';
+    const firstDot = s.indexOf('.');
+    if (firstDot >= 0) s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '');
+    const [int, dec] = s.split('.');
+    const intFmt = int ? Number(int).toLocaleString('en-US') : (firstDot === 0 ? '0' : '');
+    return dec !== undefined ? intFmt + '.' + dec.slice(0, 2) : intFmt;
+  };
   function distinct(arr) { return [...new Set(arr.filter(Boolean))]; }
 
   // Everyone who can own a job/lead: the names seen in the data plus the fixed
@@ -267,6 +351,15 @@
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
     const e = schedule.find(x => x.id === id);
     if (e) { e.status = r.entry.status; e.stage = r.entry.stage; }
+    // A multi-day hold moves as ONE booking — declining/postponing/reopening one
+    // day applies to every held day (same as dragging the hold on the Board).
+    if (e && e.holdGroup) {
+      const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
+      for (const s of siblings) {
+        try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify(patch) }); s.status = rs.entry.status; s.stage = rs.entry.stage; }
+        catch (_) {}
+      }
+    }
   }
   // Auto-pilot: confirming an OPTION books it. Decline the other held days of the
   // same option, then drop a confirmed Job into the Job Tracker (fee added later).
@@ -388,14 +481,14 @@
       return true;
     });
   }
-  // Sort so job codes run DOWN in sequence — booking order (that's when a code is
-  // assigned), so each column's numbers climb (…B1110, B1111, B1112…), like the sheet.
+  // Sort by the job CODE so the tracker runs in code order (…B1110, B1111, B1112,
+  // then C3020, C3021, C3022…). B-codes (all lower numbers) group before C-codes.
+  // Jobs with no code yet sink to the bottom.
   const jobCodeNum = j => { const m = String(j.jobId || j.jobIdNonTax || '').match(/\d{3,6}/); return m ? +m[0] : 0; };
   function sortedJobs() {
     return filteredJobs().slice().sort((a, b) => {
-      const ba = /^\d{4}-\d{2}-\d{2}$/.test(a.bookingDate || '') ? a.bookingDate : '9999-99-99';
-      const bb = /^\d{4}-\d{2}-\d{2}$/.test(b.bookingDate || '') ? b.bookingDate : '9999-99-99';
-      return ba.localeCompare(bb) || jobCodeNum(a) - jobCodeNum(b);
+      const na = jobCodeNum(a) || Infinity, nb = jobCodeNum(b) || Infinity;
+      return na - nb || (a.bookingDate || '').localeCompare(b.bookingDate || '');
     });
   }
 
@@ -411,18 +504,20 @@
     const castings = monthSched.filter(e => e.casting).length;
     const options = monthSched.filter(e => e.option).length;
 
-    // Aggregate revenue by invoice type → bank account (THB accounts). Foreign
-    // currencies (USD, CNY) are never mixed with THB — each gets its own total.
+    // Team total is in THB — foreign-currency jobs are CONVERTED to THB and included.
+    // The bank-account totals (KBank/SCB) stay pure THB (those accounts only hold THB).
     const curOf = j => j.currency || 'THB';
     const thb = list.filter(j => curOf(j) === 'THB');
-    const totalBudget = thb.reduce((s, j) => s + Number(j.budget || 0), 0);
-    const taxBudget = thb.filter(j => !isNonTax(j)).reduce((s, j) => s + Number(j.budget || 0), 0);
-    const nonTaxBudget = totalBudget - taxBudget;
-    const foreignTiles = ['USD', 'CNY'].map(c => {
-      const rows = list.filter(j => curOf(j) === c);
+    const totalBudget = list.reduce((s, j) => s + toThb(j), 0);           // THB + converted foreign
+    const taxBudget = thb.filter(j => !isNonTax(j)).reduce((s, j) => s + jobAmount(j), 0);
+    const nonTaxBudget = thb.filter(j => isNonTax(j)).reduce((s, j) => s + jobAmount(j), 0);
+    const foreignCount = list.filter(j => curOf(j) !== 'THB' && jobAmount(j)).length;
+    const foreignTiles = ['USD', 'EUR', 'CNY'].map(c => {
+      const rows = list.filter(j => curOf(j) === c && jobAmount(j));
       if (!rows.length) return '';
-      const sum = rows.reduce((s, j) => s + Number(j.budget || 0), 0);
-      return `<div class="stat money revenue-only"><div class="n">${money(sum, c)}</div><div class="l">${c} total</div></div>`;
+      const sum = rows.reduce((s, j) => s + jobAmount(j), 0);
+      const thbEq = rows.reduce((s, j) => s + toThb(j), 0);
+      return `<div class="stat money revenue-only"><div class="n">${money(sum, c)}</div><div class="l">${c} · ≈${money(thbEq)} <span class="fx-edit" data-cur="${c}" title="Edit rate">✎ ฿${fxRates[c]}</span></div></div>`;
     }).join('');
 
     // Each booker sees their OWN sales total (THB) — not the company-wide totals.
@@ -430,8 +525,8 @@
     if (role === 'booker') {
       const mine = sessionStorage.getItem('mp_admin_bookername') || '';
       if (mine) {
-        const mySum = thb.filter(j => (j.booker || '').toLowerCase() === mine.toLowerCase())
-          .reduce((s, j) => s + Number(j.budget || 0), 0);
+        const mySum = list.filter(j => (j.booker || '').toLowerCase() === mine.toLowerCase())
+          .reduce((s, j) => s + toThb(j), 0);
         mySalesTile = `<div class="stat money"><div class="n">${money(mySum)}</div><div class="l">My sales · ${esc(mine)}</div></div>`;
       }
     }
@@ -441,33 +536,172 @@
       <div class="stat"><div class="n">${castings}</div><div class="l">Castings (leads)</div></div>
       <div class="stat"><div class="n">${options}</div><div class="l">Options (leads)</div></div>
       ${mySalesTile}
-      <div class="stat money"><div class="n">${money(totalBudget)}</div><div class="l">Team total (THB)</div></div>
+      <div class="stat money"><div class="n">${money(totalBudget)}</div><div class="l">Team total (THB)${foreignCount ? ' · incl. ' + foreignCount + ' foreign' : ''}</div></div>
       <div class="stat money revenue-only"><div class="n">${money(taxBudget)}</div><div class="l">Tax invoice · KBank</div></div>
       <div class="stat money nontax revenue-only"><div class="n">${money(nonTaxBudget)}</div><div class="l">Non-Tax · SCB</div></div>
       ${foreignTiles}`;
 
+    // Managers can edit an exchange rate by clicking the ✎ on a foreign tile.
+    el('j-stats').querySelectorAll('.fx-edit').forEach(sp => {
+      if (!canSeeMoney()) return;
+      sp.style.cursor = 'pointer';
+      sp.addEventListener('click', async () => {
+        const cur = sp.dataset.cur;
+        const v = prompt(`Exchange rate — how many THB per 1 ${cur}?`, fxRates[cur]);
+        if (v == null) return;
+        const rate = parseFloat(String(v).replace(/[^\d.]/g, ''));
+        if (!rate || rate <= 0) { alert('Enter a number greater than 0.'); return; }
+        fxRates[cur] = rate;
+        try { await api('/api/settings', { method: 'PUT', body: JSON.stringify({ fxRates: { [cur]: rate } }) }); } catch (_) {}
+        renderJobs();
+      });
+    });
+
     el('j-empty').style.display = list.length ? 'none' : 'block';
-    el('j-rows').innerHTML = list.map(j => {
+    const jobRowHtml = j => {
       // Split the code into its own column: C-code = Tax, B-code = Non-Tax.
       const taxCode = /b\s?\d/i.test(j.jobId || '') ? '' : (j.jobId || '');   // C (or blank)
       const nonTaxCode = j.jobIdNonTax || (/b\s?\d/i.test(j.jobId || '') ? j.jobId : '');   // B
-      const who = [j.model, j.freelance].filter(Boolean).map(esc).join(' / ') || '—';
+      let who;
+      if (Array.isArray(j.lines) && j.lines.length) {
+        const parts = j.lines.map(l => `<b>${esc(l.name) || '—'}</b> ฿${withCommas((+l.rate || 0) + (+l.ot || 0))}${l.mp ? '' : ' <span style="color:var(--web)">FL</span>'}`);
+        who = `<span>${j.lines.length} models</span><span class="job-lines">${parts.join('<br>')}</span>`;
+      } else {
+        who = [j.model, j.freelance].filter(Boolean).map(esc).join(' / ') || '—';
+      }
       const webBadge = j.source === 'website' ? ' <span class="badge web">web</span>' : '';
+      const usageBadge = isUsageJob(j) ? ' <span class="badge usage" title="Additional usage fee — re-uses an existing job code">🔁 usage fee</span>' : '';
       return `
-      <tr class="row ${j.source === 'website' ? 'web' : ''}" data-id="${j.id}">
+      <tr class="row ${j.source === 'website' ? 'web' : ''}${j.collected ? ' collected' : ''}" data-id="${j.id}">
+        <td class="col-collected"><input type="checkbox" class="collect-box" data-id="${j.id}"${j.collected ? ' checked' : ''} title="Collected — photos/videos gathered"></td>
         <td>${esc(j.jobDate) || '—'}</td>
         <td class="code-c">${esc(taxCode) || '<span class="code-dash">—</span>'}</td>
         <td class="code-b">${esc(nonTaxCode) || '<span class="code-dash">—</span>'}</td>
-        <td class="title-cell">${esc(j.jobTitle) || '—'}${webBadge}${matBadge(j.materials)}${j.internalNote ? ' <span class="note-dot" title="Has an internal note">📝</span>' : ''}</td>
+        <td class="title-cell"><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span><span class="prev-icon" data-id="${j.id}" title="Preview this job's confirmation form">👁</span>${j.signedDocUrl ? ` <a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''} ${esc(j.jobTitle) || '—'}${webBadge}${usageBadge}${matBadge(j.materials)}${j.internalNote ? ' <span class="note-dot" title="Has an internal note">📝</span>' : ''}</td>
         <td>${who}</td>
-        <td>${esc(j.client) || '—'}</td>
+        <td>${esc(j.client) || '—'}${j.leadSource ? ` <span class="src-badge" title="Lead source">${SOURCE_ICON[j.leadSource] || ''} ${esc(j.leadSource)}</span>` : ''}</td>
         <td>${esc(j.booker) || '—'}</td>
-        <td class="num money">${j.budget ? money(j.budget, j.currency) : '—'}</td>
+        <td class="num money">${budgetCell(j)}</td>
       </tr>`;
-    }).join('');
+    };
+    // When viewing ALL months, group by month with a header (like the old monthly
+    // sheets) so the full code sequence is visible and you see which month each is.
+    if (el('j-month').value === 'all') {
+      const byMonth = {};
+      list.forEach(j => { const m = j.month || '(no month)'; (byMonth[m] = byMonth[m] || []).push(j); });
+      const months = Object.keys(byMonth).sort().reverse();   // newest month first
+      el('j-rows').innerHTML = months.map(m => {
+        const rows = byMonth[m].map(jobRowHtml).join('');
+        return `<tr class="month-head"><td colspan="9">📅 ${m === '(no month)' ? 'No month' : monthLabel(m)} · ${byMonth[m].length} jobs</td></tr>` + rows;
+      }).join('');
+    } else {
+      // Single-month view: show the jobs PLUS marker rows for codes that fall inside
+      // this month's number range but live elsewhere — a July job, or a free code —
+      // so the sequence is unbroken and bookers see which codes are already taken.
+      el('j-rows').innerHTML = jobRowsWithGaps(list, jobRowHtml);
+    }
 
+    // Inline "collected" tick — toggles without opening the job.
+    el('j-rows').querySelectorAll('.collect-box').forEach(cb => {
+      cb.addEventListener('click', ev => ev.stopPropagation());
+      cb.addEventListener('change', async ev => {
+        const jb = jobs.find(x => x.id === cb.dataset.id);
+        if (jb) jb.collected = cb.checked;
+        cb.closest('tr').classList.toggle('collected', cb.checked);
+        try { await api('/api/jobs/' + cb.dataset.id, { method: 'PATCH', body: JSON.stringify({ collected: cb.checked }) }); } catch (_) {}
+      });
+    });
+    // Click the 📄 icon to mark/unmark "confirmation made" — without opening the job.
+    el('j-rows').querySelectorAll('.conf-icon').forEach(ic => {
+      ic.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        const jb = jobs.find(x => x.id === ic.dataset.id); if (!jb) return;
+        jb.confirmationMade = !jb.confirmationMade;
+        renderJobs();
+        try { await api('/api/jobs/' + jb.id, { method: 'PATCH', body: JSON.stringify({ confirmationMade: jb.confirmationMade }) }); } catch (_) {}
+      });
+    });
+    // 👁 per-row preview: open THIS job's confirmation form straight from the tracker.
+    el('j-rows').querySelectorAll('.prev-icon').forEach(ic => {
+      ic.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const jb = jobs.find(x => x.id === ic.dataset.id); if (!jb) return;
+        openConfirmationDoc({ ...jb });
+      });
+    });
     el('j-rows').querySelectorAll('tr.row').forEach(tr =>
       tr.addEventListener('click', () => openJob(tr.dataset.id)));
+    // Click a free-code marker → new job pre-filled with that exact code.
+    el('j-rows').querySelectorAll('tr.gap-free').forEach(tr =>
+      tr.addEventListener('click', () => {
+        const code = tr.dataset.newcode;
+        const prefill = { _codeOnly: true };
+        if (/^C/i.test(code)) prefill.jobId = code; else prefill.jobIdNonTax = code;
+        openJob(null, prefill);
+      }));
+  }
+
+  // Parse a "C3016-MV" / "B1108-PHOTO" code into {p:'C', n:3016, usage:'/1'|null}.
+  // A "/N" suffix (e.g. B1045/1) marks an ADDITIONAL USAGE fee of an existing job —
+  // it re-uses an old code and is NOT part of the current running sequence.
+  function parseCode(str) {
+    const s = String(str || '');
+    const m = s.match(/([CB])\s?(\d{3,})/i);
+    if (!m) return null;
+    const usage = s.match(new RegExp(m[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*/\\s*(\\d+)'));
+    return { p: m[1].toUpperCase(), n: +m[2], usage: usage ? usage[1] : null };
+  }
+  const isUsageJob = j => { const c = parseCode(j.jobId || j.jobIdNonTax); return !!(c && c.usage); };
+  // Where does code <prefix><n> live? Returns that job's month, or null if the code
+  // is free (used by nobody) — searched across ALL jobs, every month.
+  function codeMonth(prefix, n) {
+    const re = new RegExp('(^|[^0-9])' + prefix + '\\s?' + n + '(?![0-9])', 'i');
+    const j = jobs.find(x => re.test((x.jobId || '') + ' ' + (x.jobIdNonTax || '')));
+    return j ? (j.month || '') : null;
+  }
+  // Build the month's rows with gap-marker rows woven in (like the old "JOB IN JULY").
+  function jobRowsWithGaps(list, rowHtml) {
+    const out = [];
+    const MAX_GAP = 15;   // don't fill huge gaps (e.g. an old usage-fee code far below the sequence)
+    ['C', 'B'].forEach(prefix => {
+      const coded = list.map(j => ({ j, c: parseCode(j.jobId || j.jobIdNonTax) }))
+        .filter(x => x.c && x.c.p === prefix).sort((a, b) => a.c.n - b.c.n);
+      for (let i = 0; i < coded.length; i++) {
+        out.push({ sort: prefix === 'B' ? coded[i].c.n : 100000 + coded[i].c.n, html: rowHtml(coded[i].j) });
+        // Usage-fee codes (B1045/1) aren't part of the running sequence — skip gaps after them.
+        if (coded[i].c.usage) continue;
+        const cur = coded[i].c.n, nxt = i + 1 < coded.length ? coded[i + 1].c.n : null;
+        if (nxt && nxt > cur + 1 && (nxt - cur - 1) <= MAX_GAP) {
+          // walk the missing numbers, grouping consecutive ones with the same home
+          let runStart = null, runHome;
+          const flush = (endN) => {
+            if (runStart == null) return;
+            const range = runStart === endN ? prefix + runStart : prefix + runStart + '–' + prefix + endN;
+            if (runHome) {
+              // These codes belong to another month's job — informational only, not free.
+              out.push({ sort: (prefix === 'B' ? 0 : 100000) + runStart + 0.5, marker: true,
+                html: `<tr class="gap-row"><td class="col-collected"></td><td></td><td colspan="7">${prefix === 'C' ? '↳ ' : ''}${range} · 📅 ${monthLabel(runHome)}</td></tr>` });
+            } else {
+              // Genuinely free — click to start a new job pre-filled with the first free code.
+              out.push({ sort: (prefix === 'B' ? 0 : 100000) + runStart + 0.5, marker: true,
+                html: `<tr class="gap-row gap-free" data-newcode="${prefix + runStart}" title="Click to create a job with code ${prefix + runStart}"><td class="col-collected"></td><td></td><td colspan="7">${prefix === 'C' ? '↳ ' : ''}${range} · ⚪ free — <b>click to create</b> ${prefix + runStart}</td></tr>` });
+            }
+            runStart = null;
+          };
+          for (let k = cur + 1; k < nxt; k++) {
+            const home = codeMonth(prefix, k);   // '' month string or null(free)
+            const key = home || '__free__';
+            if (runStart == null) { runStart = k; runHome = home; }
+            else if (key !== (runHome || '__free__')) { flush(k - 1); runStart = k; runHome = home; }
+          }
+          flush(nxt - 1);
+        }
+      }
+    });
+    // no-code jobs at the very end
+    list.filter(j => !parseCode(j.jobId || j.jobIdNonTax)).forEach(j => out.push({ sort: 1e9, html: rowHtml(j) }));
+    out.sort((a, b) => a.sort - b.sort);
+    return out.map(x => x.html).join('');
   }
 
   // Small photos/videos status chip on a job row (bookers never see it — CSS-gated).
@@ -484,7 +718,97 @@
   ['j-month', 'j-booker', 'j-invtype', 'j-search'].forEach(idc =>
     el(idc).addEventListener('input', renderJobs));
   el('j-refresh').addEventListener('click', loadAll);
+
+  /* ---- Excel export (Aim: billing / ส่งเบิก needs the tracker as a file) ---- */
+  // CSV with a UTF-8 BOM → opens directly in Excel with Thai text intact.
+  function jobsCsvRows(list) {
+    const cell = v => {
+      v = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(v)) v = "'" + v;                 // formula-injection guard
+      return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    const head = ['Booking date', 'Job date', 'C code', 'B code', 'Job title', 'Model', 'MP / Freelance',
+      'Client', 'Company', 'Tax ID', 'Contact person', 'Email', 'Booker', 'Status', 'Shoot days',
+      'Fee', 'OT', 'Total', 'Currency', 'Lead source', 'Confirmation made', 'Signed doc', 'Note'];
+    const lines = [head.map(cell).join(',')];
+    let grand = 0;
+    list.forEach(j => {
+      const base = [j.bookingDate, j.jobDate, (/b\s?\d/i.test(j.jobId || '') ? '' : j.jobId), j.jobIdNonTax || (/b\s?\d/i.test(j.jobId || '') ? j.jobId : ''),
+        j.jobTitle, /*model*/'', /*mp-fl*/'', j.client, j.companyName, j.clientTaxId, j.contactPerson, j.clientEmail,
+        j.booker, j.status, j.shootDays, /*fee*/'', /*ot*/'', /*total*/'', j.currency || 'THB', j.leadSource,
+        j.confirmationMade ? 'yes' : '', j.signedDocUrl || '', ''];
+      if (Array.isArray(j.lines) && j.lines.length) {
+        // One row per model with their OWN rate + OT — exactly what billing needs.
+        j.lines.forEach(l => {
+          const total = (+l.rate || 0) + (+l.ot || 0); grand += (j.currency || 'THB') === 'THB' ? total : 0;
+          const row = base.slice();
+          row[5] = l.name; row[6] = l.mp ? 'MP' : 'Freelance';
+          row[15] = l.rate || 0; row[16] = l.ot || 0; row[17] = total;
+          lines.push(row.map(cell).join(','));
+        });
+      } else {
+        const total = jobAmount(j); grand += (j.currency || 'THB') === 'THB' ? total : 0;
+        const row = base.slice();
+        row[5] = j.model || j.freelance || ''; row[6] = j.model ? 'MP' : (j.freelance ? 'Freelance' : '');
+        row[15] = +j.budget || 0; row[16] = +j.overtimeFee || 0; row[17] = total;
+        lines.push(row.map(cell).join(','));
+      }
+    });
+    lines.push(['', '', '', '', 'TOTAL (THB rows)', '', '', '', '', '', '', '', '', '', '', '', '', Math.round(grand * 100) / 100, 'THB', '', '', '', ''].map(cell).join(','));
+    return lines.join('\r\n');
+  }
+  function downloadCsv(text, filename) {
+    const blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+  // Names a job can carry (single field, comma-joined legacy, or per-model lines).
+  const jobNamesOf = j => {
+    const out = [];
+    if (Array.isArray(j.lines) && j.lines.length) j.lines.forEach(l => l.name && out.push(l.name));
+    [j.model, j.freelance].forEach(s => String(s || '').split(/[,\/\n]+/).forEach(t => t.trim() && out.push(t.trim())));
+    return out;
+  };
+  function openExportDrawer() {
+    const allNames = [...new Set(jobs.flatMap(jobNamesOf))].sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
+    el('d-title').textContent = 'Download Job Tracker (Excel)';
+    el('drawer-body').innerHTML = `
+      <p style="color:var(--grey);font-size:13px;margin-bottom:14px">Downloads a .csv file that opens straight in Excel (Thai text OK) — for billing / ส่งเบิก. Multi-model jobs show one row per model with their own fee + OT.</p>
+      <div class="field"><button class="btn" id="ex-filtered" style="width:100%">⬇ What's shown now (current month & filters)</button></div>
+      <div class="field"><button class="btn ghost" id="ex-all" style="width:100%">⬇ Everything — all months, all jobs</button></div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+      <div class="field"><label>Per model — all of one model's jobs</label>
+        <input id="ex-model" list="ex-model-list" placeholder="Start typing a model's name…">
+        <datalist id="ex-model-list">${allNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+      <div class="field"><button class="btn ghost" id="ex-permodel" style="width:100%">⬇ Download this model's jobs</button></div>`;
+    const stamp = todayLocal();
+    el('ex-filtered').addEventListener('click', () => {
+      const scope = el('j-month').value === 'all' ? 'all-months' : el('j-month').value;
+      downloadCsv(jobsCsvRows(sortedJobs()), `MP Job Tracker ${scope} ${stamp}.csv`);
+    });
+    el('ex-all').addEventListener('click', () => {
+      const list = jobs.slice().sort((a, b) => (a.jobDate || '').localeCompare(b.jobDate || ''));
+      downloadCsv(jobsCsvRows(list), `MP Job Tracker ALL ${stamp}.csv`);
+    });
+    el('ex-permodel').addEventListener('click', () => {
+      const name = el('ex-model').value.trim();
+      if (!name) { alert('Type or pick a model name first.'); return; }
+      const nn = name.toLowerCase();
+      const list = jobs.filter(j => jobNamesOf(j).some(t => t.toLowerCase() === nn))
+        .sort((a, b) => (a.jobDate || '').localeCompare(b.jobDate || ''));
+      if (!list.length) { alert(`No jobs found for “${name}”.`); return; }
+      // For a per-model file, narrow lines-jobs to that model's own fee row.
+      const narrowed = list.map(j => (Array.isArray(j.lines) && j.lines.length)
+        ? { ...j, lines: j.lines.filter(l => (l.name || '').toLowerCase() === nn) } : j);
+      downloadCsv(jobsCsvRows(narrowed), `MP Jobs - ${name} ${stamp}.csv`);
+    });
+    openDrawer();
+  }
+  if (el('j-export')) el('j-export').addEventListener('click', openExportDrawer);
   el('j-add').addEventListener('click', () => openJob(null));
+  // Sample confirmation — opens an example form (SAMPLE watermark) so bookers can
+  // see the layout without filling in a real job. Never touches any data.
 
   /* ================= 5. JOB DRAWER (view / edit / add / delete) ===== */
   function jobForm(j) {
@@ -497,13 +821,21 @@
         ${f('Job ID (taxed)', 'jobId', j?.jobId || '')}
         ${f('Job ID (non-tax)', 'jobIdNonTax', j?.jobIdNonTax || '')}
       </div>
-      <div style="margin:-8px 0 16px;display:flex;gap:16px;font-size:12px">
+      <div style="margin:-8px 0 6px;display:flex;gap:16px;font-size:12px;flex-wrap:wrap">
         <button type="button" class="link" id="gen-tax" style="color:var(--teal)">+ Generate C code (taxed)</button>
         <button type="button" class="link" id="gen-nontax" style="color:var(--web)">+ Generate B code (non-tax)</button>
+        <button type="button" class="link" id="swap-code" style="color:var(--ink)">⇄ Move C ↔ B</button>
       </div>
+      <div id="d-code-warn" class="dup-warn" style="display:none"></div>
+      <p style="margin:0 0 16px;font-size:11px;color:var(--grey)">Both codes are free to edit — retype to move a client from Tax (C) to Non-Tax (B), clear a code to free it, or type a freed code onto a new job to reuse it.</p>
       <div class="field two">
         ${f('Booking Date', 'bookingDate', j?.bookingDate || '')}
         ${f('Job Date', 'jobDate', j?.jobDate || '')}
+      </div>
+      <div class="field">
+        <label>Shoot date(s) <span style="font-weight:400;color:var(--grey);font-size:11px">· click the shooting day(s) — they auto-appear on the Schedule so you never re-fill</span></label>
+        <div class="mini-cal" id="d-picker"></div>
+        <div id="d-picked" class="picked-summary"></div>
       </div>
       <div class="field two">
         ${f('Model (MP)', 'model', j?.model || '')}
@@ -515,6 +847,18 @@
           ${clientDatalist()}</div>
         ${f('Booker', 'booker', j?.booker || '')}
       </div>
+      <div class="field two">
+        <div class="field" style="margin:0"><label>Lead source <span style="font-weight:400;color:var(--declined);font-size:11px">· required</span></label>
+          <select id="d-leadSource">
+            <option value="">— source —</option>
+            ${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(j?.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}
+          </select></div>
+        <div class="field" style="margin:0"><label>Client type <span style="font-weight:400;color:var(--declined);font-size:11px">· required</span></label>
+          <select id="d-clientCategory">
+            <option value="">— type —</option>
+            ${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(j?.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}
+          </select></div>
+      </div>
       <div class="field two money">
         <div class="field" style="margin:0"><label>Budget</label>
           <input id="d-budget" type="text" inputmode="numeric" value="${j?.budget ? withCommas(j.budget) : ''}"></div>
@@ -522,12 +866,27 @@
           <select id="d-currency">
             <option value="THB" ${(j?.currency || 'THB') === 'THB' ? 'selected' : ''}>THB ฿</option>
             <option value="USD" ${j?.currency === 'USD' ? 'selected' : ''}>USD $</option>
+            <option value="EUR" ${j?.currency === 'EUR' ? 'selected' : ''}>EUR €</option>
             <option value="CNY" ${j?.currency === 'CNY' ? 'selected' : ''}>CNY ¥</option>
           </select></div>
+      </div>
+      <div class="field" id="d-lines-wrap">
+        <label>Per-model fees <span style="font-weight:400;color:var(--grey);font-size:11px">· one row per model when a job confirms several at different rates / OT. When used, it sets the total budget.</span></label>
+        <div id="d-lines"></div>
+        <div style="display:flex;align-items:center;gap:14px;margin-top:6px">
+          <button type="button" class="line-add" id="d-line-add">＋ Add model</button>
+          <span id="d-lines-total" style="font-size:12.5px;color:var(--grey)"></span>
+        </div>
       </div>
       <div class="field money" style="max-width:220px"><label>Shoot days (fee is often per day)</label>
         <input id="d-shootdays" type="number" min="1" max="10" step="1" value="${j?.shootDays || ''}" placeholder="e.g. 1 or 2"></div>
       ${j && (j.email || j.phone) ? `<div class="field"><label>Contact</label><input value="${esc([j.email, j.phone].filter(Boolean).join('  ·  '))}" readonly></div>` : ''}
+      <div class="field"><label>🖊️ Signed confirmation <span style="font-weight:400;color:var(--grey);font-size:11px">· when the client signs &amp; sends it back — upload to
+        <a href="https://drive.google.com/drive/folders/1xJO5ZtZsnTlkbzbpsn-y0IbD9sF8-LVG" target="_blank" rel="noopener">📂 JOB CONFIRMATION / 2026</a> (month folder), then paste the file's link here</span></label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="d-signedDocUrl" type="url" placeholder="https://drive.google.com/…" value="${esc(j?.signedDocUrl || '')}" style="flex:1">
+          ${j?.signedDocUrl ? `<a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="btn ghost" style="text-decoration:none;white-space:nowrap">Open ↗</a>` : ''}
+        </div></div>
       <div class="field"><label>Assignment description <span style="font-weight:400;color:var(--grey);font-size:11px">· shows on the client confirmation</span></label><textarea id="d-notes" rows="3">${esc(j?.notes)}</textarea></div>
       <div class="field int-note"><label>📝 Internal note <span style="font-weight:400;color:var(--grey);font-size:11px">· team only — never sent to client</span></label><textarea id="d-internalNote" rows="3" placeholder="Reminders for the team: follow-ups, client preferences, anything private…">${esc(j?.internalNote)}</textarea></div>
       <div class="materials-box">
@@ -587,7 +946,11 @@
       </div>
       <div class="field two">
         ${fld('Work Package', `<select id="d-workPackage">${pkgOptions}</select>`)}
+        ${fld('Contracted hours', `<input id="d-contractHours" type="number" step="0.5" min="0" value="${val('contractHours')}" placeholder="any hours, e.g. 6">`)}
+      </div>
+      <div class="field two">
         ${fld('Break (hours)', `<input id="d-breakHours" type="number" step="0.5" min="0" value="${val('breakHours')}">`)}
+        <div></div>
       </div>
       <div class="field two">
         <div class="field" style="margin:0"><label>Overtime Rate (THB / hour)</label>
@@ -615,15 +978,16 @@
   function recalcOvertime() {
     const box = el('ot-summary');
     if (!box) return;
-    const pkg = PACKAGES[el('d-workPackage').value];
     const t1 = el('d-timeStart').value, t2 = el('d-timeEnd').value;
-    if (!pkg) { box.textContent = 'Choose a work package to calculate overtime.'; box.className = 'ot-box'; return; }
-    if (!t1 || !t2) { box.textContent = `${pkg.label}: enter start & end time to calculate overtime.`; box.className = 'ot-box'; return; }
+    // Allowed on-set hours = the Contracted hours field (flexible, any value).
+    const contracted = parseFloat(el('d-contractHours') ? el('d-contractHours').value : '') || 0;
+    if (!contracted) { box.textContent = 'Enter the contracted hours (and times) to calculate overtime.'; box.className = 'ot-box'; return; }
+    if (!t1 || !t2) { box.textContent = `${contracted}h contracted — enter start & end time to calculate overtime.`; box.className = 'ot-box'; return; }
 
     let elapsed = (toMinutes(t2) - toMinutes(t1)) / 60;
     if (elapsed < 0) elapsed += 24;                 // shoot ran past midnight
     const brk = parseFloat(el('d-breakHours').value) || 0;
-    const allowed = pkg.hours + brk;
+    const allowed = contracted + brk;
     const otHours = billOvertime(elapsed - allowed);
     const rate = parseFloat(el('d-overtimeRate').value) || 0;
     const fee = otHours * rate;
@@ -633,7 +997,7 @@
 
     box.className = 'ot-box' + (otHours > 0 ? ' has-ot' : '');
     box.innerHTML = `On set <b>${elapsed.toFixed(1)}h</b> · allowed <b>${allowed}h</b> `
-      + `(package ${pkg.hours}h + break ${brk}h) → overtime <b>${otHours}h</b>`
+      + `(${contracted}h contracted + break ${brk}h) → overtime <b>${otHours}h</b>`
       + (rate > 0 ? ` × ฿${rate.toLocaleString()} = <b>฿${fee.toLocaleString()}</b>`
                   : (otHours > 0 ? ' — enter an overtime rate' : ''));
   }
@@ -643,11 +1007,12 @@
     if (!pkgEl) return;
     pkgEl.addEventListener('change', () => {
       const p = PACKAGES[pkgEl.value];
-      // set the default break for this package if the field is empty
+      // A preset pre-fills the contracted hours + default break; "Custom" leaves them for typing.
+      if (p && p.hours != null && el('d-contractHours')) el('d-contractHours').value = p.hours;
       if (p && !el('d-breakHours').value) el('d-breakHours').value = p.brk;
       recalcOvertime();
     });
-    ['d-timeStart', 'd-timeEnd', 'd-breakHours', 'd-overtimeRate'].forEach(id =>
+    ['d-timeStart', 'd-timeEnd', 'd-breakHours', 'd-overtimeRate', 'd-contractHours'].forEach(id =>
       el(id).addEventListener('input', recalcOvertime));
     recalcOvertime();
   }
@@ -660,13 +1025,87 @@
       client: el('d-client').value, booker: el('d-booker').value,
       budget: el('d-budget').value, currency: el('d-currency') ? el('d-currency').value : 'THB',
       shootDays: el('d-shootdays') ? el('d-shootdays').value : '',
+      shootDates: el('d-picker') ? pickedList() : [],
       notes: el('d-notes').value,
       internalNote: el('d-internalNote') ? el('d-internalNote').value : '',
       materials: el('d-materials') ? el('d-materials').value : '',
       materialsNote: el('d-materialsNote') ? el('d-materialsNote').value : '',
+      whtMode: el('d-whtMode') ? el('d-whtMode').value : '',
     };
     CLIENT_KEYS.forEach(k => { const e = el('d-' + k); if (e) data[k] = e.value; });
+    data.lines = collectJobLines();
     return data;
+  }
+  const lineNum = v => parseFloat(String(v == null ? '' : v).replace(/[,\s฿]/g, '')) || 0;
+  function collectJobLines() {
+    return [...document.querySelectorAll('#d-lines .line-row')].map(r => ({
+      name: r.querySelector('.ln-name').value.trim(),
+      mp: r.querySelector('.ln-type').value === 'mp',
+      rate: lineNum(r.querySelector('.ln-rate').value),
+      ot: lineNum(r.querySelector('.ln-ot').value),
+    })).filter(l => l.name || l.rate || l.ot);
+  }
+  function lineRowHtml(l) {
+    l = l || {};
+    return `<div class="line-row">
+      <input class="ln-name" placeholder="Model name" value="${esc(l.name || '')}">
+      <select class="ln-type"><option value="mp"${l.mp !== false ? ' selected' : ''}>MP</option><option value="fl"${l.mp === false ? ' selected' : ''}>Freelance</option></select>
+      <input class="ln-rate" inputmode="numeric" placeholder="Rate ฿" value="${l.rate ? withCommas(l.rate) : ''}">
+      <input class="ln-ot" inputmode="numeric" placeholder="OT ฿" value="${l.ot ? withCommas(l.ot) : ''}">
+      <button type="button" class="ln-del" title="remove">×</button>
+    </div>`;
+  }
+  function updateLinesTotal() {
+    const lines = collectJobLines();
+    const total = lines.reduce((s, l) => s + l.rate + l.ot, 0);
+    const t = el('d-lines-total');
+    if (t) t.textContent = lines.length ? `Total ฿${withCommas(total)} · ${lines.length} model${lines.length > 1 ? 's' : ''}` : '';
+    const bud = el('d-budget');
+    if (bud) {
+      if (lines.length) { bud.value = withCommas(total); bud.readOnly = true; bud.style.opacity = '.6'; bud.title = 'Auto — sum of per-model fees'; }
+      else { bud.readOnly = false; bud.style.opacity = '1'; bud.title = ''; }
+    }
+  }
+  function wireJobLines(j) {
+    const wrap = el('d-lines'); if (!wrap) return;
+    (j && Array.isArray(j.lines) ? j.lines : []).forEach(l => wrap.insertAdjacentHTML('beforeend', lineRowHtml(l)));
+    const add = el('d-line-add');
+    if (add) add.addEventListener('click', () => { wrap.insertAdjacentHTML('beforeend', lineRowHtml({ mp: true })); updateLinesTotal(); wrap.lastElementChild.querySelector('.ln-name').focus(); });
+    wrap.addEventListener('click', e => { const d = e.target.closest('.ln-del'); if (d) { d.closest('.line-row').remove(); updateLinesTotal(); } });
+    wrap.addEventListener('input', updateLinesTotal);
+    updateLinesTotal();
+  }
+
+  // Open the client confirmation for a job — shared by the drawer's Confirmation
+  // button AND the per-row 👁 preview in the tracker. Handles the per-model fee
+  // lines and the legacy shared-code grouping. Type ('tax'/'nontax') is inferred
+  // from the job's codes when not given.
+  function openConfirmationDoc(data, type) {
+    if (!type) type = (data.jobId && !/b\s?\d/i.test(data.jobId)) ? 'tax' : (data.jobIdNonTax || /b\s?\d/i.test(data.jobId || '') ? 'nontax' : 'tax');
+    // ONE job holding several models with their own rate/OT → per-model fee table.
+    if (Array.isArray(data.lines) && data.lines.length > 1) {
+      data.modelFees = data.lines.map(l => ({
+        model: l.name,
+        fee: (+l.rate || 0) + (+l.ot || 0),
+        currency: data.currency || 'THB',
+      }));
+    } else {
+      // Legacy: multiple SEPARATE job records sharing one code → one confirmation
+      // listing every model + their fee.
+      const pc = jj => { const m = String(jj.jobId || jj.jobIdNonTax || '').match(/([CB])\s?(\d{3,})/i); return m ? m[1].toUpperCase() + m[2] : ''; };
+      const myCode = pc(data);
+      if (myCode) {
+        const group = jobs.filter(x => pc(x) === myCode);
+        if (group.length > 1) {
+          data.modelFees = group.map(x => ({
+            model: (x.id === data.id ? data.model : (x.model || x.freelance)) || (x.model || x.freelance),
+            fee: (x.id === data.id ? data.budget : x.budget),
+            currency: (x.id === data.id ? data.currency : x.currency) || 'THB',
+          }));
+        }
+      }
+    }
+    MPConfirmation.open(data, type, { hideMoney: role === 'designer' });
   }
 
   // openJob(id)            → edit an existing job
@@ -675,22 +1114,37 @@
   function openJob(id, prefill) {
     const j = id ? jobs.find(x => x.id === id) : null;
     const src = j || prefill || null;   // values shown in the form
-    el('d-title').textContent = j ? (j.jobTitle || 'Job') : (prefill ? 'New job from casting' : 'Add job');
+    const codeOnly = !!(prefill && prefill._codeOnly);
+    el('d-title').textContent = j ? (j.jobTitle || 'Job') : (prefill && !codeOnly ? 'New job from casting' : 'Add job');
     const confirmUi = j ? `
         <select id="d-form-type" title="Confirmation form">
           ${MPConfirmation.types.map(t => `<option value="${t.key}" ${t.key === MPConfirmation.defaultType(j) ? 'selected' : ''}>${t.label}</option>`).join('')}
         </select>
-        <button class="btn ghost" id="d-confirm-doc">Confirmation</button>` : '';
+        <select id="d-whtMode" title="Withholding tax 3% on the confirmation — Auto shows it for THB clients only (foreign clients can't issue a Thai WHT certificate)">
+          <option value="" ${!j?.whtMode ? 'selected' : ''}>WHT 3%: Auto (THB only)</option>
+          <option value="on" ${j?.whtMode === 'on' ? 'selected' : ''}>WHT 3%: Show</option>
+          <option value="off" ${j?.whtMode === 'off' ? 'selected' : ''}>WHT 3%: Hide (foreign)</option>
+        </select>
+        <button class="btn ghost" id="d-confirm-doc" title="Open the client confirmation. Tick the 📄 in the tracker yourself once it's actually created/sent.">Confirmation</button>` : '';
 
-    el('drawer-body').innerHTML = (prefill ? '<p style="margin:0 0 14px;color:var(--teal);font-size:12.5px">Pre-filled from the casting — add budget & client, then Create.</p>' : '')
+    el('drawer-body').innerHTML = (prefill && !codeOnly ? '<p style="margin:0 0 14px;color:var(--teal);font-size:12.5px">Pre-filled from the casting — add budget & client, then Create.</p>' : '')
+      + (codeOnly ? `<p style="margin:0 0 14px;color:var(--teal);font-size:12.5px">Code <b>${esc(prefill.jobId || prefill.jobIdNonTax)}</b> is free — fill in the job details, then Create.</p>` : '')
       + jobForm(src) + `
       <div class="drawer-actions">
         <button class="btn" id="d-save">${j ? 'Save changes' : 'Create job'}</button>
         ${confirmUi}
+        ${j && canSeeMoney() ? '<button class="link revenue-only" id="d-to-income" style="color:var(--teal)" title="This isn\'t a model booking — move it to Other Income (studio rental, commission, sale…)">→ Move to Other Income</button>' : ''}
         ${j ? '<button class="link" id="d-delete" style="color:var(--declined)">Delete</button>' : ''}
       </div>`;
 
     wireOvertimeCalc();   // live overtime calculator in the Schedule & fee block
+    wireJobLines(j);      // per-model fee rows (multi-model job at different rates + OT)
+
+    // Shoot-date picker: pre-select the job's existing shoot dates and render.
+    pickedDates = new Set((src && Array.isArray(src.shootDates)) ? src.shootDates : []);
+    pickerMonth = (pickedList()[0] || (isISODate(src?.jobDate) ? src.jobDate : todayLocal())).slice(0, 7);
+    onPickerChange = null;
+    if (el('d-picker')) renderDatePicker();
 
     // Budget field: add thousands separators as you type (no spinner arrows).
     const bud = el('d-budget');
@@ -712,42 +1166,189 @@
 
     // Running-code generator buttons
     el('gen-tax').addEventListener('click', async () => {
-      el('d-jobId').value = (await api('/api/next-code')).tax;
+      try { el('d-jobId').value = (await api('/api/next-code')).tax; } catch (_) { alert('Could not fetch the next code — check the connection and try again.'); }
+      checkCodeDup();
     });
     el('gen-nontax').addEventListener('click', async () => {
-      el('d-jobIdNonTax').value = (await api('/api/next-code')).nonTax;
+      try { el('d-jobIdNonTax').value = (await api('/api/next-code')).nonTax; } catch (_) { alert('Could not fetch the next code — check the connection and try again.'); }
+      checkCodeDup();
     });
+    // Move a code between Tax (C) and Non-Tax (B) — for when a client switches
+    // invoice type. Swaps the two fields' contents in one click.
+    el('swap-code').addEventListener('click', () => {
+      const c = el('d-jobId').value, b = el('d-jobIdNonTax').value;
+      el('d-jobId').value = b;
+      el('d-jobIdNonTax').value = c;
+      checkCodeDup();
+    });
+    // Live guard: warn if a typed code is already used by a DIFFERENT job — so a
+    // booker never double-creates or re-uses a taken code by accident. (Overtime /
+    // usage lines of the SAME job are fine — those legitimately share a code.)
+    const baseTitle = s => String(s || '').toLowerCase().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    function checkCodeDup() {
+      const warn = el('d-code-warn'); if (!warn) return;
+      const mine = j ? j.id : null;
+      const myBase = baseTitle(el('d-jobTitle') ? el('d-jobTitle').value : '');
+      const codes = [el('d-jobId').value, el('d-jobIdNonTax').value]
+        .map(s => { const m = String(s).match(/([CB])\s?(\d{3,})/i); return m ? (m[1].toUpperCase() + m[2]) : ''; })
+        .filter(Boolean);
+      const clashes = [];
+      codes.forEach(code => {
+        jobs.forEach(x => {
+          if (x.id === mine) return;
+          const xc = String(x.jobId || x.jobIdNonTax || '').match(/([CB])\s?(\d{3,})/i);
+          const xcode = xc ? (xc[1].toUpperCase() + xc[2]) : '';
+          if (xcode !== code) return;
+          // same base job (multi-model / OT / usage line) → OK, not a clash
+          if (baseTitle(x.jobTitle) === myBase && myBase) return;
+          clashes.push(`${esc(code)} is already used by “${esc(x.jobTitle || '(untitled)')}” (${esc(x.model || x.freelance || '?')})`);
+        });
+      });
+      if (clashes.length) { warn.style.display = 'block'; warn.innerHTML = '⚠ ' + [...new Set(clashes)].slice(0, 3).join('<br>⚠ ') + '<br><span style="font-weight:400">Use a fresh code (Generate) unless this is an overtime/usage line of the same job.</span>'; }
+      else warn.style.display = 'none';
+    }
+    ['d-jobId', 'd-jobIdNonTax', 'd-jobTitle'].forEach(id => { const e = el(id); if (e) e.addEventListener('input', checkCodeDup); });
+    checkCodeDup();
     // Printable confirmation form (uses whatever is currently in the form)
-    if (j) el('d-confirm-doc').addEventListener('click', () =>
-      MPConfirmation.open({ ...j, ...collectJob() }, el('d-form-type').value));
+    // Designer (Ploy) can open the confirmation to check country of airing etc.,
+    // but WITHOUT the fees/payment section (money stays hidden from her).
+    // Open the confirmation for the current job (with multi-model fee grouping).
+    // Generating/downloading does NOT mark the job — the 📄 tick means "actually
+    // created/sent" and the booker sets it themselves in the tracker.
+    if (j) el('d-confirm-doc').addEventListener('click', () => {
+      openConfirmationDoc({ ...j, ...collectJob() }, el('d-form-type').value);
+    });
 
     el('d-save').addEventListener('click', async () => {
       const data = collectJob();
       if (!data.jobTitle.trim()) { alert('Please add a job title.'); return; }
-      if (j) {
-        const r = await api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify(data) });
-        Object.assign(j, r.job);
-      } else {
-        const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(data) });
-        jobs.unshift(r.job);
-        // If this job came from a casting, mark that casting so it can't be duplicated.
-        if (prefill && prefill._fromScheduleId) {
-          await api('/api/schedule/' + prefill._fromScheduleId, { method: 'PATCH', body: JSON.stringify({ jobCreated: true }) });
-          const e = schedule.find(x => x.id === prefill._fromScheduleId);
-          if (e) e.jobCreated = true;
-          renderSchedule();
-        }
+      // Lead source is required on NEW jobs (CRM tracking). Existing jobs aren't forced.
+      if (!j && !(data.leadSource || '').trim()) {
+        alert('Please pick a Lead source — where did this client come from?');
+        if (el('d-leadSource')) el('d-leadSource').focus();
+        return;
       }
-      buildFilters(); renderJobs(); closeDrawer();
+      if (!j && !(data.clientCategory || '').trim()) {
+        alert('Please pick a Client type — Fashion, Commercial, Film & TV, Event organizer…');
+        if (el('d-clientCategory')) el('d-clientCategory').focus();
+        return;
+      }
+      // Guard against double-clicks: two fast clicks on Create fired two POSTs
+      // and made duplicate jobs (with duplicate codes).
+      const saveBtn = el('d-save');
+      if (saveBtn.disabled) return;
+      saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+      let saved;
+      try {
+        if (j) {
+          const r = await api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify(data) });
+          Object.assign(j, r.job); saved = j;
+        } else {
+          const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(data) });
+          jobs.unshift(r.job); saved = r.job;
+          // If this job came from a casting, mark it created + link it, and decline the
+          // other held days of that option so the model is freed up (same as confirming).
+          if (prefill && prefill._fromScheduleId) {
+            const e = schedule.find(x => x.id === prefill._fromScheduleId);
+            await api('/api/schedule/' + prefill._fromScheduleId, { method: 'PATCH', body: JSON.stringify({ jobCreated: true, jobRef: saved.id }) }).catch(() => {});
+            if (e) { e.jobCreated = true; e.jobRef = saved.id; }
+            if (e && e.holdGroup) {
+              const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id && x.status !== 'declined');
+              for (const s of siblings) {
+                await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'declined' }) }).catch(() => {});
+                s.status = 'declined';
+              }
+            }
+          }
+        }
+        await syncShootDates(saved);   // put the shoot date(s) on the Schedule automatically
+        buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
+      } catch (err) {
+        if (err.message !== 'unauthorized') alert('Could not save the job: ' + err.message);
+      } finally {
+        saveBtn.disabled = false; saveBtn.textContent = j ? 'Save changes' : 'Create job';
+      }
     });
     if (j) el('d-delete').addEventListener('click', async () => {
       if (!confirm('Delete this job permanently?')) return;
-      await api('/api/jobs/' + j.id, { method: 'DELETE' });
-      jobs = jobs.filter(x => x.id !== j.id);
-      renderJobs(); closeDrawer();
+      try {
+        await api('/api/jobs/' + j.id, { method: 'DELETE' });
+        jobs = jobs.filter(x => x.id !== j.id);
+        // The server cascades away this job's shoot entries — mirror that locally.
+        schedule = schedule.filter(e => e.jobRef !== j.id);
+        buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
+      } catch (err) { if (err.message !== 'unauthorized') alert('Could not delete: ' + err.message); }
+    });
+
+    // Move a non-booking entry (studio rental, commission, a sale) OUT of the Job
+    // Tracker and INTO Other Income — where it counts toward net profit. Creates the
+    // income record from the job's amount/date, then removes the job from the tracker.
+    if (j && canSeeMoney() && el('d-to-income')) el('d-to-income').addEventListener('click', async () => {
+      const label = (j.jobTitle || 'this job');
+      if (!confirm(`Move “${label}” to Other Income?\n\nIt leaves the Job Tracker and its amount counts as net income instead. You can edit the type/details after.`)) return;
+      // Guess the type from the title (studio/rental → rental), else "other".
+      const t = /studio|rental|rent\b/i.test(label) ? 'rental' : 'other';
+      const src = [j.jobTitle, j.client].filter(Boolean).join(' · ');
+      const payload = {
+        date: j.jobDate || todayLocal(),
+        kind: t,
+        amount: jobAmount(j) || 0,
+        currency: j.currency || 'THB',
+        source: src,
+        note: 'Moved from Job Tracker' + (j.jobIdNonTax || j.jobId ? ' (' + (j.jobIdNonTax || j.jobId) + ')' : ''),
+      };
+      try {
+        await api('/api/income', { method: 'POST', body: JSON.stringify(payload) });
+        await api('/api/jobs/' + j.id, { method: 'DELETE' });
+        jobs = jobs.filter(x => x.id !== j.id);
+        schedule = schedule.filter(e => e.jobRef !== j.id);   // server cascades shoot entries
+        buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
+        toast('Moved to Other Income →');
+      } catch (e) { alert('Could not move: ' + (e.message || e)); }
     });
 
     openDrawer();
+  }
+
+  // Put a job's shoot date(s) onto the Schedule automatically (as confirmed shooting
+  // entries linked back to the job), so a booker never re-fills the calendar. Re-syncs
+  // on every save: removes the job's old shoot entries, then adds one per current date.
+  async function syncShootDates(job) {
+    if (!job) return;
+    const dates = Array.isArray(job.shootDates) ? job.shootDates : [];
+    // Remove existing schedule entries linked to this job whose date is no longer set.
+    const existing = schedule.filter(e => e.jobRef === job.id);
+    for (const e of existing) {
+      if (!dates.includes(e.date)) {
+        try { await api('/api/schedule/' + e.id, { method: 'DELETE' }); } catch (_) {}
+        schedule = schedule.filter(x => x.id !== e.id);
+      }
+    }
+    // Add a shooting entry for any date that doesn't already have one.
+    const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const modelStr = job.model || job.freelance || '';
+    for (const dt of dates) {
+      if (existing.some(e => e.date === dt)) continue;      // already linked to this job
+      // Don't double-fill: if this model already has a job/shooting entry that day, LINK
+      // that one to the job instead of creating a duplicate card.
+      const clash = schedule.find(e => e.date === dt && e.jobRef !== job.id
+        && norm(e.models) === norm(modelStr)
+        && (e.job || e.stage === 'shooting' || e.status === 'confirmed'));
+      if (clash) {
+        try { await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, stage: 'shooting', jobCreated: true }) }); } catch (_) {}
+        clash.jobRef = job.id; clash.stage = 'shooting'; clash.jobCreated = true;
+        continue;
+      }
+      const body = {
+        date: dt, models: modelStr, subject: job.jobTitle || '',
+        job: job.jobTitle || '(job)', booker: job.booker || '', status: 'confirmed',
+        stage: 'shooting', jobCreated: true, jobRef: job.id,
+      };
+      try {
+        const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(body) });
+        if (r.entry) schedule.push(r.entry);
+      } catch (_) {}
+    }
   }
 
   /* ================= 6. SCHEDULE ================= */
@@ -760,7 +1361,7 @@
       if (booker === '__untagged__') { if (e.booker) return false; }
       else if (booker && e.booker !== booker) return false;
       if (term) {
-        const hay = [e.models, e.casting, e.fitting, e.option, e.job, e.booker].join(' ').toLowerCase();
+        const hay = [e.models, e.casting, e.fitting, e.option, e.job, e.booker, e.subject, e.shortlist, e.priority, e.note].join(' ').toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
@@ -883,8 +1484,7 @@
     // newest date first
     const rows = schedule.filter(e => (e.status === 'declined' || e.status === 'postponed') && match(e))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    const typeLabel = e => e.job ? 'Job' : e.fitting ? 'Fitting' : e.shortlist ? 'Shortlist'
-      : e.option ? 'Option' : e.casting ? 'Casting' : e.priority ? 'Priority' : 'Entry';
+    const typeLabel = e => catLabel(e);
     const body = rows.map(e => {
       const detail = e.subject || firstLine(entryText(e)) || '—';
       const pill = e.status === 'declined'
@@ -914,8 +1514,12 @@
     el('s-history').querySelectorAll('.hist-back').forEach(b =>
       b.addEventListener('click', async () => {
         const e = schedule.find(x => x.id === b.dataset.id); if (!e) return;
-        await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', stage: '' }) });
-        e.status = 'open'; e.stage = '';
+        // Bring back the WHOLE hold, not just this one day.
+        const members = e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup) : [e];
+        for (const s of members) {
+          try { await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', stage: '' }) }); s.status = 'open'; s.stage = ''; }
+          catch (_) {}
+        }
         buildFilters(); renderSchedule();
       }));
     el('s-history').querySelectorAll('.hist-edit').forEach(b =>
@@ -946,16 +1550,39 @@
   const isGoSee = t => /go\s*(?:&|and)?\s*see/i.test(String(t || ''));
   // Where a booking sits if it has no explicit stage yet — inferred from its type tags.
   function deriveStage(e) {
+    if (e.priority) return 'priority';         // admin task (visa/flight/vacation) = hard "don't book" block; wins over any stage
     if (STAGE_KEYS.includes(e.stage)) return e.stage;
     if (e.jobCreated || e.job) return 'shooting';
     if (e.shortlist) return 'shortlist';
     if (e.fitting) return 'fitting';
-    if (e.priority) return 'priority';
     if (e.casting && isGoSee(e.casting)) return 'goandsee';   // "Go & See" is its own column
     if (e.option) return 'option';
     if (e.casting) return 'casting';
     return 'casting';
   }
+  // The ONE category an entry belongs to — shared by Month, stats AND Board so they never
+  // disagree. MUST mirror deriveStage exactly (same order): a Priority admin task is a hard
+  // "don't book" block that wins over any stage; otherwise an explicit board stage wins;
+  // otherwise the furthest-along type tag wins.
+  function schedCat(e) {
+    if (e.priority) return 'prio';             // admin-task block — wins over any stage
+    if (STAGE_KEYS.includes(e.stage)) {
+      return (e.stage === 'shooting' || e.stage === 'waiting_payment' || e.stage === 'complete') ? 'job'
+        : e.stage === 'shortlist' ? 'short' : e.stage === 'fitting' ? 'fit'
+        : e.stage === 'option' ? 'opt' : e.stage === 'priority' ? 'prio'
+        : e.stage === 'goandsee' ? 'gosee' : e.stage === 'casting' ? 'cast' : 'note';
+    }
+    if (e.job || e.jobCreated) return 'job';
+    if (e.shortlist) return 'short';
+    if (e.fitting) return 'fit';
+    if (e.casting) return isGoSee(e.casting) ? 'gosee' : 'cast';
+    if (e.option) return 'opt';
+    return 'note';
+  }
+  // Human label for an entry's ONE category — history, copy, conflicts, notify all
+  // use this so no view ever names the same entry two different things.
+  const CAT_LABELS = { prio: 'Priority', short: 'Shortlist', job: 'Job', fit: 'Fitting', cast: 'Casting', gosee: 'Go & See', opt: 'Option', note: 'Entry' };
+  function catLabel(e) { return CAT_LABELS[schedCat(e)] || 'Entry'; }
   // One card per booking: multi-day holds (same holdGroup) collapse into a single card.
   function boardCards() {
     const booker = el('s-booker').value;
@@ -986,10 +1613,24 @@
     const hold = c.ids.length > 1 ? `<span class="b-hold">🔒 ${c.ids.length} days</span>` : '';
     const time = e.timeStart ? `<span class="b-time">🕐 ${esc(e.timeStart)}${e.timeEnd ? '–' + esc(e.timeEnd) : ''}</span>` : '';
     const pp = (e.status === 'postponed' && e.postponeDate) ? `<div class="b-pp">→ postponed to ${esc(e.postponeDate)}</div>` : '';
+    // Related stages of the SAME booking (other days) — so a casting card shows its
+    // shooting/fitting dates too, and you never think a shoot date is "missing".
+    let plan = '';
+    if (e.planGroup) {
+      const label = { shooting: '🎬 Shoot', fitting: '👗 Fit', casting: '🎥 Cast', goandsee: '👀 Go&See', option: '🔖 Option', shortlist: '★ Short', priority: '⚑ Prio' };
+      const sibs = schedule.filter(x => x.planGroup === e.planGroup && x.date !== e.date && x.status !== 'declined')
+        .map(x => ({ st: deriveStage(x), d: x.date })).filter(x => x.d);
+      const seen = {}; const parts = [];
+      sibs.sort((a, b) => (a.d || '').localeCompare(b.d || '')).forEach(x => {
+        const k = x.st + x.d; if (seen[k]) return; seen[k] = 1;
+        parts.push(`${label[x.st] || '•'} ${fmtNice(x.d)}`);
+      });
+      if (parts.length) plan = `<div class="b-plan">↳ also: ${parts.join(' · ')}</div>`;
+    }
     return `<div class="bcard" draggable="true" data-key="${esc(c.key)}" style="border-left-color:${stageColor(c.stage)}">
       <div class="b-subj">${esc(subj)}</div>
       ${e.models ? `<div class="b-models">${esc(e.models)}</div>` : ''}
-      ${pp}
+      ${pp}${plan}
       <div class="b-meta">${time}<span>${esc(dateStr)}</span>${hold}${e.booker ? `<span class="b-book">${esc(e.booker)}</span>` : ''}</div>
     </div>`;
   }
@@ -1072,6 +1713,13 @@
   async function moveCardToStage(key, target) {
     const entries = schedule.filter(e => (e.holdGroup || e.id) === key);
     if (!entries.length) return;
+    // A Priority admin task (visa/flight/vacation) is a "don't book" block — it can't be
+    // dragged into a booking column (that's what wrongly gave ALIYA a shooting stage).
+    if (entries[0].priority && !['priority', 'declined', 'postponed'].includes(target)) {
+      renderBoard();
+      alert('This is a Priority admin task — the model is blocked that day, so it can’t go into a booking column. Open the card and change its Type if it should be a booking.');
+      return;
+    }
     const cur = entries[0].status;
     let patch;
     if (target === 'declined') patch = { status: 'declined' };
@@ -1098,13 +1746,15 @@
       const bookers = distinct(entries.map(e => e.booker || '(untagged)')).sort();
       // A multi-day hold is ONE option spread over several days (same holdGroup),
       // so count it ONCE — never 5× for a 5-day hold. Singles count by their own id.
-      const count = (es, k) => new Set(es.filter(e => e[k]).map(e => e.holdGroup || e.id)).size;
+      // Classification uses schedCat — the same rule as the calendar/board — so an
+      // entry counts in exactly ONE column and the reports always reconcile.
+      const count = (es, cat) => new Set(es.filter(e => schedCat(e) === cat || (cat === 'cast' && schedCat(e) === 'gosee')).map(e => e.holdGroup || e.id)).size;
       const totalOf = es => new Set(es.map(e => e.holdGroup || e.id)).size;
       let cT = 0, fT = 0, oT = 0, jT = 0, sT = 0, pT = 0, tT = 0;
       const rows = bookers.map(b => {
         const es = entries.filter(e => (e.booker || '(untagged)') === b);
-        const c = count(es, 'casting'), f = count(es, 'fitting'), o = count(es, 'option'), j = count(es, 'job'),
-          s = count(es, 'shortlist'), p = count(es, 'priority');
+        const c = count(es, 'cast'), f = count(es, 'fit'), o = count(es, 'opt'), j = count(es, 'job'),
+          s = count(es, 'short'), p = count(es, 'prio');
         const total = totalOf(es);
         cT += c; fT += f; oT += o; jT += j; sT += s; pT += p; tT += total;
         return `<tr class="row"><td class="model-cell">${esc(b)}</td>
@@ -1131,13 +1781,8 @@
 
   // The single colour/type of an entry, for the Day view + chips.
   function entryType(e) {
-    if (e.priority) return 'prio';
-    if (e.shortlist) return 'short';
-    if (e.job) return 'job';
-    if (e.fitting) return 'fit';
-    if (e.option) return 'opt';
-    if (e.casting) return 'cast';
-    return 'note';
+    const c = schedCat(e);
+    return c === 'gosee' ? 'cast' : c;   // calendar colours Go&See as a casting
   }
   function entryText(e) {
     return e.priority || e.shortlist || e.job || e.fitting || e.option || e.casting || e.note || '';
@@ -1183,7 +1828,7 @@
       const top = (start - DAY_START_H * 60) / 60 * HOUR_PX;
       const height = Math.max(22, (end - start) / 60 * HOUR_PX - 2);
       const w = 100 / e._cols, left = e._col * w;
-      const time = e.timeStart + (e.timeEnd ? '–' + e.timeEnd : '');
+      const time = esc(e.timeStart + (e.timeEnd ? '–' + e.timeEnd : ''));
       return `<div class="day-event ev-${entryType(e)}" data-id="${e.id}"
         style="top:${top}px;height:${height}px;left:calc(${left}% + 2px);width:calc(${w}% - 4px)">
         <div class="et">${time} ${esc(e.booker) || ''}</div>
@@ -1260,6 +1905,43 @@
     // The calendar has its OWN month cursor so you can page to ANY month/year —
     // even empty future ones — to plan ahead. Default to the CURRENT month on load.
     if (!calMonth) calMonth = todayLocal().slice(0, 7);
+    const STAT_DEFS = [
+      ['Jobs', e => schedCat(e) === 'job', 'lg-job'],
+      ['Shortlist', e => schedCat(e) === 'short', 'lg-short'],
+      ['Fitting', e => schedCat(e) === 'fit', 'lg-fit'],
+      ['Casting', e => schedCat(e) === 'cast', 'lg-cast'],
+      ['Go & See', e => schedCat(e) === 'gosee', 'lg-gosee'],
+      ['Options', e => schedCat(e) === 'opt', 'lg-opt'],
+      ['Priority', e => schedCat(e) === 'prio', 'lg-prio'],
+    ];
+    // "All months" can't fit a 12-month day grid — show a year-at-a-glance instead:
+    // every month that has activity, with its totals. Click a month to open it.
+    if (el('s-month').value === 'all') {
+      const bkr = el('s-booker').value;
+      const months = distinct(schedule.map(s => s.month)).filter(Boolean).sort().reverse();
+      const inScope = e => (!bkr || (bkr === '__untagged__' ? !e.booker : e.booker === bkr))
+        && (e.status !== 'declined' || e.autoDeclined);
+      const rowFor = mo => {
+        const me = schedule.filter(e => e.month === mo && inScope(e));
+        const c = pick => new Set(me.filter(pick).map(e => e.holdGroup || e.id)).size;
+        const pills = STAT_DEFS.map(([label, pick, cls]) =>
+          `<span class="yo-pill"><span class="cal-stat-dot ${cls}"></span><b>${c(pick)}</b> ${label}</span>`).join('');
+        return `<div class="yo-row" data-month="${mo}"><span class="yo-mon">${monthLabel(mo)}</span><div class="yo-pills">${pills}</div></div>`;
+      };
+      // All-year totals across every month (respects the booker filter) — one card per category.
+      const yearScope = schedule.filter(inScope);
+      const yTot = pick => new Set(yearScope.filter(pick).map(e => e.holdGroup || e.id)).size;
+      const statCards = STAT_DEFS.map(([label, pick, cls]) =>
+        `<div class="stat"><div class="n">${yTot(pick)}</div><div class="l"><span class="cal-stat-dot ${cls}"></span> ${label}</div></div>`).join('');
+      el('s-calendar').innerHTML = `
+        <div class="cal-nav"><p class="cal-title">All months · year overview</p>
+          <span style="color:var(--grey);font-size:12.5px">totals across every month · click a month to open its calendar</span></div>
+        <div class="stats" style="margin-bottom:14px">${statCards}</div>
+        <div class="yo-list">${months.map(rowFor).join('') || '<div class="empty" style="padding:24px">No entries yet.</div>'}</div>`;
+      el('s-calendar').querySelectorAll('.yo-row').forEach(r =>
+        r.addEventListener('click', () => { el('s-month').value = r.dataset.month; calMonth = r.dataset.month; renderCalendar(); }));
+      return;
+    }
     // Keep the month dropdown locked in step with the grid (so they never disagree).
     ensureMonthOption(el('s-month'), calMonth);
     el('s-month').value = calMonth;
@@ -1275,7 +1957,7 @@
       if (booker === '__untagged__') { if (e.booker) return; }
       else if (booker && e.booker !== booker) return;
       if (term) {
-        const hay = [e.models, e.casting, e.fitting, e.option, e.job, e.booker].join(' ').toLowerCase();
+        const hay = [e.models, e.casting, e.fitting, e.option, e.job, e.booker, e.subject, e.shortlist, e.priority, e.note].join(' ').toLowerCase();
         if (!hay.includes(term)) return;
       }
       (byDate[e.date] = byDate[e.date] || []).push(e);
@@ -1299,10 +1981,11 @@
         const prefix = t === 'prio' ? '⚑ ' : t === 'short' ? '★ ' : '';
         chips.push([t, prefix + (e.subject || firstLine(entryText(e))), e.booker || '', e.status]);
       });
-      // Order within a day so the important work shows first (and never gets buried
-      // in "+N more"): Work → Shortlist → Casting → Fitting → Options → Priority → Note.
+      // Order within a day. Priority (admin tasks — visa / work permit / vacation)
+      // shows FIRST so bookers see it before booking a model that day and can work
+      // around those hours; then: Work → Shortlist → Casting → Fitting → Options → Note.
       // Declined/expired entries always sink to the very bottom.
-      const CAL_RANK = { job: 0, short: 1, cast: 2, fit: 3, opt: 4, prio: 5, note: 6 };
+      const CAL_RANK = { prio: 0, job: 1, short: 2, cast: 3, fit: 4, opt: 5, note: 6 };
       chips.sort((a, b) => {
         const da = a[3] === 'declined' ? 1 : 0, db = b[3] === 'declined' ? 1 : 0;
         if (da !== db) return da - db;
@@ -1315,6 +1998,18 @@
         <div class="cal-date">${d}</div>${shown}${more}</div>`;
     }
 
+    // Month stats — a true monthly-activity tally. Options auto-decline once their
+    // date passes, so the old "exclude all declined" rule made every past month read
+    // 0 options. We now keep expired holds (autoDeclined) and count them — only a
+    // genuine manual rejection is left out. So each month shows its real totals like
+    // the current one. Multi-day holds dedupe by holdGroup.
+    const monthEntries = schedule.filter(e => e.month === month
+      && (!booker || (booker === '__untagged__' ? !e.booker : e.booker === booker))
+      && (e.status !== 'declined' || e.autoDeclined));
+    const countType = pick => new Set(monthEntries.filter(pick).map(e => e.holdGroup || e.id)).size;
+    const statBar = STAT_DEFS.map(([label, pick, cls]) =>
+      `<div class="cal-stat"><span class="cal-stat-dot ${cls}"></span><b>${countType(pick)}</b> ${label}</div>`).join('');
+
     el('s-calendar').innerHTML = `
       <div class="cal-nav">
         <button class="link cal-prev" title="Previous month">‹</button>
@@ -1322,6 +2017,7 @@
         <button class="link cal-next" title="Next month">›</button>
         <button class="link cal-today" title="Jump to this month">Today</button>
       </div>
+      <div class="cal-stats">${statBar}</div>
       <div class="cal">${DOW.map(d => `<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
       <div class="cal-legend">
         <span class="lg-prio">Priority (admin task)</span>
@@ -1338,7 +2034,8 @@
     el('s-calendar').querySelector('.cal-today').addEventListener('click', () => goMonth(todayLocal().slice(0, 7)));
 
     // Click a day → jump straight to that day's Board (drag bookings through stages).
-    el('s-calendar').querySelectorAll('.cal-cell[data-date]').forEach(c =>
+    // Scouters are read-only, so day-click does nothing for them.
+    if (role !== 'scouter') el('s-calendar').querySelectorAll('.cal-cell[data-date]').forEach(c =>
       c.addEventListener('click', () => { dayDate = c.dataset.date; boardAll = false; setScheduleView('board'); }));
   }
 
@@ -1401,12 +2098,13 @@
   // (so the calendar chips + per-type counts still work). No type tagged → the
   // text is kept as a plain Note.
   const SCHED_CATS = [['job', 'Job'], ['shortlist', 'Shortlist'], ['fitting', 'Fitting'], ['casting', 'Casting'], ['option', 'Option'], ['priority', 'Priority (admin task)']];
+  // One type per entry, resolved by the shared schedCat (honours the board stage too),
+  // so the drawer opens on the SAME type Month/Board show — and re-saving clears stale tags.
+  const CAT2KEY = { job: 'job', short: 'shortlist', fit: 'fitting', cast: 'casting', gosee: 'casting', opt: 'option', prio: 'priority' };
   function typeDetailsSection(entry) {
-    const active = entry ? SCHED_CATS.filter(([k]) => entry[k]).map(([k]) => k) : [];
-    // details = the tagged types' text (usually one), else the plain note
-    const details = entry
-      ? (active.map(k => entry[k]).filter(Boolean).join('\n') || entry.note || '')
-      : '';
+    const primary = entry ? (CAT2KEY[schedCat(entry)] || null) : null;
+    const active = primary ? [primary] : [];
+    const details = entry ? ((primary && entry[primary]) || entry.note || entry.priority || '') : '';
     return `
       <div class="field"><label>Type — click to tag</label>
         <div class="cat-btns">
@@ -1422,9 +2120,13 @@
       </div>`;
   }
   function wireTypeButtons() {
+    // Single-select: an entry is ONE type. Picking a type replaces any previous one
+    // (so changing e.g. Priority → Job clears Priority — no conflicting tags across views).
     document.querySelectorAll('.cat-btn').forEach(b =>
       b.addEventListener('click', () => {
-        b.classList.toggle('active');
+        const wasActive = b.classList.contains('active');
+        document.querySelectorAll('.cat-btn').forEach(x => x.classList.remove('active'));
+        if (!wasActive) b.classList.add('active');   // click the active one again → clear (plain note)
         // Priority = admin task → assign it to Admin automatically.
         if (b.dataset.cat === 'priority' && b.classList.contains('active')) {
           const sel = el('d-sbooker'); if (sel) sel.value = 'Admin';
@@ -1482,6 +2184,37 @@
   }
   const schedSubject = () => (el('d-ssubject') ? el('d-ssubject').value : '');
 
+  // Client block on the schedule entry — New/Returning toggle + Lead source (required)
+  // + a contact box. Grouped at the top so bookers capture the client as they type.
+  function clientBlockField(entry) {
+    const e = entry || {};
+    const ct = e.clientType || 'new';
+    return `<div class="client-block">
+      <div class="cb-head">CLIENT</div>
+      <div class="cb-seg">
+        <button type="button" class="cbt ${ct === 'new' ? 'active' : ''}" data-ct="new">🆕 New client</button>
+        <button type="button" class="cbt ${ct === 'old' ? 'active' : ''}" data-ct="old">🔁 Returning client</button>
+      </div>
+      <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span></label>
+      <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
+      <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
+      <select id="d-sclientCategory"><option value="">— pick a type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
+      <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
+      <input id="d-sclientContact" value="${esc(e.clientContact || '')}" placeholder="e.g. K. Nan · 08x-xxx-xxxx · LINE @nan · nan@brand.com">
+    </div>`;
+  }
+  // Wire the New/Returning toggle inside whatever drawer just rendered a client block.
+  function wireClientBlock() {
+    el('drawer-body').querySelectorAll('.cbt').forEach(b =>
+      b.addEventListener('click', () => {
+        el('drawer-body').querySelectorAll('.cbt').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+      }));
+  }
+  const schedClientType = () => { const a = el('drawer-body').querySelector('.cbt.active'); return a ? a.dataset.ct : 'new'; };
+  const schedClientContact = () => (el('d-sclientContact') ? el('d-sclientContact').value : '');
+  const schedClientCategory = () => (el('d-sclientCategory') ? el('d-sclientCategory').value : '');
+
   // Multi-day hold: an optional end date. When set, the entry is auto-filled on
   // every day from the start date through this end date (e.g. a 5-day client hold).
   function holdField() {
@@ -1532,8 +2265,7 @@
         schedule.forEach(e => {
           if (e.id === excludeId || e.date !== date) return;
           if (!modelTokens(e.models).some(m => m.norm === tg.norm)) return;
-          const type = e.priority ? 'Priority' : e.shortlist ? 'Shortlist' : e.job ? 'Job'
-            : e.fitting ? 'Fitting' : e.option ? 'Option' : e.casting ? 'Casting' : 'Entry';
+          const type = catLabel(e);
           // HARD = model is really committed that day (confirmed / shortlist / priority / job).
           // SOFT = a pending option or casting — normal to have several the same day.
           const hard = !!(e.priority || e.shortlist || e.status === 'confirmed' || e.job);
@@ -1720,6 +2452,25 @@
     }).join('');
     bhost.querySelectorAll('.cat-btn').forEach(b =>
       b.addEventListener('click', () => { activeBrush = b.dataset.brush; renderStagePicker(); }));
+    // If days sit on ONE other brush and the active brush has none, offer a
+    // one-click transfer. (Aim painted 7 days on the default Shooting brush,
+    // then clicked Priority — the days silently stayed as a Job.)
+    document.querySelectorAll('.brush-move-hint').forEach(h => h.remove());   // no stacking on re-render
+    const otherWithDays = STAGE_BRUSHES.filter(([k]) => k !== activeBrush && stageDays[k].size);
+    if (stageDays[activeBrush].size === 0 && otherWithDays.length === 1) {
+      const [fromKey, , fromLabel] = otherWithDays[0];
+      const toLabel = (STAGE_BRUSHES.find(([k]) => k === activeBrush) || [])[2] || activeBrush;
+      el('stage-summary').insertAdjacentHTML('beforebegin',
+        `<div class="brush-move-hint">${stageDays[fromKey].size} day(s) are on <b>${fromLabel}</b> — ` +
+        `<button type="button" class="link" id="brush-move">Move them to ${toLabel}</button></div>`);
+      const mv = el('brush-move');
+      if (mv) mv.addEventListener('click', () => {
+        stageDays[fromKey].forEach(ds => stageDays[activeBrush].add(ds));
+        stageDays[fromKey].clear();
+        renderStagePicker();
+        if (onPickerChange) onPickerChange();
+      });
+    }
 
     const host = el('stage-cal'); if (!host) return;
     if (!stagePickerMonth) stagePickerMonth = (allStageDates()[0] || todayLocal()).slice(0, 7);
@@ -1763,6 +2514,10 @@
   // an Option on several days links as one multi-day hold (like before).
   async function createStagedEntries(base, details) {
     const created = [];
+    // One booking may span several stages on different days — link them so you can
+    // see casting + fitting + shooting of the same booking together (planGroup).
+    const usedBrushes = STAGE_BRUSHES.filter(([b]) => stageDays[b].size).length;
+    const plan = usedBrushes > 1 ? (crypto.randomUUID ? crypto.randomUUID() : 'p' + Date.now()) : '';
     for (const [brush, field, , forcedStage] of STAGE_BRUSHES) {
       const days = [...stageDays[brush]].sort();
       if (!days.length) continue;
@@ -1771,6 +2526,8 @@
       for (const dt of days) {
         const data = { ...base, date: dt, [field]: details || base.subject || '' };
         if (forcedStage) data.stage = forcedStage;   // e.g. Go & See → its own board column
+        else if (brush === 'shooting') data.stage = 'shooting';   // pin shooting to its board column
+        if (plan) data.planGroup = plan;
         if (hold) { data.holdGroup = hg; data.holdStart = days[0]; data.holdEnd = days[days.length - 1]; }
         const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(data) });
         if (r.entry) created.push(r.entry);
@@ -1835,6 +2592,7 @@
   // Build a pre-filled job draft from a casting/option/job schedule entry.
   function jobPrefillFromEntry(e) {
     const details = [
+      e.clientContact && 'Client contact: ' + e.clientContact,
       e.fitting && 'Fitting: ' + e.fitting,
       e.casting && 'Casting: ' + e.casting,
       e.option && 'Option: ' + e.option,
@@ -1849,6 +2607,8 @@
       jobTitle: e.subject || firstLine(e.job || e.fitting || e.casting || e.option || e.note || ''),
       notes: details,
       shootDays: e.shootDays || '',
+      leadSource: e.leadSource || '',        // carry the lead source from the casting → the job
+      clientCategory: e.clientCategory || '', // carry the client type through too
       status: 'confirmed',
     };
   }
@@ -1860,15 +2620,14 @@
   // message that goes to a model or client — a recipient could poke at the login page.
   function stripInternalLinks(text) {
     return String(text || '')
-      .replace(/https?:\/\/(?:www\.)?booking\.mpmodelsbkk\.com\S*/gi, '')
+      .replace(/https?:\/\/(?:www\.)?(?:booking|finance)\.mpmodelsbkk\.com\S*/gi, '')
       .replace(/https?:\/\/\S*\.up\.railway\.app\S*/gi, '')
       .replace(/[ \t]+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
   function buildNotifyMessage(e) {
-    const typeLabel = e.priority ? 'Admin task' : e.shortlist ? 'Shortlist (hold)'
-      : e.job ? 'Job' : e.fitting ? 'Fitting' : e.option ? 'Option' : e.casting ? 'Casting' : 'Schedule';
+    const typeLabel = { prio: 'Admin task', short: 'Shortlist (hold)', job: 'Job', fit: 'Fitting', opt: 'Option', cast: 'Casting', gosee: 'Go & See' }[schedCat(e)] || 'Schedule';
     const time = e.timeStart ? (e.timeStart + (e.timeEnd ? '–' + e.timeEnd : '')) : '';
     const body = entryText(e);
     const msg = [
@@ -1973,6 +2732,7 @@
         ${timeScheduleField(null)}
         ${shootDaysField(null)}
         ${typeDetailsSection(null)}
+        ${clientBlockField(null)}
         <div class="drawer-actions"><button class="btn" id="d-add-day">Add entry</button></div>`;
       el('drawer-body').innerHTML = addForm
         + `<hr style="border:none;border-top:1px solid var(--line);margin:18px 0 10px">`
@@ -1982,6 +2742,7 @@
       pickedDates = new Set([dateStr]);          // the day they clicked starts selected
       pickerMonth = dateStr.slice(0, 7);
       renderDatePicker();
+      wireClientBlock();   // lead source / client type buttons on the quick-add form
       const getAddDates = () => pickedList();
       setupConflictCheck(getAddDates, null);
       el('d-add-day').addEventListener('click', async (ev) => {
@@ -1989,7 +2750,7 @@
         if (btn.disabled) return;                 // guard: ignore rapid repeat taps
         const dates = getAddDates();
         if (!dates.length) { alert('Click at least one day to hold.'); return; }
-        const base = { models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), ...collectTypeDetails() };
+        const base = { models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails() };
         if (!(base.models || base.casting || base.fitting || base.option || base.job || base.shortlist || base.priority || base.note)) { alert('Add something first.'); return; }
         if (!passesDuplicateGuard(base, dates)) return;
         if (!passesConflictGuard(getAddDates, null)) return;
@@ -2041,8 +2802,7 @@
     const e = schedule.find(x => x.id === id);
     if (!e) return;
     const detail = e.subject || firstLine(entryText(e)) || '(no details)';
-    const typeLabel = e.job ? 'Job' : e.fitting ? 'Fitting' : e.shortlist ? 'Shortlist'
-      : e.option ? 'Option' : e.casting ? 'Casting' : e.priority ? 'Priority' : 'Entry';
+    const typeLabel = catLabel(e);
     el('d-title').textContent = 'Copy to other day(s)';
     el('drawer-body').innerHTML = `
       <div class="card" style="padding:12px 14px;margin-bottom:14px">
@@ -2063,7 +2823,11 @@
       if (!days.length) { alert('Click at least one day to copy to.'); return; }
       btn.disabled = true; btn.textContent = 'Copying…';
       // Copy every field except the identity/date/hold ones — keep type, details, time, booker.
-      const SKIP = { id: 1, date: 1, month: 1, holdGroup: 1, holdStart: 1, holdEnd: 1, notified: 1, jobCreated: 1 };
+      // Never copy identity/link fields: stage (a fresh copy starts un-staged),
+      // jobRef/planGroup (the copy is NOT part of the original job/plan — a copied
+      // jobRef would get the copy deleted by that job's next shoot-date sync),
+      // and postponeDate (belongs to the original's status history).
+      const SKIP = { id: 1, date: 1, month: 1, holdGroup: 1, holdStart: 1, holdEnd: 1, notified: 1, jobCreated: 1, stage: 1, jobRef: 1, planGroup: 1, postponeDate: 1 };
       const baseCopy = {};
       Object.keys(e).forEach(k => { if (!SKIP[k]) baseCopy[k] = e[k]; });
       baseCopy.models = el('d-copy-models').value;
@@ -2094,9 +2858,10 @@
     el('d-title').textContent = 'Edit schedule entry';
     el('drawer-body').innerHTML = `
       <div class="field"><label>Date</label><input id="d-date" type="date" value="${esc(e.date)}"></div>
+      ${subjectScheduleField(e)}
+      ${clientBlockField(e)}
       <div class="field"><label>Models</label><input id="d-models" value="${esc(e.models)}"></div>
       <div id="d-conflict" class="conflict-box" style="display:none"></div>
-      ${subjectScheduleField(e)}
       ${bookerScheduleField(e.booker || '', e)}
       <div class="field" id="d-postpone-wrap" style="display:${e.status === 'postponed' ? 'block' : 'none'}">
         <label>Postpone to — new date <span style="font-weight:400;color:var(--grey);font-size:11px">· optional</span></label>
@@ -2110,6 +2875,7 @@
         <button class="link" id="d-del" style="color:var(--declined)">Delete</button>
       </div>`;
     wireTypeButtons();
+    wireClientBlock();
     // Reveal the "postpone to" date only when Postponed is chosen.
     const statusEl = el('d-sstatus');
     if (statusEl) statusEl.addEventListener('change', () => {
@@ -2119,11 +2885,30 @@
     setupConflictCheck(getEditDates, id);
     el('d-save').addEventListener('click', async () => {
       if (!passesConflictGuard(getEditDates, id)) return;
-      const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), ...collectTypeDetails() };
+      const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails() };
       data.postponeDate = (data.status === 'postponed' && el('d-postponeDate')) ? el('d-postponeDate').value : '';
-      if (data.status === 'confirmed') data.stage = 'shooting';   // auto-pilot: confirmed → Confirmed/Shooting box
+      // The chosen TYPE is authoritative — it also sets the board stage, so a
+      // stale stage from an old drag/brush can't keep showing the wrong column
+      // (Aim changed a Priority-tagged entry but its stuck 'shooting' stage kept
+      // it looking like a Job on the Board).
+      const TYPE2STAGE = { job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' };
+      const chosenType = ['job', 'shortlist', 'fitting', 'casting', 'option', 'priority'].find(k => data[k]);
+      data.stage = chosenType === 'priority' ? 'priority'                         // an admin block is never a shoot
+        : data.status === 'confirmed' ? 'shooting'                                // confirmed booking → Confirmed/Shooting
+        : (chosenType ? TYPE2STAGE[chosenType] : '');
       const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(data) });
       Object.assign(e, r.entry);
+      // A multi-day hold is ONE booking — apply the same edit to its other days
+      // (everything except the date), so the hold never ends up half-edited with
+      // the Board showing one thing and the calendar another.
+      if (e.holdGroup) {
+        const sibPatch = { ...data }; delete sibPatch.date;
+        const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
+        for (const s of siblings) {
+          try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify(sibPatch) }); Object.assign(s, rs.entry); }
+          catch (_) {}
+        }
+      }
       done();
     });
     el('d-del').addEventListener('click', async () => {
@@ -2140,9 +2925,9 @@
   // so the grid and the dropdown always show the same month.
   el('s-month').addEventListener('change', () => {
     const v = el('s-month').value;
-    calMonth = (v === 'all')
-      ? (distinct(schedule.map(s => s.month)).sort().reverse()[0] || todayLocal().slice(0, 7))
-      : v;
+    // 'all' → the calendar shows a year overview; keep calMonth on the last real
+    // month so Board/Summary (which don't do a 12-month grid) still behave.
+    if (v !== 'all') calMonth = v;
     renderSchedule();
   });
   el('s-refresh').addEventListener('click', loadAll);
@@ -2162,6 +2947,7 @@
     el('d-title').textContent = 'Add schedule entry';
     el('drawer-body').innerHTML = `
       ${subjectScheduleField(null)}
+      ${clientBlockField(null)}
       <div class="field"><label>Models</label><input id="d-models"></div>
       <div id="d-conflict" class="conflict-box" style="display:none"></div>
       ${bookerScheduleField(null)}
@@ -2173,6 +2959,7 @@
       <div class="field int-note"><label>📝 Internal note <span style="font-weight:400;color:var(--grey);font-size:11px">· team only</span></label>
         <textarea id="d-sinternalNote" rows="2"></textarea></div>
       <div class="drawer-actions"><button class="btn" id="d-save">Add entry</button></div>`;
+    wireClientBlock();
     stageDays = {}; STAGE_BRUSHES.forEach(([b]) => stageDays[b] = new Set());
     activeBrush = 'shooting';
     stagePickerMonth = (calMonth || todayLocal().slice(0, 7));
@@ -2189,8 +2976,11 @@
         models: el('d-models').value, subject: schedSubject(), booker: schedBooker(),
         status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(),
         shootDays: schedShootDays(), internalNote: el('d-sinternalNote') ? el('d-sinternalNote').value : '',
+        leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '',
+        clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(),
       };
       if (!(base.models || details || base.subject)) { alert('Add a model or some details first.'); return; }
+      if (!base.leadSource) { alert('Please pick a Lead source — where did this client come from?'); if (el('d-sleadSource')) el('d-sleadSource').focus(); return; }
       // These guards use a Yes/No popup — clicking "Cancel" means "don't add".
       if (!passesDuplicateGuard({ ...base, casting: details }, dates)) return;
       if (!passesConflictGuard(getDates, null)) return;
@@ -2241,9 +3031,561 @@
       el('view-schedule').style.display = v === 'schedule' ? 'block' : 'none';
       el('view-models').style.display = v === 'models' ? 'block' : 'none';
       el('view-activity').style.display = v === 'activity' ? 'block' : 'none';
+      if (el('view-income')) el('view-income').style.display = v === 'income' ? 'block' : 'none';
+      if (el('view-clients')) el('view-clients').style.display = v === 'clients' ? 'block' : 'none';
+      if (el('view-mac')) el('view-mac').style.display = v === 'mac' ? 'block' : 'none';
       if (v === 'activity') loadActivity();
       if (v === 'models') loadModels();
+      if (v === 'income') loadIncome();
+      if (v === 'clients') loadClients().then(renderClients);
+      if (v === 'mac') loadMac();
     }));
+
+  /* ============= OTHER INCOME / COMMISSION (Director + Admin only) ===== */
+  let income = [];
+  const INCOME_KINDS = [['sale', 'Sale'], ['commission', 'Commission'], ['referral', 'Referral'], ['rental', 'Studio rental'], ['mac', 'Mother agency commission'], ['other', 'Other']];
+  const kindLabel = k => (INCOME_KINDS.find(x => x[0] === k) || [k, k])[1];
+  const inThb = r => { const a = Number(r.amount || 0), c = r.currency || 'THB'; return c === 'THB' ? a : a * (fxRates[c] || 0); };
+
+  async function loadIncome() {
+    if (!canSeeMoney()) return;   // hard guard — bookers never fetch this
+    try { income = (await api('/api/income')).income || []; } catch (_) { income = []; }
+    // Populate the year filter from the data
+    const yf = el('in-year');
+    if (yf) {
+      const years = [...new Set(income.map(r => (r.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+      const cur = yf.value;
+      yf.innerHTML = '<option value="">All time</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+      yf.value = cur;
+    }
+    renderIncome();
+  }
+
+  function renderIncome() {
+    const year = el('in-year') ? el('in-year').value : '';
+    const kind = el('in-kind') ? el('in-kind').value : '';
+    const term = (el('in-search') ? el('in-search').value : '').trim().toLowerCase();
+    let list = income.slice();
+    if (year) list = list.filter(r => (r.date || '').startsWith(year));
+    if (kind) list = list.filter(r => r.kind === kind);
+    if (term) list = list.filter(r => [r.source, r.note, kindLabel(r.kind)].join(' ').toLowerCase().includes(term));
+    list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created || '').localeCompare(a.created || ''));
+
+    el('in-empty').style.display = list.length ? 'none' : 'block';
+    el('in-rows').innerHTML = list.map(r => {
+      const orig = money(r.amount, r.currency);
+      const thb = money(inThb(r));
+      const same = (r.currency || 'THB') === 'THB';
+      const isMac = r.kind === 'mac';
+      const dealCell = isMac
+        ? `${esc([r.model, r.agency].filter(Boolean).join(' · ')) || '—'}${r.period ? `<div style="font-size:11px;color:#888">${esc(r.period)}</div>` : ''}`
+        : (esc(r.source) || '—');
+      const noteCell = isMac
+        ? `${r.status ? `<span class="in-kind ${r.status === 'PAID' ? 'k-rental' : 'k-referral'}">${esc(r.status)}</span> ` : ''}${esc(r.paymentInfo || r.note) || ''}`
+        : (esc(r.note) || '');
+      return `<tr class="in-row" data-id="${r.id}">
+        <td>${esc(r.date || '—')}</td>
+        <td><span class="in-kind k-${r.kind}">${esc(kindLabel(r.kind))}</span></td>
+        <td>${dealCell}</td>
+        <td class="num">${orig}${same ? '' : ` <span class="fx-tag">🌐</span>`}</td>
+        <td class="num">${thb}</td>
+        <td class="in-note">${noteCell}</td>
+        <td class="num"><button class="link in-del" data-id="${r.id}" title="Delete" style="color:var(--declined)">✕</button></td>
+      </tr>`;
+    }).join('');
+
+    // Totals (converted to THB) — overall and by type
+    const total = list.reduce((s, r) => s + inThb(r), 0);
+    const byKind = INCOME_KINDS.map(([k, lbl]) => {
+      const sum = list.filter(r => r.kind === k).reduce((s, r) => s + inThb(r), 0);
+      return sum ? `<div class="stat"><div class="n">${money(sum)}</div><div class="l">${lbl}</div></div>` : '';
+    }).join('');
+    el('in-stats').innerHTML = `<div class="stat money"><div class="n">${money(total)}</div><div class="l">Total (THB) · ${list.length} entr${list.length === 1 ? 'y' : 'ies'}</div></div>${byKind}`;
+
+    // Row actions
+    el('in-rows').querySelectorAll('.in-del').forEach(b =>
+      b.addEventListener('click', async ev => {
+        ev.stopPropagation();
+        if (!confirm('Delete this income entry?')) return;
+        try { await api('/api/income/' + b.dataset.id, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+        income = income.filter(x => x.id !== b.dataset.id);
+        loadIncome();
+      }));
+    el('in-rows').querySelectorAll('tr.in-row').forEach(tr =>
+      tr.addEventListener('click', () => openIncome(tr.dataset.id)));
+  }
+
+  function openIncome(id) {
+    const r = id ? income.find(x => x.id === id) : null;
+    el('d-title').textContent = r ? 'Edit income' : 'Add income';
+    const CURS = ['THB', 'USD', 'EUR', 'CNY'];
+    const MAC_STATUS = ['PAID', 'Pending', 'Postponed', 'OFF'];
+    const cur = (v) => r && r[v] ? withCommas(String(r[v])) : '';
+    el('drawer-body').innerHTML = `
+      <div class="field"><label>Date</label><input id="in-f-date" type="date" value="${esc(r ? r.date : todayLocal())}"></div>
+      <div class="field"><label>Type</label>
+        <select id="in-f-kind">${INCOME_KINDS.map(([k, lbl]) => `<option value="${k}" ${r && r.kind === k ? 'selected' : ''}>${lbl}</option>`).join('')}</select></div>
+
+      <div id="in-mac" style="display:none">
+        <div class="client-block">
+          <div class="cb-head">Mother Agency Commission — details</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field" style="margin:0"><label class="cb-lbl">Model</label><input id="in-f-model" value="${esc(r ? r.model : '')}" placeholder="model name"></div>
+            <div class="field" style="margin:0"><label class="cb-lbl">Agency</label><input id="in-f-agency" value="${esc(r ? r.agency : '')}" placeholder="e.g. KAT China"></div>
+          </div>
+          <label class="cb-lbl">Work period</label><input id="in-f-period" value="${esc(r ? r.period : '')}" placeholder="e.g. 10th Oct 2024 - 13th Jan 2025">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+            <div class="field" style="margin:0"><label class="cb-lbl">Model's amount (abroad)</label><input id="in-f-modelAmount" inputmode="decimal" value="${cur('modelAmount')}" placeholder="0"></div>
+            <div class="field" style="margin:0"><label class="cb-lbl">Expense</label><input id="in-f-expense" inputmode="decimal" value="${cur('expense')}" placeholder="0"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+            <div class="field" style="margin:0"><label class="cb-lbl">Advance cost</label><input id="in-f-advanceCost" inputmode="decimal" value="${cur('advanceCost')}" placeholder="0"></div>
+            <div class="field" style="margin:0"><label class="cb-lbl">Status</label><select id="in-f-status"><option value="">—</option>${MAC_STATUS.map(s => `<option ${r && r.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+          </div>
+          <label class="cb-lbl">Payment info</label><input id="in-f-paymentInfo" value="${esc(r ? r.paymentInfo : '')}" placeholder="e.g. MAC paid to Alex via QR 11.03.2025">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+        <div class="field"><label><span id="in-amt-lbl">Amount</span> <span id="in-amt-hint" style="font-weight:400;color:var(--grey);font-size:11px"></span></label><input id="in-f-amount" inputmode="decimal" value="${esc(r ? withCommas(String(r.amount)) : '')}" placeholder="0"></div>
+        <div class="field"><label>Currency</label>
+          <select id="in-f-cur">${CURS.map(c => `<option value="${c}" ${r && r.currency === c ? 'selected' : (!r && c === 'THB' ? 'selected' : '')}>${c}</option>`).join('')}</select></div>
+      </div>
+      <div id="in-generic"><div class="field"><label>Source / deal</label><input id="in-f-source" value="${esc(r ? r.source : '')}" placeholder="Client, brand, or deal name"></div></div>
+      <div class="field"><label>Note</label><textarea id="in-f-note" rows="2" placeholder="Any detail">${esc(r ? r.note : '')}</textarea></div>
+      <div class="drawer-actions">
+        <button class="btn" id="in-f-save">${r ? 'Save changes' : 'Add income'}</button>
+        ${r ? '<button class="link" id="in-f-del" style="color:var(--declined)">Delete</button>' : ''}
+      </div>`;
+    // Comma-format every money input.
+    ['in-f-amount', 'in-f-modelAmount', 'in-f-expense', 'in-f-advanceCost'].forEach(idc => {
+      const e = el(idc); if (e) e.addEventListener('input', () => { e.value = withCommas(e.value); });
+    });
+    // Show the MAC ledger fields only for Mother-agency-commission; auto-fill the
+    // commission at 50% of the model's amount (editable) until touched by hand.
+    let amountTouched = !!r;
+    el('in-f-amount').addEventListener('input', () => { amountTouched = true; });
+    const applyKind = () => {
+      const mac = el('in-f-kind').value === 'mac';
+      el('in-mac').style.display = mac ? 'block' : 'none';
+      el('in-generic').style.display = mac ? 'none' : 'block';
+      el('in-amt-lbl').textContent = mac ? 'MAC commission (income)' : 'Amount';
+      el('in-amt-hint').textContent = mac ? '· 50% of model amount (edit if different)' : '';
+    };
+    el('in-f-kind').addEventListener('change', applyKind);
+    applyKind();
+    if (el('in-f-modelAmount')) el('in-f-modelAmount').addEventListener('input', () => {
+      if (amountTouched || el('in-f-kind').value !== 'mac') return;
+      const ma = Number(String(el('in-f-modelAmount').value).replace(/[^\d.]/g, '')) || 0;
+      el('in-f-amount').value = ma ? withCommas(String(Math.round(ma * 0.5))) : '';
+    });
+    el('in-f-save').addEventListener('click', async () => {
+      const payload = {
+        date: el('in-f-date').value,
+        kind: el('in-f-kind').value,
+        amount: el('in-f-amount').value,
+        currency: el('in-f-cur').value,
+        source: el('in-f-source') ? el('in-f-source').value : '',
+        note: el('in-f-note').value,
+        model: el('in-f-model') ? el('in-f-model').value : '',
+        agency: el('in-f-agency') ? el('in-f-agency').value : '',
+        period: el('in-f-period') ? el('in-f-period').value : '',
+        modelAmount: el('in-f-modelAmount') ? el('in-f-modelAmount').value : '',
+        expense: el('in-f-expense') ? el('in-f-expense').value : '',
+        advanceCost: el('in-f-advanceCost') ? el('in-f-advanceCost').value : '',
+        status: el('in-f-status') ? el('in-f-status').value : '',
+        paymentInfo: el('in-f-paymentInfo') ? el('in-f-paymentInfo').value : '',
+      };
+      try {
+        if (r) await api('/api/income/' + r.id, { method: 'PATCH', body: JSON.stringify(payload) });
+        else await api('/api/income', { method: 'POST', body: JSON.stringify(payload) });
+        closeDrawer();
+        loadIncome();
+      } catch (e) { alert('Could not save: ' + (e.message || e)); }
+    });
+    if (r) el('in-f-del').addEventListener('click', async () => {
+      if (!confirm('Delete this income entry?')) return;
+      try { await api('/api/income/' + r.id, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+      closeDrawer();
+      income = income.filter(x => x.id !== r.id);
+      loadIncome();
+    });
+    openDrawer();
+  }
+
+  if (el('in-add')) el('in-add').addEventListener('click', () => openIncome(null));
+  if (el('in-refresh')) el('in-refresh').addEventListener('click', loadIncome);
+  ['in-year', 'in-kind', 'in-search'].forEach(idc => { if (el(idc)) el(idc).addEventListener('input', renderIncome); });
+
+  /* ============= CLIENTS CRM (Director + Admin only) ============= */
+  const clientKey = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  let clientRowsCache = [];   // the profiles currently shown — used by export + detail drawer
+  let clientRecords = [];     // clients added directly (merged with job history)
+  async function loadClients() {
+    if (!canSeeMoney()) return;
+    try { clientRecords = (await api('/api/clients')).clients || []; } catch (_) { clientRecords = []; }
+  }
+  // Whole months since a YYYY-MM-DD date (big number if never / no date).
+  function monthsAgo(d) {
+    if (!isISODate(d)) return 9999;
+    const t = new Date(d + 'T00:00:00'), n = new Date(todayLocal() + 'T00:00:00');
+    return Math.max(0, Math.round((n - t) / (1000 * 60 * 60 * 24 * 30.44)));
+  }
+  const agoLabel = m => m >= 9999 ? '' : m < 1 ? 'this month' : m === 1 ? '1 mo ago' : m + ' mo ago';
+
+  // Build one rich profile per client from their jobs + confirmation details.
+  function clientProfiles(pool) {
+    const groups = {};
+    pool.forEach(j => { const k = clientKey(j.client); (groups[k] = groups[k] || []).push(j); });
+    // most-recent non-empty value across a client's jobs (confirmations hold the detail)
+    const best = (js, keys) => {
+      for (const j of js.slice().sort((a, b) => (b.jobDate || '').localeCompare(a.jobDate || '')))
+        for (const k of keys) if (String(j[k] || '').trim()) return String(j[k]).trim();
+      return '';
+    };
+    const profiles = Object.entries(groups).map(([key, js]) => {
+      const names = {}; js.forEach(j => { const n = (j.client || '').trim(); if (n) names[n] = (names[n] || 0) + 1; });
+      const name = Object.entries(names).sort((a, b) => b[1] - a[1])[0][0];
+      const dates = js.map(j => j.jobDate).filter(Boolean).sort();
+      const last = dates[dates.length - 1] || '';
+      const catCount = {}; js.forEach(j => { const c = (j.clientCategory || '').trim(); if (c) catCount[c] = (catCount[c] || 0) + 1; });
+      const category = (Object.entries(catCount).sort((a, b) => b[1] - a[1])[0] || [''])[0];
+      return {
+        key, name, jobs: js, count: js.length, category,
+        company: best(js, ['companyName']), taxId: best(js, ['clientTaxId']),
+        address: best(js, ['companyAddress']),
+        person: best(js, ['contactPerson', 'clientName']),
+        phone: best(js, ['contactNumber', 'phone']),
+        email: best(js, ['clientEmail', 'email']),
+        sources: distinct(js.map(j => j.leadSource).filter(Boolean)),
+        first: dates[0] || '', last,
+        monthsSince: monthsAgo(last),
+        total: js.reduce((s, j) => s + toThb(j), 0),
+      };
+    });
+    // Merge in directly-added client records (they may or may not have jobs yet).
+    const byKey = {}; profiles.forEach(p => { byKey[p.key] = p; });
+    clientRecords.forEach(rec => {
+      const key = clientKey(rec.name); if (!key) return;
+      let p = byKey[key];
+      if (!p) { p = { key, name: rec.name, jobs: [], count: 0, category: '', company: '', taxId: '', address: '', person: '', phone: '', email: '', sources: [], first: '', last: '', monthsSince: 9999, total: 0 }; byKey[key] = p; profiles.push(p); }
+      p.recordId = rec.id;
+      if (rec.name) p.name = rec.name;                 // record spelling wins
+      p.company = rec.company || p.company;
+      p.taxId = rec.taxId || p.taxId;
+      p.address = rec.address || p.address;
+      p.person = rec.contactPerson || p.person;
+      p.phone = rec.phone || p.phone;
+      p.email = rec.email || p.email;
+      if (rec.clientCategory) p.category = rec.clientCategory;
+      if (rec.leadSource && !p.sources.includes(rec.leadSource)) p.sources.unshift(rec.leadSource);
+      if (rec.note) p.note = rec.note;
+    });
+    return profiles;
+  }
+
+  function renderClients() {
+    if (!canSeeMoney()) { el('view-clients').innerHTML = '<p style="padding:20px;color:var(--grey)">Director / Admin only.</p>'; return; }
+    const srcSel = el('cl-source');
+    if (srcSel && srcSel.options.length <= 1) srcSel.innerHTML = '<option value="">All sources</option>' + LEAD_SOURCES.map(s => `<option value="${s}">${SOURCE_ICON[s] || ''} ${s}</option>`).join('');
+    const catSel = el('cl-cat');
+    if (catSel && catSel.options.length <= 1) catSel.innerHTML = '<option value="">All types</option>' + CLIENT_CATEGORIES.map(c => `<option value="${c}">${CAT_ICON[c] || ''} ${c}</option>`).join('');
+    const ySel = el('cl-year');
+    if (ySel && ySel.options.length <= 1) {
+      const years = distinct(jobs.map(j => String(j.jobDate || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y))).sort().reverse();
+      ySel.innerHTML = '<option value="">All time</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+    }
+    const term = (el('cl-search').value || '').trim().toLowerCase();
+    const srcF = el('cl-source').value;
+    const yearF = el('cl-year').value;
+    const sortBy = el('cl-sort').value;
+
+    const pool = jobs.filter(j => (j.client || '').trim()
+      && (!yearF || String(j.jobDate || '').startsWith(yearF))
+      && (!srcF || j.leadSource === srcF));
+
+    // Leads-by-source summary.
+    const srcCount = {};
+    pool.forEach(j => { const s = j.leadSource || '—'; srcCount[s] = (srcCount[s] || 0) + 1; });
+    const srcBar = Object.entries(srcCount).sort((a, b) => b[1] - a[1])
+      .map(([s, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${s === '—' ? 'no source' : (SOURCE_ICON[s] || '') + ' ' + s}</div></div>`).join('');
+
+    const followF = el('cl-follow') ? Number(el('cl-follow').value) : 0;
+    const catF = el('cl-cat') ? el('cl-cat').value : '';
+    let rows = clientProfiles(pool);
+    if (catF) rows = rows.filter(r => r.category === catF);
+    if (term) rows = rows.filter(r => (r.name + ' ' + r.company + ' ' + r.person + ' ' + r.phone + ' ' + r.email + ' ' + r.sources.join(' ') + ' ' + r.category).toLowerCase().includes(term));
+    if (followF) rows = rows.filter(r => r.monthsSince >= followF && r.monthsSince < 9999);   // dormant clients to chase
+    rows.sort((a, b) =>
+      sortBy === 'jobs' ? b.count - a.count :
+      sortBy === 'recent' ? (b.last || '').localeCompare(a.last || '') :
+      sortBy === 'dormant' ? b.monthsSince - a.monthsSince :
+      sortBy === 'name' ? a.name.toLowerCase().localeCompare(b.name.toLowerCase()) :
+      b.total - a.total);
+    clientRowsCache = rows;
+
+    el('cl-srcstats').innerHTML = `<div class="stat money"><div class="n">${rows.length}</div><div class="l">Clients · ${pool.length} jobs</div></div>${srcBar}`;
+    el('cl-empty').style.display = rows.length ? 'none' : 'block';
+    el('cl-rows').innerHTML = rows.map(r => `
+      <tr class="cl-row" data-key="${esc(r.key)}">
+        <td><b>${esc(r.name)}</b>${r.category ? ` <span class="src-badge cat">${CAT_ICON[r.category] || ''} ${esc(r.category)}</span>` : ''}${r.company && clientKey(r.company) !== r.key ? `<div style="font-size:11px;color:#888">${esc(r.company)}</div>` : ''}${r.count > 1 ? ' <span class="src-badge">🔁 returning</span>' : ''}</td>
+        <td>${r.sources.length ? r.sources.map(s => `<span class="src-badge">${SOURCE_ICON[s] || ''} ${esc(s)}</span>`).join(' ') : '<span class="src-badge none">no source</span>'}</td>
+        <td class="num">${r.count}</td>
+        <td>${esc(r.first) || '—'}</td>
+        <td>${esc(r.last) || '—'}${r.last ? `<div class="cl-ago ${r.monthsSince >= 6 ? 'stale' : ''}">${agoLabel(r.monthsSince)}</div>` : ''}</td>
+        <td class="num money">${money(r.total)}</td>
+        <td style="color:#666;font-size:12px">${[r.person, r.phone, r.email].filter(Boolean).map(esc).join(' · ') || '—'}</td>
+      </tr>`).join('');
+    el('cl-rows').querySelectorAll('.cl-row').forEach(tr =>
+      tr.addEventListener('click', () => openClientDetail(tr.dataset.key)));
+  }
+
+  // Full client profile drawer — company/tax/address/contact + their job history.
+  function openClientDetail(key) {
+    const p = clientRowsCache.find(x => x.key === key); if (!p) return;
+    el('d-title').textContent = p.name;
+    const line = (label, val) => val ? `<div class="cd-line"><span class="cd-l">${label}</span><span class="cd-v">${esc(val)}</span></div>` : '';
+    const jobsSorted = p.jobs.slice().sort((a, b) => (b.jobDate || '').localeCompare(a.jobDate || ''));
+    el('drawer-body').innerHTML = `
+      <div class="client-block">
+        <div class="cb-head">Client details ${p.count > 1 ? '· 🔁 returning' : ''}</div>
+        ${line('Client type', p.category ? (CAT_ICON[p.category] || '') + ' ' + p.category : '')}
+        ${line('Company', p.company)}
+        ${line('Tax ID', p.taxId)}
+        ${line('Address', p.address)}
+        ${line('Contact person', p.person)}
+        ${line('Phone', p.phone)}
+        ${line('Email', p.email)}
+        ${line('Source(s)', p.sources.join(', '))}
+        <div class="cd-line"><span class="cd-l">Last booked</span><span class="cd-v">${p.last ? esc(p.last) + ' · ' + agoLabel(p.monthsSince) : '—'}</span></div>
+        <div class="cd-line"><span class="cd-l">Total value</span><span class="cd-v money"><b>${money(p.total)}</b></span></div>
+      </div>
+      <div class="drawer-actions" style="margin:0 0 14px">
+        <button class="btn ghost" id="cd-edit">✏️ ${p.recordId ? 'Edit client' : 'Save as client record'}</button>
+        ${p.email ? `<a class="link" style="text-decoration:none;color:var(--teal)" href="mailto:${esc(p.email)}?subject=${encodeURIComponent('MP Models — great to work with you again')}&body=${encodeURIComponent('Dear ' + (p.person || p.name) + ',\n\n')}">✉ Follow-up email</a>` : ''}
+        ${p.recordId ? '<button class="link" id="cd-del" style="color:var(--declined)">Delete client</button>' : ''}
+      </div>
+      <div class="sect-h">Jobs (${p.count})</div>
+      <table class="cd-jobs"><thead><tr><th>Date</th><th>Code</th><th>Title</th><th class="num money">Value</th></tr></thead><tbody>
+        ${jobsSorted.map(j => `<tr><td>${esc(j.jobDate) || '—'}</td><td>${esc(j.jobId || j.jobIdNonTax) || '—'}</td><td>${esc(j.jobTitle) || '—'}</td><td class="num money">${budgetCell(j)}</td></tr>`).join('')}
+      </tbody></table>`;
+    // Edit → open the record form (prefilled from the record, or from the job-derived profile).
+    el('cd-edit').addEventListener('click', () => openClientForm(p.recordId || null, p));
+    if (p.recordId) el('cd-del').addEventListener('click', async () => {
+      if (!confirm('Delete this client record?\n\n(Their job history stays — only the manually-added contact record is removed.)')) return;
+      try { await api('/api/clients/' + p.recordId, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+      clientRecords = clientRecords.filter(x => x.id !== p.recordId);
+      closeDrawer(); renderClients();
+    });
+    openDrawer();
+  }
+
+  // Add / edit a standalone client record. prefill = a profile to seed fields from.
+  function openClientForm(recordId, prefill) {
+    const rec = recordId ? clientRecords.find(x => x.id === recordId) : null;
+    const src = rec || prefill || {};
+    el('d-title').textContent = rec ? 'Edit client' : 'Add client';
+    const f = (label, id, val, ph) => `<div class="field"><label>${label}</label><input id="cf-${id}" value="${esc(val || '')}" placeholder="${ph || ''}"></div>`;
+    el('drawer-body').innerHTML = `
+      <div class="field"><label>Client name <span style="color:var(--declined);font-weight:400;font-size:11px">· required</span></label>
+        <input id="cf-name" value="${esc(rec ? rec.name : (src.name || ''))}" placeholder="as bookers type it"></div>
+      <div class="field two">
+        <div class="field" style="margin:0"><label>Client type</label>
+          <select id="cf-clientCategory"><option value="">— type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(src.clientCategory || src.category || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select></div>
+        <div class="field" style="margin:0"><label>Lead source</label>
+          <select id="cf-leadSource"><option value="">— source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(src.leadSource || (src.sources && src.sources[0]) || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select></div>
+      </div>
+      ${f('Company name', 'company', src.company)}
+      <div class="field two">${f('Tax ID', 'taxId', src.taxId)}${f('Contact person', 'contactPerson', src.contactPerson || src.person)}</div>
+      <div class="field two">${f('Phone', 'phone', src.phone)}${f('Email', 'email', src.email)}</div>
+      ${f('Address', 'address', src.address)}
+      <div class="field"><label>Note</label><textarea id="cf-note" rows="2">${esc(src.note || '')}</textarea></div>
+      <div class="drawer-actions">
+        <button class="btn" id="cf-save">${rec ? 'Save' : 'Add client'}</button>
+        ${rec ? '<button class="link" id="cf-del" style="color:var(--declined)">Delete</button>' : ''}
+      </div>`;
+    el('cf-save').addEventListener('click', async () => {
+      const data = { name: el('cf-name').value.trim(), company: el('cf-company').value, taxId: el('cf-taxId').value,
+        address: el('cf-address').value, contactPerson: el('cf-contactPerson').value, phone: el('cf-phone').value,
+        email: el('cf-email').value, leadSource: el('cf-leadSource').value, clientCategory: el('cf-clientCategory').value, note: el('cf-note').value };
+      if (!data.name) { alert('Please enter a client name.'); return; }
+      try {
+        if (rec) { const r = await api('/api/clients/' + rec.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(rec, r.client); }
+        else { const r = await api('/api/clients', { method: 'POST', body: JSON.stringify(data) }); clientRecords.push(r.client); }
+        closeDrawer(); renderClients();
+        toast(rec ? 'Client saved ✓' : 'Client added ✓');
+      } catch (e) { alert('Could not save: ' + (e.message || e)); }
+    });
+    if (rec) el('cf-del').addEventListener('click', async () => {
+      if (!confirm('Delete this client record?')) return;
+      try { await api('/api/clients/' + rec.id, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+      clientRecords = clientRecords.filter(x => x.id !== rec.id);
+      closeDrawer(); renderClients();
+    });
+    openDrawer();
+  }
+
+  function exportClients() {
+    const rows = clientRowsCache;
+    if (!rows.length) { alert('No clients to export.'); return; }
+    const header = ['Client', 'Client type', 'Company name', 'Tax ID', 'Address', 'Contact person', 'Phone', 'Email', 'Source(s)', 'Returning?', 'Jobs', 'First job', 'Last job', 'Total value (THB)'];
+    const data = rows.map(r => [r.name, r.category, r.company, r.taxId, r.address, r.person, r.phone, r.email, r.sources.join(' / '), r.count > 1 ? 'Yes' : '', r.count, r.first, r.last, Math.round(r.total)]);
+    const esc2 = v => { v = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(v)) v = "'" + v;               // neutralise spreadsheet formula injection (=,+,-,@)
+      return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const csv = [header, ...data].map(r => r.map(esc2).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'MP-clients-' + todayLocal() + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Exported ${rows.length} clients ✓`);
+  }
+
+  ['cl-search', 'cl-source', 'cl-cat', 'cl-year', 'cl-sort', 'cl-follow'].forEach(idc => { if (el(idc)) el(idc).addEventListener('input', renderClients); });
+  if (el('cl-refresh')) el('cl-refresh').addEventListener('click', () => loadAll().then(loadClients).then(renderClients));
+  if (el('cl-export')) el('cl-export').addEventListener('click', exportClients);
+  if (el('cl-add')) el('cl-add').addEventListener('click', () => openClientForm(null));
+
+  /* ============= MOTHER AGENCY (MAC) LEDGER — scouter + managers ===== */
+  let macRecords = [];
+  const MAC_STATUSES = ['PAID', 'To be paid', 'Pending', 'Postponed', 'OFF', 'In town', 'To be seen'];
+  const macIsScouter = () => role === 'scouter';
+  async function loadMac() {
+    try { macRecords = (await api('/api/mac')).mac || []; } catch (_) { macRecords = []; }
+    const yf = el('mac-year');
+    if (yf) {
+      const cur = yf.value;
+      const years = distinct(macRecords.map(r => r.year || (r.created || '').slice(0, 4)).filter(Boolean)).sort().reverse();
+      yf.innerHTML = '<option value="">All years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+      yf.value = cur;
+    }
+    const of = el('mac-owner');
+    if (of && !macIsScouter()) {
+      const cur = of.value;
+      const owners = distinct(macRecords.map(r => r.ownerName || r.owner).filter(Boolean));
+      of.innerHTML = '<option value="">All scouters</option>' + owners.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+      of.value = cur;
+    }
+    renderMac();
+  }
+  function renderMac() {
+    const yearF = el('mac-year') ? el('mac-year').value : '';
+    const ownerF = el('mac-owner') ? el('mac-owner').value : '';
+    const term = (el('mac-search') ? el('mac-search').value : '').trim().toLowerCase();
+    let list = macRecords.slice();
+    if (yearF) list = list.filter(r => (r.year || (r.created || '').slice(0, 4)) === yearF);
+    if (ownerF) list = list.filter(r => (r.ownerName || r.owner) === ownerF);
+    if (term) list = list.filter(r => [r.model, r.agency, r.period, r.status, r.paymentInfo, r.note].join(' ').toLowerCase().includes(term));
+    list.sort((a, b) => (a.created || '').localeCompare(b.created || ''));   // ledger order
+    macRowsCache = list;
+    el('mac-empty').style.display = list.length ? 'none' : 'block';
+    const stCls = s => /paid/i.test(s) && !/to be/i.test(s) ? 'ok' : /off|postpon/i.test(s) ? 'off' : 'wait';
+    el('mac-rows').innerHTML = list.map((r, i) => `
+      <tr class="mac-row" data-id="${r.id}">
+        <td>${i + 1}</td>
+        <td>${esc(r.period) || '—'}</td>
+        <td><b>${esc(r.model) || '—'}</b>${!macIsScouter() && r.ownerName ? `<div style="font-size:10.5px;color:#999">${esc(r.ownerName)}</div>` : ''}</td>
+        <td>${esc(r.agency) || '—'}</td>
+        <td class="num">${r.amount ? money(r.amount) : '—'}</td>
+        <td class="num">${r.gross ? money(r.gross) : '—'}</td>
+        <td class="num"><b>${r.commission ? money(r.commission) : '—'}</b></td>
+        <td class="num">${r.expense ? money(r.expense) : ''}</td>
+        <td>${r.status ? `<span class="mac-st ${stCls(r.status)}">${esc(r.status)}</span>` : ''}</td>
+        <td style="font-size:11.5px;color:#555">${esc(r.paymentInfo) || ''}</td>
+        <td class="num"><button class="link mac-del" data-id="${r.id}" title="Delete" style="color:var(--declined)">✕</button></td>
+      </tr>`).join('');
+    const sumGross = list.reduce((s, r) => s + Number(r.gross || 0), 0);
+    const sumComm = list.reduce((s, r) => s + Number(r.commission || 0), 0);
+    const paidComm = list.filter(r => /paid/i.test(r.status) && !/to be/i.test(r.status)).reduce((s, r) => s + Number(r.commission || 0), 0);
+    el('mac-stats').innerHTML = `
+      <div class="stat"><div class="n">${list.length}</div><div class="l">Records</div></div>
+      <div class="stat"><div class="n">${money(sumGross)}</div><div class="l">Gross MAC (10%)</div></div>
+      <div class="stat money"><div class="n">${money(sumComm)}</div><div class="l">Wolf's share (5%)</div></div>
+      <div class="stat"><div class="n">${money(paidComm)}</div><div class="l">Paid to Wolf</div></div>`;
+    el('mac-rows').querySelectorAll('.mac-del').forEach(b => b.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      if (!confirm('Delete this record?')) return;
+      try { await api('/api/mac/' + b.dataset.id, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+      macRecords = macRecords.filter(x => x.id !== b.dataset.id); renderMac();
+    }));
+    el('mac-rows').querySelectorAll('.mac-row').forEach(tr => tr.addEventListener('click', () => openMacForm(tr.dataset.id)));
+  }
+  let macRowsCache = [];
+  function openMacForm(id) {
+    const r = id ? macRecords.find(x => x.id === id) : null;
+    el('d-title').textContent = r ? 'Edit record' : 'Add record';
+    const cur = v => r && r[v] ? withCommas(String(r[v])) : '';
+    el('drawer-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Model</label><input id="mc-model" value="${esc(r ? r.model : '')}"></div>
+        <div class="field"><label>Agency</label><input id="mc-agency" value="${esc(r ? r.agency : '')}" placeholder="e.g. KAT China"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+        <div class="field"><label>Work period</label><input id="mc-period" value="${esc(r ? r.period : '')}" placeholder="e.g. 10th Oct 2024 - 13th Jan 2025"></div>
+        <div class="field"><label>Year</label><input id="mc-year" value="${esc(r ? r.year : String(new Date().getFullYear()))}"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Model's amount <span style="font-weight:400;color:#999;font-size:11px">· model's earning</span></label><input id="mc-amount" inputmode="decimal" value="${cur('amount')}" placeholder="0"></div>
+        <div class="field"><label>Gross MAC <span style="font-weight:400;color:#999;font-size:11px">· 10%</span></label><input id="mc-gross" inputmode="decimal" value="${cur('gross')}" placeholder="0"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Wolf's share <span style="font-weight:400;color:#999;font-size:11px">· 5% (half of gross)</span></label><input id="mc-commission" inputmode="decimal" value="${cur('commission')}" placeholder="0"></div>
+        <div class="field"><label>Expense</label><input id="mc-expense" inputmode="decimal" value="${cur('expense')}" placeholder="0"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Advance cost</label><input id="mc-advanceCost" inputmode="decimal" value="${cur('advanceCost')}" placeholder="0"></div>
+        <div class="field"><label>Status</label><select id="mc-status"><option value="">—</option>${MAC_STATUSES.map(s => `<option ${r && r.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>Payment info</label><input id="mc-paymentInfo" value="${esc(r ? r.paymentInfo : '')}" placeholder="e.g. MAC paid to Wolf's Wechat 11.03.2025"></div>
+      <div class="field"><label>Note</label><textarea id="mc-note" rows="2">${esc(r ? r.note : '')}</textarea></div>
+      <div class="drawer-actions"><button class="btn" id="mc-save">${r ? 'Save' : 'Add record'}</button>${r ? '<button class="link" id="mc-del" style="color:var(--declined)">Delete</button>' : ''}</div>`;
+    ['mc-amount', 'mc-gross', 'mc-commission', 'mc-expense', 'mc-advanceCost'].forEach(idc => { const e = el(idc); e.addEventListener('input', () => { e.value = withCommas(e.value); }); });
+    const numOf = idc => Number(String(el(idc).value).replace(/[^\d.]/g, '')) || 0;
+    let grossTouched = !!(r && r.gross), commTouched = !!(r && r.commission);
+    const recalcComm = () => { if (commTouched) return; const g = numOf('mc-gross'); el('mc-commission').value = g ? withCommas(String(Math.round(g * 0.5))) : ''; };
+    el('mc-commission').addEventListener('input', () => { commTouched = true; });
+    el('mc-gross').addEventListener('input', () => { grossTouched = true; recalcComm(); });
+    el('mc-amount').addEventListener('input', () => {
+      if (!grossTouched) { const a = numOf('mc-amount'); el('mc-gross').value = a ? withCommas(String(Math.round(a * 0.1))) : ''; }
+      recalcComm();
+    });
+    el('mc-save').addEventListener('click', async () => {
+      const data = { model: el('mc-model').value, agency: el('mc-agency').value, period: el('mc-period').value, year: el('mc-year').value,
+        amount: el('mc-amount').value, gross: el('mc-gross').value, commission: el('mc-commission').value, expense: el('mc-expense').value, advanceCost: el('mc-advanceCost').value,
+        status: el('mc-status').value, paymentInfo: el('mc-paymentInfo').value, note: el('mc-note').value };
+      try {
+        if (r) { const x = await api('/api/mac/' + r.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(r, x.mac); }
+        else { const x = await api('/api/mac', { method: 'POST', body: JSON.stringify(data) }); macRecords.push(x.mac); }
+        closeDrawer(); loadMac();
+      } catch (e) { alert('Could not save: ' + (e.message || e)); }
+    });
+    if (r) el('mc-del').addEventListener('click', async () => {
+      if (!confirm('Delete this record?')) return;
+      try { await api('/api/mac/' + r.id, { method: 'DELETE' }); } catch (err) { alert('Could not delete: ' + err.message); return; }
+      macRecords = macRecords.filter(x => x.id !== r.id); closeDrawer(); renderMac();
+    });
+    openDrawer();
+  }
+  function exportMac() {
+    const rows = macRowsCache;
+    if (!rows.length) { alert('No records to export.'); return; }
+    const header = ['#', 'Period', 'Model', 'Agency', 'Model amount', 'Gross MAC 10%', "Wolf's share 5%", 'Expense', 'Advance cost', 'Status', 'Payment info', 'Scouter'];
+    const data = rows.map((r, i) => [i + 1, r.period, r.model, r.agency, Math.round(r.amount || 0), Math.round(r.gross || 0), Math.round(r.commission || 0), Math.round(r.expense || 0), Math.round(r.advanceCost || 0), r.status, r.paymentInfo, r.ownerName || r.owner]);
+    const e2 = v => { v = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(v)) v = "'" + v;               // neutralise spreadsheet formula injection (=,+,-,@)
+      return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const csv = [header, ...data].map(r => r.map(e2).join(',')).join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'MAC-record-' + todayLocal() + '.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  if (el('mac-add')) el('mac-add').addEventListener('click', () => openMacForm(null));
+  if (el('mac-export')) el('mac-export').addEventListener('click', exportMac);
+  if (el('mac-refresh')) el('mac-refresh').addEventListener('click', loadMac);
+  ['mac-year', 'mac-owner', 'mac-search'].forEach(idc => { if (el(idc)) el(idc).addEventListener('input', renderMac); });
 
   /* ============= MODEL DIRECTORY (contacts — no money) ============= */
   let models = [];
@@ -2252,8 +3594,9 @@
     'Talents (Old)', 'MC', 'Kids', 'Direct Models', 'Body Talent', 'Transgender', 'Talents'];
   const MODEL_STATUSES = ['In town', 'Out of town', 'Direct booking', 'Left'];
   let mStatus = '';   // quick availability filter driven by the chips
+  let mSelected = new Set();   // bulk-selected model ids (checkboxes)
   let mCat = '';      // active category: '' = show the category tiles, else drill into one
-  const canEditModels = () => role !== 'booker';   // master/admin/designer edit; booker views
+  const canEditModels = () => ['master', 'admin', 'designer'].includes(role);   // booker + scouter view only
   async function loadModels() {
     try { models = (await api('/api/models')).models || []; } catch (_) { models = []; }
     // fill the category filter once
@@ -2339,10 +3682,20 @@
       if (sex && !sexMatch(m, sex)) return false;
       if (country && !(m.country || '').toLowerCase().includes(country)) return false;
       if (mStatus && (m.status || '') !== mStatus) return false;
-      if (term) return [m.name, m.nickname, m.country, m.phone, m.line, m.email].join(' ').toLowerCase().includes(term);
+      if (term) return [m.name, m.nickname, m.country, m.phone, m.line, m.email, m.location, m.modelCode, ('mp-' + String(m.modelNo || '').padStart(4, '0')), String(m.modelNo || '')].join(' ').toLowerCase().includes(term);
       return true;
     });
-    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    // Order by real code: newest YEAR first, then category, then running number
+    // (001, 002, 003…) — like the master sheet, but current models on top.
+    // Anyone without a code yet follows, by name.
+    const codeKey = m => {
+      if (!m.modelCode) return '1~' + (m.name || '').toLowerCase();
+      const mm = /^MP(\d{2})-(\d{2})-(\d+)/.exec(m.modelCode);
+      if (!mm) return '0~' + m.modelCode;
+      const yInv = String(99 - parseInt(mm[1], 10)).padStart(2, '0');   // year descending
+      return '0' + yInv + mm[2] + mm[3].padStart(4, '0');
+    };
+    list.sort((a, b) => codeKey(a).localeCompare(codeKey(b)));
     // Render a page at a time so huge categories (1,000+) stay fast.
     const CAP = 300;
     const shown = list.slice(0, CAP);
@@ -2351,25 +3704,72 @@
       : `${list.length} model${list.length === 1 ? '' : 's'}`;
     el('m-empty').style.display = list.length ? 'none' : 'block';
     const chip = (ic, v) => v ? `<span class="m-c"><span class="ic">${ic}</span>${esc(v)}</span>` : '';
-    el('m-grid').innerHTML = shown.map(m => {
+    // Group key MUST use the same strict pattern as the sort key — a looser match
+    // here made oddly-formatted codes emit a duplicate year header further down.
+    const codeYear = c => { const mm = /^MP(\d{2})-(\d{2})-(\d+)/.exec(c || ''); return mm ? '20' + mm[1] : 'other'; };
+    const groupOf = m => m.modelCode ? codeYear(m.modelCode) : 'nocode';
+    const groupLabel = { other: 'Other codes', nocode: 'No code yet' };
+    const rowHtml = m => {
       const contacts = [chip('📱', m.phone), chip('💬', m.whatsapp), chip('🟢', m.line), chip('✉', m.email), chip('📸', m.ig)].filter(Boolean).join('');
       const hasContact = m.phone || m.whatsapp || m.line || m.email || m.ig;
       const stCls = { 'In town': 'st-intown', 'Out of town': 'st-outoftown', 'Direct booking': 'st-direct', 'Left': 'st-left' }[m.status] || '';
       const statusPill = m.status ? `<span class="m-status-pill ${stCls}">${esc(m.status)}</span>` : '';
       const visa = m.visaExpiry ? `<span class="m-c"><span class="ic">🛂</span><span class="${visaSoon(m.visaExpiry) ? 'm-visa-soon' : ''}">${esc(m.visaExpiry)}${visaSoon(m.visaExpiry) ? ' ⚠' : ''}</span></span>` : '';
       const ma = m.motherAgency ? `<span class="m-c" title="${esc(m.motherAgency)}"><span class="ic">🏢</span>${esc(m.motherAgency.split('\n')[0].trim().slice(0, 26))}</span>` : '';
+      // Show the REAL model code (from the master sheet / FlowAccount). Fall back to
+      // the old running number only if a model has no code yet.
+      const idTag = m.modelCode
+        ? `<span class="m-no" title="Model code (same as FlowAccount)">${esc(m.modelCode)}</span>`
+        : (m.modelNo ? `<span class="m-no m-no-tmp" title="No code from the sheet yet">MP-${String(m.modelNo).padStart(4, '0')}</span>` : '');
+      const age = m.age ? `<span class="m-c"><span class="ic">🎂</span>${esc(m.age)}</span>` : '';
+      const loc = m.location ? `<span class="m-c"><span class="ic">📍</span>${esc(m.location)}</span>` : '';
       return `<div class="m-row" data-id="${m.id}">
         <div class="m-r-id">
+          ${canEditModels() ? `<input type="checkbox" class="m-sel" data-id="${m.id}" ${mSelected.has(m.id) ? 'checked' : ''} title="Select for bulk move">` : ''}
+          ${idTag}
           <span class="m-name">${esc(m.name) || '—'}</span>
           ${m.nickname ? `<span class="m-nick">${esc(m.nickname)}</span>` : ''}
           ${m.category ? `<span class="m-badge ${m.category === 'MP Models' ? 'mp' : 'free'}">${esc(m.category)}</span>` : ''}
           ${statusPill}
         </div>
-        <div class="m-r-meta">${m.country ? `<span class="m-c"><span class="ic">🌏</span>${esc(m.country)}</span>` : ''}${ma}${contacts}${visa}${!hasContact ? '<span class="m-missing">✎ no contact yet</span>' : ''}</div>
+        <div class="m-r-meta">${m.country ? `<span class="m-c"><span class="ic">🌏</span>${esc(m.country)}</span>` : ''}${age}${loc}${ma}${contacts}${visa}${!hasContact ? '<span class="m-missing">✎ no contact yet</span>' : ''}</div>
       </div>`;
-    }).join('');
-    el('m-grid').querySelectorAll('.m-row').forEach(c =>
-      c.addEventListener('click', () => openModelEdit(c.dataset.id)));
+    };
+    // Build the list with a year heading each time the code's year changes.
+    let lastYear = '__init__';
+    const html = [];
+    shown.forEach(m => {
+      const yr = groupOf(m);
+      if (yr !== lastYear) {
+        lastYear = yr;
+        const n = list.filter(x => groupOf(x) === yr).length;
+        html.push(`<div class="m-year-div">${groupLabel[yr] || 'MP ' + yr}<span class="m-year-n">${n}</span></div>`);
+      }
+      html.push(rowHtml(m));
+    });
+    el('m-grid').innerHTML = html.join('');
+    const canDrag = canEditModels();
+    if (el('m-drag-hint')) el('m-drag-hint').style.display = canDrag ? 'flex' : 'none';
+    renderBulkBar(shown);
+    el('m-grid').querySelectorAll('.m-sel').forEach(cb => {
+      cb.addEventListener('click', ev => ev.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) mSelected.add(cb.dataset.id); else mSelected.delete(cb.dataset.id);
+        renderBulkBar(shown);
+      });
+    });
+    el('m-grid').querySelectorAll('.m-row').forEach(c => {
+      c.addEventListener('click', () => openModelEdit(c.dataset.id));
+      if (canDrag) {
+        c.setAttribute('draggable', 'true');
+        c.addEventListener('dragstart', ev => {
+          ev.dataTransfer.setData('text/plain', c.dataset.id);
+          ev.dataTransfer.effectAllowed = 'move';
+          c.classList.add('m-dragging');
+        });
+        c.addEventListener('dragend', () => c.classList.remove('m-dragging'));
+      }
+    });
   }
   function modelField(label, id, val, ph) {
     const list = id === 'country' ? 'list="m-country-list"' : '';
@@ -2380,11 +3780,15 @@
     const edit = canEditModels();
     el('d-title').textContent = m ? (edit ? 'Edit model' : m.name) : 'Add model';
     el('drawer-body').innerHTML = `
+      <div class="field"><label>Model Code <span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0">· same code Aim uses in FlowAccount</span></label>
+        <input id="md-modelCode" value="${esc((m && m.modelCode) || '')}" placeholder="e.g. MP26-08-001" ${edit ? '' : 'readonly'}></div>
+      ${m && !m.modelCode && m.modelNo ? `<p style="margin:-8px 0 12px;color:#b06a1a;font-size:11.5px">No code from the master sheet yet — temporary ref MP-${String(m.modelNo).padStart(4, '0')}</p>` : ''}
       <div class="field two">
         ${modelField('Name', 'name', m && m.name, 'as bookers type it')}
         ${modelField('Nickname', 'nickname', m && m.nickname)}
       </div>
       <div id="md-name-warn" class="dup-warn" style="display:none"></div>
+      <div class="field two">${modelField('Age', 'age', m && m.age, 'e.g. 22')}${modelField('Location', 'location', m && m.location, 'e.g. Bangkok / area')}</div>
       <div class="field two">
         <div class="field" style="margin:0"><label>Category</label>
           <select id="md-category" ${edit ? '' : 'disabled'}>
@@ -2395,6 +3799,11 @@
             ${['', ...MODEL_STATUSES].map(s => `<option ${((m && m.status) || '') === s ? 'selected' : ''}>${s || '—'}</option>`).join('')}
           </select></div>
       </div>
+      <div class="field manager-only"><label>Scouter <span style="font-weight:400;color:var(--grey);font-size:11px">· links this model to a scouter's ledger & login</span></label>
+        <select id="md-scouter" ${edit ? '' : 'disabled'}>
+          <option value="">— none —</option>
+          <option value="scouter@mpmodelsbkk.com" ${(m && m.scouter) === 'scouter@mpmodelsbkk.com' ? 'selected' : ''}>Wolf</option>
+        </select></div>
       <div class="field two">
         <div class="field" style="margin:0"><label>Sex</label>
           <select id="md-sex" ${edit ? '' : 'disabled'}>
@@ -2427,7 +3836,7 @@
       checkDup();
 
       el('md-save').addEventListener('click', async () => {
-        const F = ['name', 'nickname', 'country', 'phone', 'whatsapp', 'line', 'email', 'ig', 'visaType', 'visaExpiry', 'workPermit', 'compCard', 'arrival', 'departure', 'note', 'motherAgency'];
+        const F = ['name', 'nickname', 'country', 'phone', 'whatsapp', 'line', 'email', 'ig', 'visaType', 'visaExpiry', 'workPermit', 'compCard', 'arrival', 'departure', 'note', 'motherAgency', 'age', 'location', 'modelCode', 'scouter'];
         const cat = el('md-category').value === '—' ? '' : el('md-category').value;
         const data = { category: cat, agency: cat === 'MP Models' ? 'MP' : (cat ? 'Freelance' : ''), status: el('md-status').value === '—' ? '' : el('md-status').value, sex: el('md-sex').value === '—' ? '' : el('md-sex').value };
         F.forEach(k => data[k] = el('md-' + k).value);
@@ -2437,28 +3846,33 @@
           if (m) { const r = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(m, r.model); }
           else {
             const r = await api('/api/models', { method: 'POST', body: JSON.stringify(data) });
-            if (r.duplicate || !r.model) {            // server rejected a same-name model
-              warnEl.style.display = 'block';
-              warnEl.textContent = '⚠ ' + (r.error || 'That model is already on the list.');
-              btn.disabled = false; btn.textContent = 'Add model';
-              return;
-            }
             models.push(r.model);
           }
           renderModels(); closeDrawer();
-        } catch (_) { btn.disabled = false; btn.textContent = m ? 'Save' : 'Add model'; }
+        } catch (err) {
+          btn.disabled = false; btn.textContent = m ? 'Save' : 'Add model';
+          if (err && err.body && err.body.duplicate) {   // server rejected a same-name model
+            warnEl.style.display = 'block';
+            warnEl.textContent = '⚠ ' + (err.message || 'That model is already on the list.');
+          } else if (err && err.message !== 'unauthorized') {
+            alert('Could not save: ' + (err.message || 'please try again.'));
+          }
+        }
       });
       if (m) el('md-del').addEventListener('click', async () => {
         if (!confirm('Delete ' + m.name + ' from the directory?')) return;
-        await api('/api/models/' + m.id, { method: 'DELETE' });
-        models = models.filter(x => x.id !== m.id);
-        renderModels(); closeDrawer();
+        try {
+          await api('/api/models/' + m.id, { method: 'DELETE' });
+          models = models.filter(x => x.id !== m.id);
+          renderModels(); closeDrawer();
+        } catch (err) { if (err.message !== 'unauthorized') alert('Could not delete: ' + err.message); }
       });
     }
     openDrawer();
   }
   el('m-add').addEventListener('click', () => openModelEdit(null));
   el('m-refresh').addEventListener('click', loadModels);
+  // One-time: import real model codes from the master sheet (managers only).
   ['m-search', 'm-country', 'm-sex'].forEach(idc => el(idc).addEventListener('input', renderModels));
   el('m-cat').addEventListener('change', () => { mCat = el('m-cat').value; renderModels(); });
   el('m-back').addEventListener('click', () => {
@@ -2468,12 +3882,73 @@
     el('m-status-chips').querySelector('[data-st=""]').classList.add('active');
     renderModels();
   });
+  // ---- Bulk actions bar (Ploy: tick many → move status / change category at once) ----
+  function renderBulkBar(shown) {
+    const bar = el('m-bulkbar'); if (!bar) return;
+    if (!canEditModels() || !mSelected.size) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = `<b>${mSelected.size} selected</b>
+      <select id="mb-status"><option value="">Move to status…</option>${MODEL_STATUSES.map(st => `<option>${st}</option>`).join('')}<option value="__clear__">(clear status)</option></select>
+      <select id="mb-cat"><option value="">Set category…</option>${MODEL_CATS.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+      <button class="link" id="mb-all">Select all shown</button>
+      <button class="link" id="mb-clear">Clear selection</button>`;
+    el('mb-status').addEventListener('change', () => {
+      const v = el('mb-status').value; if (!v) return;
+      applyBulk({ status: v === '__clear__' ? '' : v });
+    });
+    el('mb-cat').addEventListener('change', () => {
+      const v = el('mb-cat').value; if (!v) return;
+      applyBulk({ category: v });
+    });
+    el('mb-all').addEventListener('click', () => {
+      (shown || []).forEach(m => mSelected.add(m.id));
+      renderModels();
+    });
+    el('mb-clear').addEventListener('click', () => { mSelected.clear(); renderModels(); });
+  }
+  async function applyBulk(set) {
+    const ids = [...mSelected];
+    const what = set.status !== undefined ? (`status → ${set.status || 'cleared'}`) : (`category → ${set.category}`);
+    if (!confirm(`Apply to ${ids.length} model${ids.length > 1 ? 's' : ''}?\n\n${what}`)) { renderModels(); return; }
+    try {
+      const r = await api('/api/models', { method: 'POST', body: JSON.stringify({ __bulk: true, ids, set }) });
+      models.forEach(m => {
+        if (!mSelected.has(m.id)) return;
+        if (set.status !== undefined) m.status = set.status;
+        if (set.category !== undefined) { m.category = set.category; m.agency = set.category === 'MP Models' ? 'MP' : (set.category ? 'Freelance' : ''); }
+      });
+      mSelected.clear();
+      renderModels();
+      toast(`✓ Updated ${r.updated} models`);
+    } catch (err) { if (err.message !== 'unauthorized') alert('Bulk update failed: ' + err.message); }
+  }
+
   el('m-status-chips').addEventListener('click', (e) => {
     const b = e.target.closest('.m-chip'); if (!b) return;
     el('m-status-chips').querySelectorAll('.m-chip').forEach(x => x.classList.remove('active'));
     b.classList.add('active');
     mStatus = b.dataset.st;
     renderModels();
+  });
+  // Drag a model row onto a status chip to move it there — bulk cleanup without opening each.
+  el('m-status-chips').querySelectorAll('.m-chip').forEach(chip => {
+    if (!chip.dataset.st) return;                      // "All" is not a drop target
+    chip.addEventListener('dragover', ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; chip.classList.add('drop-hot'); });
+    chip.addEventListener('dragleave', () => chip.classList.remove('drop-hot'));
+    chip.addEventListener('drop', async ev => {
+      ev.preventDefault(); chip.classList.remove('drop-hot');
+      if (!canEditModels()) return;
+      const id = ev.dataTransfer.getData('text/plain'); if (!id) return;
+      // Dragging a TICKED row moves the whole selection at once.
+      if (mSelected.has(id) && mSelected.size > 1) { applyBulk({ status: chip.dataset.st }); return; }
+      const m = models.find(x => x.id === id); if (!m) return;
+      const st = chip.dataset.st;
+      if ((m.status || '') === st) return;
+      const prev = m.status; m.status = st;             // optimistic — row leaves the current filter
+      renderModels();
+      try { const r = await api('/api/models/' + id, { method: 'PATCH', body: JSON.stringify({ status: st }) }); Object.assign(m, r.model); }
+      catch (_) { m.status = prev; renderModels(); alert('Could not move that model — please try again.'); }
+    });
   });
 
   /* ============= 7b. ACTIVITY LOG (Director / Admin) ============= */
@@ -2514,7 +3989,7 @@
       <tr>
         <td style="white-space:nowrap">${fmtTime(a.time)}</td>
         <td>${esc(a.name || a.email)}</td>
-        <td>${esc(a.role === 'master' ? 'Director' : a.role === 'admin' ? 'Admin' : 'Booker')}</td>
+        <td>${esc(a.role === 'master' ? 'Director' : a.role === 'admin' ? 'Admin' : a.role === 'designer' ? 'Graphic' : a.role === 'scouter' ? 'Scouter' : a.role === 'system' ? 'System' : 'Booker')}</td>
         <td>${esc(a.action)}</td>
         <td>${esc(a.detail) || '—'}</td>
       </tr>`).join('');
@@ -2523,7 +3998,11 @@
   el('a-refresh').addEventListener('click', loadActivity);
 
   /* ================= 8. BOOT ================= */
-  function start() { calMonth = todayLocal().slice(0, 7); showApp(); loadAll().catch(() => {}); }
+  function start() {
+    calMonth = todayLocal().slice(0, 7); showApp(); loadAll().catch(() => {});
+    // Scouter's home is the Mother-Agency ledger (Job Tracker is hidden for them).
+    if (role === 'scouter') { const t = document.querySelector('.tab[data-view="mac"]'); if (t) t.click(); }
+  }
   if (token) api('/api/jobs').then(() => start()).catch(() => showLogin());
   else showLogin();
 })();

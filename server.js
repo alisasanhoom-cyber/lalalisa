@@ -627,7 +627,9 @@ async function handleApi(req, res) {
           jobs.push({ ...base, model: l.mp ? l.name : '', freelance: l.mp ? '' : l.name, budget: fee });
         });
       } else {
-        jobs.push({ ...base, model: j.model, freelance: j.freelance, budget: j.budget });
+        // budget + overtime: the finance app must see the full job amount
+        // (lines-jobs already carry OT inside each line's fee above).
+        jobs.push({ ...base, model: j.model, freelance: j.freelance, budget: number(j.budget) + number(j.overtimeFee) });
       }
     });
     // fx: current exchange rates so the Finance app can convert foreign-currency
@@ -928,7 +930,7 @@ async function handleApi(req, res) {
       // Strip the fee server-side so it isn't even in the response.
       // Strip ALL money for the designer — including the per-model fee lines
       // (each line carries rate/ot; keep only the names so she can still browse).
-      if (user.role === 'designer') jobs = jobs.map(({ budget, currency, lines, ...rest }) => ({
+      if (user.role === 'designer') jobs = jobs.map(({ budget, currency, lines, overtimeFee, overtimeRate, ...rest }) => ({
         ...rest,
         lines: Array.isArray(lines) ? lines.map(l => ({ name: l.name, mp: l.mp })) : lines,
       }));
