@@ -2272,8 +2272,14 @@
     const details = el('d-details') ? el('d-details').value : '';
     const active = [...document.querySelectorAll('.cat-btn.active')].map(b => b.dataset.cat);
     const out = {}; SCHED_CATS.forEach(([k]) => out[k] = '');
-    if (active.length) { active.forEach(k => out[k] = details); out.note = ''; }
+    if (active.length) {
+      // The tag lives in the type field's TEXT — an empty Details box must not
+      // erase the tag (Lisa's Karine entry lost its type and jumped category).
+      const fill = details || (typeof schedSubject === 'function' ? schedSubject() : '') || ' ';
+      active.forEach(k => out[k] = fill); out.note = '';
+    }
     else { out.note = details; }
+    out._activeType = active[0] || '';   // which button is on, even with empty text
     out.internalNote = el('d-sinternalNote') ? el('d-sinternalNote').value : '';
     return out;
   }
@@ -2885,6 +2891,12 @@
         const dates = getAddDates();
         if (!dates.length) { alert('Click at least one day to hold.'); return; }
         const base = { models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails() };
+        // The chosen type sets the stage on NEW entries too — so a fresh Option
+        // can't land with a blank/mismatched stage and drift categories later.
+        const addType = base._activeType; delete base._activeType;
+        if (addType) base.stage = addType === 'priority' ? 'priority'
+          : base.status === 'confirmed' ? 'shooting'
+          : ({ job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' })[addType];
         if (!(base.models || base.casting || base.fitting || base.option || base.job || base.shortlist || base.priority || base.note)) { alert('Add something first.'); return; }
         if (!passesDuplicateGuard(base, dates)) return;
         if (!passesConflictGuard(getAddDates, null)) return;
@@ -3021,15 +3033,26 @@
       if (!passesConflictGuard(getEditDates, id)) return;
       const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails() };
       data.postponeDate = (data.status === 'postponed' && el('d-postponeDate')) ? el('d-postponeDate').value : '';
-      // The chosen TYPE is authoritative — it also sets the board stage, so a
-      // stale stage from an old drag/brush can't keep showing the wrong column
-      // (Aim changed a Priority-tagged entry but its stuck 'shooting' stage kept
-      // it looking like a Job on the Board).
+      // CATEGORY LOCK (Lisa's rule): saving other info must NEVER move an entry
+      // to another category. The stage is rewritten ONLY when the booker
+      // explicitly clicked a DIFFERENT type button (that keeps Aim's fix — a
+      // changed type still clears a stale stage from an old drag/brush).
       const TYPE2STAGE = { job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' };
-      const chosenType = ['job', 'shortlist', 'fitting', 'casting', 'option', 'priority'].find(k => data[k]);
-      data.stage = chosenType === 'priority' ? 'priority'                         // an admin block is never a shoot
-        : data.status === 'confirmed' ? 'shooting'                                // confirmed booking → Confirmed/Shooting
-        : (chosenType ? TYPE2STAGE[chosenType] : '');
+      const activeType = data._activeType; delete data._activeType;
+      const prevPrimary = CAT2KEY[schedCat(e)] || '';
+      // The chosen tag survives an empty Details box: old text → subject → ' '.
+      if (activeType) data[activeType] = (el('d-details') ? el('d-details').value : '') || e[activeType] || data.subject || ' ';
+      const typeChanged = activeType !== prevPrimary;
+      const becameConfirmed = data.status === 'confirmed' && e.status !== 'confirmed';
+      if (typeChanged) {
+        data.stage = activeType === 'priority' ? 'priority'                       // an admin block is never a shoot
+          : data.status === 'confirmed' ? 'shooting'                              // confirmed booking → Confirmed/Shooting
+          : (activeType ? TYPE2STAGE[activeType] : '');
+      } else if (becameConfirmed && activeType !== 'priority') {
+        data.stage = 'shooting';                                                  // newly confirmed → Shooting column
+      } else {
+        data.stage = e.stage || '';                                               // LOCKED — category stays put
+      }
       const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(data) });
       Object.assign(e, r.entry);
       // A multi-day hold is ONE booking — apply the same edit to its other days
