@@ -393,6 +393,11 @@ function buildScheduleEntry(input) {
     jobRef:  text(input.jobRef, 40),                 // links a shoot-date entry back to its job
     planGroup: text(input.planGroup, 40),            // links casting/fitting/shooting of ONE booking
     notified: input.notified ? String(input.notified).slice(0, 30) : '',  // 'YYYY-MM-DD' when the model was told, else ''
+    // Scouting placements (Wolf): a plan can span months — where a model is,
+    // with whom, from `date` until `endDate`, and whether it's happening yet.
+    endDate:   date(input.endDate) || '',
+    place:     text(input.place, 200),
+    planState: ['planned', 'current', 'done'].includes(input.planState) ? input.planState : '',
     shootDays: input.shootDays ? Math.max(1, Math.round(number(input.shootDays)) || 1) : '',  // 1 or 2 shoot days
     leadSource: text(input.leadSource, 40),          // CRM: which channel this lead came from
     clientType: (input.clientType === 'new' || input.clientType === 'old') ? input.clientType : '',  // new vs returning client
@@ -423,6 +428,9 @@ function updateScheduleEntry(id, changes) {
   if (changes.internalNote !== undefined) entry.internalNote = text(changes.internalNote, 2000);
   if (changes.jobCreated !== undefined) entry.jobCreated = !!changes.jobCreated;
   if (changes.notified !== undefined) entry.notified = changes.notified ? String(changes.notified).slice(0, 30) : '';
+  if (changes.endDate !== undefined)   entry.endDate = date(changes.endDate) || '';
+  if (changes.place !== undefined)     entry.place = text(changes.place, 200);
+  if (changes.planState !== undefined) entry.planState = ['planned', 'current', 'done'].includes(changes.planState) ? changes.planState : '';
   if (changes.shootDays !== undefined) entry.shootDays = changes.shootDays ? Math.max(1, Math.round(number(changes.shootDays)) || 1) : '';
   if (changes.leadSource !== undefined) entry.leadSource = text(changes.leadSource, 40);
   if (changes.clientType !== undefined) entry.clientType = (changes.clientType === 'new' || changes.clientType === 'old') ? changes.clientType : '';
@@ -1013,7 +1021,8 @@ async function handleApi(req, res) {
       // Scouting entries are simple diary rows — no job/hold/type machinery,
       // always tagged with the scouter's name.
       const input = isScouter ? {
-        date: body.date, models: body.models, subject: body.subject,
+        date: body.date, endDate: body.endDate, models: body.models, subject: body.subject,
+        place: body.place, planState: body.planState,
         timeStart: body.timeStart, timeEnd: body.timeEnd, note: body.note,
         internalNote: body.internalNote, booker: user.name || 'Wolf',
       } : body;
@@ -1041,7 +1050,7 @@ async function handleApi(req, res) {
       if (isScouter) {
         // Only his own entries (created by him, or created FOR him by a manager).
         if (before.createdBy !== user.email && before.booker !== user.name) return reply(res, 403, { error: 'Not allowed.' });
-        const allow = ['date', 'models', 'subject', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status'];
+        const allow = ['date', 'endDate', 'models', 'subject', 'place', 'planState', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status'];
         Object.keys(body).forEach(k => { if (!allow.includes(k)) delete body[k]; });
       }
       const entry = updateScheduleEntry(id, body);

@@ -3166,26 +3166,34 @@
   // --- Wolf's scouting diary: add/edit his OWN simple entries ---------------
   function scoutEntryDrawer(e) {
     const isNew = !e;
-    el('d-title').textContent = isNew ? 'Add scouting entry' : 'Edit scouting entry';
+    el('d-title').textContent = isNew ? 'Add scouting plan' : 'Edit scouting plan';
     el('drawer-body').innerHTML = `
-      <div class="field"><label>Date</label><input id="sc-date" type="date" value="${esc(e ? e.date : todayLocal())}"></div>
-      <div class="field"><label>Person / model</label><input id="sc-models" value="${esc(e ? e.models || '' : '')}" placeholder="Who are you meeting / scouting?"></div>
-      <div class="field"><label>What</label><input id="sc-subject" value="${esc(e ? e.subject || '' : '')}" placeholder="e.g. Meeting, test shoot, scouting trip"></div>
+      <div class="field"><label>Model / person</label><input id="sc-models" value="${esc(e ? e.models || '' : '')}" placeholder="e.g. OLGA, Natalia Campaz…"></div>
+      <div class="field"><label>Doing what</label><input id="sc-subject" value="${esc(e ? e.subject || '' : '')}" placeholder="e.g. KAT Shanghai placement, test shoot, meeting"></div>
+      <div class="field"><label>Where</label><input id="sc-place" value="${esc(e ? e.place || '' : '')}" placeholder="e.g. China, Bangkok, Tokyo"></div>
       <div class="field two">
-        <div class="field" style="margin:0"><label>Time from</label><input id="sc-t1" type="time" value="${esc(e ? e.timeStart || '' : '')}"></div>
-        <div class="field" style="margin:0"><label>To</label><input id="sc-t2" type="time" value="${esc(e ? e.timeEnd || '' : '')}"></div>
+        <div class="field" style="margin:0"><label>From</label><input id="sc-date" type="date" value="${esc(e ? e.date : todayLocal())}"></div>
+        <div class="field" style="margin:0"><label>Until <span style="font-weight:400;color:var(--grey);font-size:11px">· optional</span></label><input id="sc-end" type="date" value="${esc(e ? e.endDate || '' : '')}"></div>
       </div>
-      <div class="field"><label>Details</label><textarea id="sc-note" rows="4" placeholder="Location, contact, notes…">${esc(e ? e.note || '' : '')}</textarea></div>
+      <div class="field"><label>Status</label>
+        <select id="sc-state">
+          <option value="planned" ${e && e.planState === 'planned' ? 'selected' : ''}>Planned (next plan)</option>
+          <option value="current" ${!e || e.planState === 'current' || !e.planState ? 'selected' : ''}>Current (happening now)</option>
+          <option value="done" ${e && e.planState === 'done' ? 'selected' : ''}>Done</option>
+        </select></div>
+      <div class="field"><label>Details</label><textarea id="sc-note" rows="3" placeholder="Agency contact, visa notes, conditions…">${esc(e ? e.note || '' : '')}</textarea></div>
       <div class="drawer-actions">
-        <button class="btn" id="d-save">${isNew ? 'Add entry' : 'Save changes'}</button>
+        <button class="btn" id="d-save">${isNew ? 'Add plan' : 'Save changes'}</button>
         ${isNew ? '' : '<button class="link" id="d-del" style="color:var(--declined)">Delete</button>'}
       </div>`;
     el('d-save').addEventListener('click', async () => {
-      const data = { date: el('sc-date').value, models: el('sc-models').value, subject: el('sc-subject').value,
-        timeStart: el('sc-t1').value, timeEnd: el('sc-t2').value, note: el('sc-note').value };
+      const data = { date: el('sc-date').value, endDate: el('sc-end').value, models: el('sc-models').value,
+        subject: el('sc-subject').value, place: el('sc-place').value, planState: el('sc-state').value,
+        note: el('sc-note').value };
       // A manager adding/editing on Wolf's behalf keeps the entry tagged as his.
       if (role !== 'scouter') data.booker = 'Wolf (Scouter)';
       if (!data.date || !(data.models.trim() || data.subject.trim())) { alert('Add a date and who / what.'); return; }
+      if (data.endDate && data.endDate < data.date) { alert('"Until" must be after "From".'); return; }
       try {
         if (isNew) { const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(data) }); schedule.push(r.entry); }
         else { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(e, r.entry); }
@@ -3741,27 +3749,73 @@
   }
   // Wolf's scouting schedule ON the Mother Agency page — two sections, one
   // page (Lisa). Managers see and can edit everything; Wolf edits his own.
+  // Gantt: rows = models, bars = placements (From→Until), colours = status.
+  function scoutGanttHtml(list) {
+    const items = list.filter(e => e.date).map(e => ({
+      ...e,
+      s: new Date(e.date + 'T00:00:00'),
+      t: new Date((e.endDate && e.endDate >= e.date ? e.endDate : e.date) + 'T00:00:00'),
+    }));
+    if (!items.length) return '';
+    let min = new Date(Math.min.apply(null, items.map(i => i.s)));
+    let max = new Date(Math.max.apply(null, items.map(i => i.t)));
+    const now = new Date();
+    if (max < now) max = now;
+    min = new Date(min.getFullYear(), min.getMonth(), 1);
+    max = new Date(max.getFullYear(), max.getMonth() + 2, 0);   // pad one month ahead
+    const span = max - min;
+    const months = [];
+    for (let d = new Date(min); d <= max; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) months.push(new Date(d));
+    const pct = d => (d - min) / span * 100;
+    const COLORS = { planned: '#c9973a', current: '#2f8f83', done: '#a7adb3' };
+    const byModel = {};
+    items.forEach(i => { const k = (String(i.models || '').split(/[,\n]/)[0] || '—').trim() || '—'; (byModel[k] = byModel[k] || []).push(i); });
+    const head = months.map(m =>
+      `<div style="flex:1;border-left:1px solid #e8e8e8;font-size:9.5px;color:#999;padding-left:3px;overflow:hidden">${m.toLocaleString('en', { month: 'short' })}${m.getMonth() === 0 || m === months[0] ? ' ' + String(m.getFullYear()).slice(2) : ''}</div>`).join('');
+    const rows = Object.keys(byModel).sort().map(name => {
+      const bars = byModel[name].map(i => {
+        const l = pct(i.s), w = Math.max(2, pct(i.t) - l + 100 / months.length / 30);
+        const c = COLORS[i.planState] || COLORS.current;
+        const lbl = [i.subject, i.place].filter(Boolean).join(' · ');
+        return `<div class="scout-row" data-id="${i.id}" title="${esc(name + ' — ' + lbl + ' (' + i.date + (i.endDate ? ' → ' + i.endDate : '') + ')')}"
+          style="position:absolute;left:${l.toFixed(2)}%;width:${w.toFixed(2)}%;top:3px;height:18px;background:${c};border-radius:4px;color:#fff;font-size:9.5px;line-height:18px;padding:0 5px;overflow:hidden;white-space:nowrap;cursor:pointer">${esc(lbl)}</div>`;
+      }).join('');
+      return `<div style="display:flex;align-items:center;margin:2px 0">
+        <div style="width:110px;flex:none;font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</div>
+        <div style="flex:1;position:relative;height:24px;background:#fbfbfb;border-left:1px solid #e8e8e8">${bars}</div></div>`;
+    }).join('');
+    const tl = pct(now);
+    return `<div style="margin-top:10px">
+      <div style="display:flex"><div style="width:110px;flex:none"></div><div style="flex:1;display:flex">${head}</div></div>
+      <div style="position:relative">${rows}
+        ${tl >= 0 && tl <= 100 ? `<div style="position:absolute;top:0;bottom:0;left:calc(110px + (100% - 110px)*${(tl / 100).toFixed(4)});width:2px;background:#c74436;opacity:.65" title="Today"></div>` : ''}
+      </div>
+      <div style="display:flex;gap:14px;margin-top:6px;font-size:10.5px;color:#777">
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#2f8f83"></span> Current</span>
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#c9973a"></span> Planned</span>
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#a7adb3"></span> Done</span>
+      </div></div>`;
+  }
   function renderMacScoutSched() {
     const host = el('mac-scout-sched'); if (!host) return;
     const mine = schedule.filter(e => e.createdBy === 'scouter@mpmodelsbkk.com' || /scouter/i.test(String(e.booker || '')));
-    const today = todayLocal();
     const sorted = mine.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const upcoming = sorted.filter(e => e.date >= today), past = sorted.filter(e => e.date < today).reverse();
     const row = e => `<tr class="scout-row" data-id="${e.id}" style="cursor:pointer">
-      <td>${esc(e.date)}</td><td>${esc([e.timeStart, e.timeEnd].filter(Boolean).join('–'))}</td>
-      <td><b>${esc(e.models || '')}</b></td><td>${esc(e.subject || '')}</td>
-      <td style="color:#8a8a8a">${esc(String(e.note || '').slice(0, 70))}</td></tr>`;
+      <td>${esc(e.date)}${e.endDate ? ' → ' + esc(e.endDate) : ''}</td>
+      <td><b>${esc(e.models || '')}</b></td><td>${esc(e.subject || '')}</td><td>${esc(e.place || '')}</td>
+      <td>${esc(e.planState || '')}</td>
+      <td style="color:#8a8a8a">${esc(String(e.note || '').slice(0, 60))}</td></tr>`;
     host.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <h3 style="margin:0;font-size:14px">🧭 Scouting Schedule — Wolf</h3>
-        <button class="btn" id="mac-scout-add">+ Scouting entry</button>
+        <button class="btn" id="mac-scout-add">+ Add plan</button>
       </div>
-      ${mine.length ? `<div class="table-scroll"><table>
-        <thead><tr><th>Date</th><th>Time</th><th>Person / model</th><th>What</th><th>Details</th></tr></thead>
-        <tbody>${upcoming.map(row).join('')}
-        ${past.length ? '<tr><td colspan="5" style="background:#f4f4f4;color:#888;font-size:11px;padding:3px 8px">Past</td></tr>' + past.map(row).join('') : ''}</tbody>
-        </table></div>`
-        : '<p style="color:#999;font-size:12.5px;margin:4px 0">No scouting entries yet — add meetings, test shoots and scouting trips here.</p>'}`;
+      ${mine.length ? scoutGanttHtml(sorted) + `
+        <details style="margin-top:8px"><summary style="font-size:11.5px;color:#777;cursor:pointer">All plans as a list</summary>
+        <div class="table-scroll"><table>
+        <thead><tr><th>From → until</th><th>Model / person</th><th>Doing what</th><th>Where</th><th>Status</th><th>Details</th></tr></thead>
+        <tbody>${sorted.map(row).join('')}</tbody></table></div></details>`
+        : '<p style="color:#999;font-size:12.5px;margin:4px 0">No plans yet — add where each model is going, with whom, from when until when.</p>'}`;
     const add = el('mac-scout-add');
     if (add) add.addEventListener('click', () => scoutEntryDrawer(null));
     host.querySelectorAll('.scout-row').forEach(tr => tr.addEventListener('click', () => {
