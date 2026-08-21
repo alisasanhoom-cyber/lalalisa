@@ -99,6 +99,7 @@
       sessionStorage.setItem('mp_admin_role', role);
       sessionStorage.setItem('mp_admin_name', data.name || '');
       sessionStorage.setItem('mp_admin_bookername', data.bookerName || '');
+      sessionStorage.setItem('mp_admin_email', (el('email') ? el('email').value : '').trim().toLowerCase());
       start();
     } else {
       el('login-err').textContent = data.error || 'Incorrect email or password.';
@@ -3067,6 +3068,12 @@
   function editScheduleEntry(id, afterSave) {
     const e = schedule.find(x => x.id === id);
     if (!e) return;
+    // Wolf: his own scouting entries open his simple diary drawer; everything
+    // else stays view-only (the server refuses his writes anyway).
+    if (role === 'scouter') {
+      if (e.createdBy && e.createdBy === (sessionStorage.getItem('mp_admin_email') || '')) scoutEntryDrawer(e);
+      return;
+    }
     const done = () => { buildFilters(); renderSchedule(); if (afterSave) afterSave(); else closeDrawer(); };
     el('d-title').textContent = 'Edit schedule entry';
     el('drawer-body').innerHTML = `
@@ -3156,6 +3163,42 @@
   });
   el('s-refresh').addEventListener('click', loadAll);
   el('s-add').addEventListener('click', openAddSchedule);
+  // --- Wolf's scouting diary: add/edit his OWN simple entries ---------------
+  function scoutEntryDrawer(e) {
+    const isNew = !e;
+    el('d-title').textContent = isNew ? 'Add scouting entry' : 'Edit scouting entry';
+    el('drawer-body').innerHTML = `
+      <div class="field"><label>Date</label><input id="sc-date" type="date" value="${esc(e ? e.date : todayLocal())}"></div>
+      <div class="field"><label>Person / model</label><input id="sc-models" value="${esc(e ? e.models || '' : '')}" placeholder="Who are you meeting / scouting?"></div>
+      <div class="field"><label>What</label><input id="sc-subject" value="${esc(e ? e.subject || '' : '')}" placeholder="e.g. Meeting, test shoot, scouting trip"></div>
+      <div class="field two">
+        <div class="field" style="margin:0"><label>Time from</label><input id="sc-t1" type="time" value="${esc(e ? e.timeStart || '' : '')}"></div>
+        <div class="field" style="margin:0"><label>To</label><input id="sc-t2" type="time" value="${esc(e ? e.timeEnd || '' : '')}"></div>
+      </div>
+      <div class="field"><label>Details</label><textarea id="sc-note" rows="4" placeholder="Location, contact, notes…">${esc(e ? e.note || '' : '')}</textarea></div>
+      <div class="drawer-actions">
+        <button class="btn" id="d-save">${isNew ? 'Add entry' : 'Save changes'}</button>
+        ${isNew ? '' : '<button class="link" id="d-del" style="color:var(--declined)">Delete</button>'}
+      </div>`;
+    el('d-save').addEventListener('click', async () => {
+      const data = { date: el('sc-date').value, models: el('sc-models').value, subject: el('sc-subject').value,
+        timeStart: el('sc-t1').value, timeEnd: el('sc-t2').value, note: el('sc-note').value };
+      if (!data.date || !(data.models.trim() || data.subject.trim())) { alert('Add a date and who / what.'); return; }
+      try {
+        if (isNew) { const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(data) }); schedule.push(r.entry); }
+        else { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(e, r.entry); }
+        buildFilters(); renderSchedule(); closeDrawer();
+      } catch (err) { alert('Could not save: ' + ((err.body && err.body.error) || 'please try again.')); }
+    });
+    if (!isNew) el('d-del').addEventListener('click', async () => {
+      if (!confirm('Delete this entry?')) return;
+      try { await api('/api/schedule/' + e.id, { method: 'DELETE' }); } catch (_) {}
+      schedule = schedule.filter(x => x.id !== e.id);
+      buildFilters(); renderSchedule(); closeDrawer();
+    });
+    openDrawer();
+  }
+  if (el('s-add-scout')) el('s-add-scout').addEventListener('click', () => scoutEntryDrawer(null));
   el('s-cal-btn').addEventListener('click', () => setScheduleView('calendar'));
   el('s-board-btn').addEventListener('click', () => setScheduleView('board'));
   el('s-sum-btn').addEventListener('click', () => setScheduleView('summary'));

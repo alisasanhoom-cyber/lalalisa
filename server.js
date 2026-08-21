@@ -692,7 +692,9 @@ async function handleApi(req, res) {
   const isScouter = user.role === 'scouter';
   if (isScouter) {
     const allowed = resource === 'mac'
-      || (resource === 'schedule' && method === 'GET')
+      // Scouter can WRITE schedule too — but only his own scouting entries
+      // (ownership + field whitelist enforced inside the schedule handlers).
+      || resource === 'schedule'
       || (resource === 'models' && method === 'GET')
       || (resource === 'settings' && method === 'GET');
     if (!allowed) return reply(res, 403, { error: 'Not allowed.' });
@@ -999,7 +1001,8 @@ async function handleApi(req, res) {
         // when a scouter owns a short name (e.g. "An" matching "Joanna").
         const mine = scouterModelNames();
         const tokens = s => String(s || '').toLowerCase().split(/[,\/\n•·&+]| and /).map(t => t.trim()).filter(Boolean);
-        list = list.filter(e => tokens(e.models).some(t => mine.has(t)));
+        // …plus every entry the scouter created himself (his scouting diary).
+        list = list.filter(e => e.createdBy === user.email || tokens(e.models).some(t => mine.has(t)));
       }
       return reply(res, 200, { schedule: list });
     }
@@ -1007,7 +1010,15 @@ async function handleApi(req, res) {
       // A booker's new entry is always tagged with their OWN name, even if the
       // form's booker field was left blank — so nothing lands untagged.
       if (!body.booker && user.bookerName) body.booker = user.bookerName;
-      const entry = buildScheduleEntry(body);
+      // Scouting entries are simple diary rows — no job/hold/type machinery,
+      // always tagged with the scouter's name.
+      const input = isScouter ? {
+        date: body.date, models: body.models, subject: body.subject,
+        timeStart: body.timeStart, timeEnd: body.timeEnd, note: body.note,
+        internalNote: body.internalNote, booker: user.name || 'Wolf',
+      } : body;
+      const entry = buildScheduleEntry(input);
+      entry.createdBy = user.email || '';   // ownership — scouters may edit only their own
       const list = load(SCHEDULE_FILE);
       list.push(entry);
       save(SCHEDULE_FILE, list);
@@ -1015,6 +1026,7 @@ async function handleApi(req, res) {
       return reply(res, 201, { ok: true, entry });
     }
     if (method === 'PATCH' && id === 'bulk') {   // tag many entries with one booker, atomically
+      if (isScouter) return reply(res, 403, { error: 'Not allowed.' });
       const ids = new Set(Array.isArray(body.ids) ? body.ids : []);
       const booker = text(body.booker, 40);
       const list = load(SCHEDULE_FILE);
@@ -1026,6 +1038,12 @@ async function handleApi(req, res) {
     }
     if (method === 'PATCH' && id) {
       const before = load(SCHEDULE_FILE).find(e => e.id === id) || {};
+      if (isScouter) {
+        // Only his own entries, only the simple diary fields.
+        if (before.createdBy !== user.email) return reply(res, 403, { error: 'Not allowed.' });
+        const allow = ['date', 'models', 'subject', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status'];
+        Object.keys(body).forEach(k => { if (!allow.includes(k)) delete body[k]; });
+      }
       const entry = updateScheduleEntry(id, body);
       if (entry) {
         const what = diffSummary(before, entry, body, SCHED_DIFF_FIELDS);
@@ -1036,6 +1054,7 @@ async function handleApi(req, res) {
     }
     if (method === 'DELETE' && id) {
       const target = load(SCHEDULE_FILE).find(e => e.id === id);
+      if (isScouter && (!target || target.createdBy !== user.email)) return reply(res, 403, { error: 'Not allowed.' });
       const ok = deleteScheduleEntry(id);
       if (ok) logActivity(user, 'deleted schedule', target ? `${target.date} ${target.models}`.trim() : id);
       return ok ? reply(res, 200, { ok: true })
