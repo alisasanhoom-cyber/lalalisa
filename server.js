@@ -46,7 +46,7 @@ function loadSettings() {
   const fx = (s && s.fxRates) || {};
   // Keep EVERY stored setting — dropping keys here meant a rates-only save
   // erased driveUploadUrl from disk and the client never received it at all.
-  return { ...(s || {}), fxRates: { ...FX_DEFAULT, ...fx }, driveUploadUrl: (s && s.driveUploadUrl) || '' };
+  return { ...(s || {}), fxRates: { ...FX_DEFAULT, ...fx }, driveUploadUrl: (s && s.driveUploadUrl) || '', driveUploadKey: (s && s.driveUploadKey) || '' };
 }
 // Changes every deploy (server restart) → busts Cloudflare's cache of js/css so
 // browsers always load the code that matches the current HTML.
@@ -808,6 +808,8 @@ async function handleApi(req, res) {
       // Apps Script webhook that files each generated confirmation into the
       // Google Drive confirmations folder as a Google Doc (Aim reads in Chrome).
       if (body.driveUploadUrl !== undefined) s.driveUploadUrl = text(body.driveUploadUrl, 300);
+      // Shared secret the script demands on every upload (defence beyond the URL).
+      if (body.driveUploadKey !== undefined) s.driveUploadKey = text(body.driveUploadKey, 100);
       save(SETTINGS_FILE, s);
       logActivity(user, 'updated FX rates', ['USD', 'EUR', 'CNY'].map(c => `${c} ${s.fxRates[c]}`).join(', '));
       return reply(res, 200, { ok: true, ...s });

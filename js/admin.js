@@ -1185,6 +1185,7 @@
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
+        key: appSettings.driveUploadKey || '',   // script rejects uploads without it
         filename: driveDocName(job) || (job.jobTitle || 'Job Confirmation'),
         jobDate: job.jobDate || '',
         code: job.jobId || job.jobIdNonTax || '',
