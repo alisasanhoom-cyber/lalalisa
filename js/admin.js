@@ -1193,8 +1193,8 @@
         sheet: confSheetRows(job, type),
       }),
     }).then(r => r.json())
-      .then(r => onStatus && onStatus(!!(r && r.ok)))
-      .catch(() => onStatus && onStatus(false));
+      .then(r => onStatus && onStatus(!!(r && r.ok), r || {}))
+      .catch(() => onStatus && onStatus(false, {}));
   }
   // Tawa: editing a job must overwrite its Drive copies right away.
   function autoDriveSave(jobRec) {
@@ -1243,8 +1243,21 @@
       };
       if (appSettings.driveUploadUrl) {
         const st = mk('☁ saving to Drive…'); st.disabled = true;
-        driveUploadConfirmation(job, type, doc.html,
-          ok => { st.textContent = ok ? '☁ in Drive ✓' : '☁ Drive failed'; });
+        driveUploadConfirmation(job, type, doc.html, (ok, resp) => {
+          st.textContent = ok ? '☁ in Drive ✓' : '☁ Drive failed';
+          // Once the Drive copy exists, one tap sends Admin the link in LINE:
+          // opens LINE's share screen with the message ready — pick Aim, send.
+          if (ok && (resp.sheetUrl || resp.pdfUrl)) {
+            const line = mk('📤 LINE');
+            line.title = 'Send the confirmation link to Admin via LINE';
+            line.onclick = () => {
+              const msg = '📄 ' + (driveDocName(job) || doc.title) + '\n'
+                + (resp.sheetUrl ? resp.sheetUrl : '')
+                + (resp.pdfUrl ? '\nPDF: ' + resp.pdfUrl : '');
+              doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
+            };
+          }
+        });
       }
       const style = d.createElement('style');
       style.textContent = '@media print{.conf-tools{display:none!important}}';
