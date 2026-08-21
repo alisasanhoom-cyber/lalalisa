@@ -638,7 +638,9 @@ async function handleApi(req, res) {
     // changes on its side. Single-model jobs pass through unchanged.
     const jobs = [];
     load(JOBS_FILE).forEach(j => {
-      const base = { currency: j.currency, jobDate: j.jobDate, jobId: j.jobId, jobIdNonTax: j.jobIdNonTax,
+      // month is the NORMALISED period (YYYY-MM) — jobDate is often free text
+      // ("13,14 July") and must never be used alone for year attribution.
+      const base = { currency: j.currency, jobDate: j.jobDate, month: j.month, jobId: j.jobId, jobIdNonTax: j.jobIdNonTax,
         jobTitle: j.jobTitle, client: j.client, leadSource: j.leadSource };
       if (Array.isArray(j.lines) && j.lines.length) {
         j.lines.forEach(l => {
