@@ -1230,7 +1230,8 @@
         code: job.jobId || job.jobIdNonTax || '',
         pdfBase64: pdfBase64,                       // the EXACT rendered form
         html: MPConfirmation.renderDrive ? MPConfirmation.renderDrive(job, type) : '',  // fallback only
-        sheet: confSheetRows(job, type),
+        grid: MPConfirmation.sheetGrid ? MPConfirmation.sheetGrid(job, type) : null,    // form-styled Sheet
+        sheet: confSheetRows(job, type),            // fallback for old script versions
       }),
     }).then(r => r.json())
       .then(r => onStatus && onStatus(!!(r && r.ok), r || {}))

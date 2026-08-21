@@ -420,9 +420,77 @@ ${job.remark ? r2('Remark', job.remark) : ''}
 </body></html>`;
   }
 
+  // The Google-Sheet version of the confirmation as a generic cell grid — the
+  // Apps Script renders it 1:1 (values, merges, colors, borders), so the Sheet
+  // looks like the FORM (Lisa: not a plain list) and future layout changes
+  // never require touching the script again.
+  function sheetGrid(job, type) {
+    const v = VARIANTS[type] || VARIANTS.tax;
+    const pay = calc(job, type);
+    const cash = pay.cash, num = pay.num;
+    const code = type === 'nontax' ? (job.jobIdNonTax || job.jobId || '') : (job.jobId || job.jobIdNonTax || '');
+    const multi = Array.isArray(job.modelFees) && job.modelFees.length > 1 ? job.modelFees : null;
+    const models = multi ? multi.map(mf => mf.model).filter(Boolean).join(', ')
+      : [job.model, job.freelance].filter(Boolean).join(', ');
+    const issued = new Date().toISOString().slice(0, 10);
+    const cells = []; let r = 1;
+    const add = c => cells.push(c);
+    const sect = t => { add({ r, c: 1, v: t, cs: 4, b: 1, bg: '#1a1a1a', fc: '#ffffff', fs: 10 }); r++; };
+    const lbl = { bg: '#f3f3f3', b: 1, fs: 9 };
+    const row4 = (a, va, b2, vb) => { add({ r, c: 1, v: a, ...lbl }); add({ r, c: 2, v: va, fs: 10 }); add({ r, c: 3, v: b2, ...lbl }); add({ r, c: 4, v: vb, fs: 10 }); r++; };
+    const row2 = (a, va, opts) => { add({ r, c: 1, v: a, ...lbl }); add({ r, c: 2, v: va, cs: 3, fs: 10, wrap: 1, ...(opts || {}) }); r++; };
+    add({ r, c: 1, v: v.company, cs: 4, b: 1, fs: 12, ha: 'center' }); r++;
+    add({ r, c: 1, v: v.address, cs: 4, fs: 9, ha: 'center' }); r++;
+    add({ r, c: 1, v: (v.taxId ? 'Tax ID: ' + v.taxId + '  ·  ' : '') + 'Tel: ' + v.tel, cs: 4, fs: 9, ha: 'center' }); r++;
+    r++;
+    add({ r, c: 1, v: 'CONFIRMATION', cs: 4, b: 1, fs: 14, ha: 'center' }); r++;
+    add({ r, c: 1, v: 'Date: ' + issued + '    Job ID: ' + (code || '-') + '    Booker: ' + (job.booker || '-'), cs: 4, fs: 10, ha: 'center' }); r++;
+    sect('CLIENT COMPANY DETAILS');
+    row4('Company Name', job.companyName || job.client || '', 'Tax ID', job.clientTaxId || '');
+    row2('Company Address', job.companyAddress || '');
+    row4('Contact Person', job.contactPerson || job.clientName || '', 'Contact Number', job.contactNumber || job.phone || '');
+    row2('Email', job.clientEmail || job.email || '');
+    sect('JOB DETAILS');
+    row2('Assignment Title', job.jobTitle || '');
+    row4('Product', job.product || '', 'Role', job.role || '');
+    row2('Model Name and Surname', models);
+    row4('Media Usage', job.mediaUsage || '', 'Period of Usage', job.periodOfUsage || '');
+    row4('Country/ies of Use', job.countryOfUse || '', 'Shooting Location', job.shootLocation || '');
+    row4('Date of Shoot', (job.shootStart || '') + (job.shootEnd && job.shootEnd !== job.shootStart ? ' → ' + job.shootEnd : ''),
+         'Time of Shoot', (job.timeStart || '') + (job.timeEnd ? ' – ' + job.timeEnd : ''));
+    row4('Contracted Hours', job.contractHours ? job.contractHours + ' hours' : '', 'No. of Shoot', job.noOfShoot || '');
+    sect('PAYMENT');
+    if (multi) {
+      add({ r, c: 1, v: 'Model', ...lbl }); add({ r, c: 2, v: 'Fee' + (v.vat ? ' (excl. VAT)' : ''), ...lbl });
+      add({ r, c: 3, v: v.vat ? 'VAT 7%' : '', ...lbl }); add({ r, c: 4, v: 'Total', ...lbl }); r++;
+      multi.forEach(mf => {
+        const f = num(mf.fee), mv = v.vat ? f * 0.07 : 0;
+        add({ r, c: 1, v: mf.model || '', fs: 10 }); add({ r, c: 2, v: cash(f), fs: 10 });
+        add({ r, c: 3, v: v.vat ? cash(mv) : '', fs: 10 }); add({ r, c: 4, v: cash(f + mv), b: 1, fs: 10 }); r++;
+      });
+    }
+    row4('Fee' + (v.vat ? ' (Excl. 7% VAT)' : ''), cash(pay.fee), 'Overtime Fee', pay.otDisplay || '-');
+    if (v.vat) row4('Subtotal', cash(pay.subtotal), 'VAT 7%', cash(pay.vat));
+    row2('TOTAL PAYMENT AMOUNT' + (v.vat ? ' (Incl. 7% VAT)' : ''), cash(pay.total), { b: 1, fs: 11, wrap: 0 });
+    if (pay.whtOn) row4('Less Withholding Tax 3%', '- ' + cash(pay.wht), 'NET AMOUNT TO TRANSFER', cash(pay.netPay));
+    row4('Payment Term', job.paymentTerm || '', 'Payment Method', 'Cash / transfer / Cheque');
+    row2('Cancellation Fee', v.cancellation);
+    row2('Deposit Account', v.bank + ' — Account Name: ' + v.accountName);
+    if (job.remark) row2('Remark', job.remark);
+    sect('ACKNOWLEDGEMENT AGREEMENT');
+    add({ r, c: 1, v: ACK, cs: 4, fs: 9, wrap: 1 }); r++;
+    TERMS.forEach((t, i) => { add({ r, c: 1, v: (i + 1) + '. ' + t, cs: 4, fs: 8, fc: '#b00000', wrap: 1 }); r++; });
+    r++;
+    add({ r, c: 1, v: 'Morgan & Preston Models Bangkok', b: 1, fs: 9, ha: 'center' });
+    add({ r, c: 3, v: 'Model', b: 1, fs: 9, ha: 'center' });
+    add({ r, c: 4, v: 'Client', b: 1, fs: 9, ha: 'center' }); r++;
+    return { cols: [170, 250, 150, 250], rows: r - 1, cells };
+  }
+
   window.MPConfirmation = {
     defaultType,
     calc,
+    sheetGrid,
     // Render the confirmation HTML without opening a window (silent Drive save).
     render(job, type, opts) { return build(job, type || defaultType(job), opts || {}); },
     // Table-based version for the Drive upload (converts cleanly to Doc/PDF).
