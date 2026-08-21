@@ -1001,8 +1001,8 @@ async function handleApi(req, res) {
         // when a scouter owns a short name (e.g. "An" matching "Joanna").
         const mine = scouterModelNames();
         const tokens = s => String(s || '').toLowerCase().split(/[,\/\n•·&+]| and /).map(t => t.trim()).filter(Boolean);
-        // …plus every entry the scouter created himself (his scouting diary).
-        list = list.filter(e => e.createdBy === user.email || tokens(e.models).some(t => mine.has(t)));
+        // …plus his scouting diary: entries he created OR a manager created for him.
+        list = list.filter(e => e.createdBy === user.email || e.booker === user.name || tokens(e.models).some(t => mine.has(t)));
       }
       return reply(res, 200, { schedule: list });
     }
@@ -1039,8 +1039,8 @@ async function handleApi(req, res) {
     if (method === 'PATCH' && id) {
       const before = load(SCHEDULE_FILE).find(e => e.id === id) || {};
       if (isScouter) {
-        // Only his own entries, only the simple diary fields.
-        if (before.createdBy !== user.email) return reply(res, 403, { error: 'Not allowed.' });
+        // Only his own entries (created by him, or created FOR him by a manager).
+        if (before.createdBy !== user.email && before.booker !== user.name) return reply(res, 403, { error: 'Not allowed.' });
         const allow = ['date', 'models', 'subject', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status'];
         Object.keys(body).forEach(k => { if (!allow.includes(k)) delete body[k]; });
       }
@@ -1054,7 +1054,7 @@ async function handleApi(req, res) {
     }
     if (method === 'DELETE' && id) {
       const target = load(SCHEDULE_FILE).find(e => e.id === id);
-      if (isScouter && (!target || target.createdBy !== user.email)) return reply(res, 403, { error: 'Not allowed.' });
+      if (isScouter && (!target || (target.createdBy !== user.email && target.booker !== user.name))) return reply(res, 403, { error: 'Not allowed.' });
       const ok = deleteScheduleEntry(id);
       if (ok) logActivity(user, 'deleted schedule', target ? `${target.date} ${target.models}`.trim() : id);
       return ok ? reply(res, 200, { ok: true })

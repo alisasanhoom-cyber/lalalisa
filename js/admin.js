@@ -3183,18 +3183,20 @@
     el('d-save').addEventListener('click', async () => {
       const data = { date: el('sc-date').value, models: el('sc-models').value, subject: el('sc-subject').value,
         timeStart: el('sc-t1').value, timeEnd: el('sc-t2').value, note: el('sc-note').value };
+      // A manager adding/editing on Wolf's behalf keeps the entry tagged as his.
+      if (role !== 'scouter') data.booker = 'Wolf (Scouter)';
       if (!data.date || !(data.models.trim() || data.subject.trim())) { alert('Add a date and who / what.'); return; }
       try {
         if (isNew) { const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(data) }); schedule.push(r.entry); }
         else { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(e, r.entry); }
-        buildFilters(); renderSchedule(); closeDrawer();
+        buildFilters(); renderSchedule(); if (el('mac-scout-sched')) renderMacScoutSched(); closeDrawer();
       } catch (err) { alert('Could not save: ' + ((err.body && err.body.error) || 'please try again.')); }
     });
     if (!isNew) el('d-del').addEventListener('click', async () => {
       if (!confirm('Delete this entry?')) return;
       try { await api('/api/schedule/' + e.id, { method: 'DELETE' }); } catch (_) {}
       schedule = schedule.filter(x => x.id !== e.id);
-      buildFilters(); renderSchedule(); closeDrawer();
+      buildFilters(); renderSchedule(); if (el('mac-scout-sched')) renderMacScoutSched(); closeDrawer();
     });
     openDrawer();
   }
@@ -3737,7 +3739,39 @@
     }
     renderMac();
   }
+  // Wolf's scouting schedule ON the Mother Agency page — two sections, one
+  // page (Lisa). Managers see and can edit everything; Wolf edits his own.
+  function renderMacScoutSched() {
+    const host = el('mac-scout-sched'); if (!host) return;
+    const mine = schedule.filter(e => e.createdBy === 'scouter@mpmodelsbkk.com' || /scouter/i.test(String(e.booker || '')));
+    const today = todayLocal();
+    const sorted = mine.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const upcoming = sorted.filter(e => e.date >= today), past = sorted.filter(e => e.date < today).reverse();
+    const row = e => `<tr class="scout-row" data-id="${e.id}" style="cursor:pointer">
+      <td>${esc(e.date)}</td><td>${esc([e.timeStart, e.timeEnd].filter(Boolean).join('–'))}</td>
+      <td><b>${esc(e.models || '')}</b></td><td>${esc(e.subject || '')}</td>
+      <td style="color:#8a8a8a">${esc(String(e.note || '').slice(0, 70))}</td></tr>`;
+    host.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 style="margin:0;font-size:14px">🧭 Scouting Schedule — Wolf</h3>
+        <button class="btn" id="mac-scout-add">+ Scouting entry</button>
+      </div>
+      ${mine.length ? `<div class="table-scroll"><table>
+        <thead><tr><th>Date</th><th>Time</th><th>Person / model</th><th>What</th><th>Details</th></tr></thead>
+        <tbody>${upcoming.map(row).join('')}
+        ${past.length ? '<tr><td colspan="5" style="background:#f4f4f4;color:#888;font-size:11px;padding:3px 8px">Past</td></tr>' + past.map(row).join('') : ''}</tbody>
+        </table></div>`
+        : '<p style="color:#999;font-size:12.5px;margin:4px 0">No scouting entries yet — add meetings, test shoots and scouting trips here.</p>'}`;
+    const add = el('mac-scout-add');
+    if (add) add.addEventListener('click', () => scoutEntryDrawer(null));
+    host.querySelectorAll('.scout-row').forEach(tr => tr.addEventListener('click', () => {
+      const e = schedule.find(x => x.id === tr.dataset.id); if (!e) return;
+      if (role === 'scouter') editScheduleEntry(e.id);   // own-entry guard inside
+      else scoutEntryDrawer(e);                          // managers edit any
+    }));
+  }
   function renderMac() {
+    renderMacScoutSched();
     const yearF = el('mac-year') ? el('mac-year').value : '';
     const ownerF = el('mac-owner') ? el('mac-owner').value : '';
     const term = (el('mac-search') ? el('mac-search').value : '').trim().toLowerCase();
