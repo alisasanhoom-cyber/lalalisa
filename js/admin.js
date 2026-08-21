@@ -1180,8 +1180,47 @@
   }
   // POST the confirmation to Lisa's Apps Script → Google SHEET + PDF copy filed
   // under JOB CONFIRMATION → <year> → <n.MONTH>, overwriting older versions.
-  function driveUploadConfirmation(job, type, html, onStatus) {
+  // --- exact-form PDF, rendered by the booker's own browser -----------------
+  // Google's HTML→Doc converter mangled the form (screen hints leaked into the
+  // PDF, the layout collapsed — Lisa: must be the exact app form). html2pdf
+  // captures the REAL rendered form in a hidden iframe instead.
+  let h2pLoad = null;
+  function ensureHtml2pdf() {
+    if (window.html2pdf) return Promise.resolve();
+    if (!h2pLoad) h2pLoad = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'js/vendor/html2pdf.bundle.min.js';
+      s.onload = res;
+      s.onerror = () => { h2pLoad = null; rej(new Error('html2pdf load failed')); };
+      document.head.appendChild(s);
+    });
+    return h2pLoad;
+  }
+  async function confPdfBase64(html) {
+    await ensureHtml2pdf();
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;left:-11000px;top:0;width:794px;height:1200px;border:0';
+    document.body.appendChild(frame);
+    try {
+      const d = frame.contentDocument;
+      d.open(); d.write(html); d.close();
+      await new Promise(r => setTimeout(r, 700));           // let logo/signature load
+      d.querySelectorAll('.print-btn,.hint,.conf-tools').forEach(x => x.remove());
+      const uri = await window.html2pdf().set({
+        margin: [8, 8, 10, 8],
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2.5, useCORS: true, windowWidth: 794 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] },
+      }).from(d.body).outputPdf('datauristring');
+      return String(uri).split(',')[1] || '';
+    } finally { frame.remove(); }
+  }
+  async function driveUploadConfirmation(job, type, html, onStatus) {
     if (!appSettings.driveUploadUrl) return;
+    let pdfBase64 = '';
+    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type)); }
+    catch (_) {}   // without it the script falls back to its own (table) version
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
@@ -1189,7 +1228,8 @@
         filename: driveDocName(job) || (job.jobTitle || 'Job Confirmation'),
         jobDate: job.jobDate || '',
         code: job.jobId || job.jobIdNonTax || '',
-        html: html || '',
+        pdfBase64: pdfBase64,                       // the EXACT rendered form
+        html: MPConfirmation.renderDrive ? MPConfirmation.renderDrive(job, type) : '',  // fallback only
         sheet: confSheetRows(job, type),
       }),
     }).then(r => r.json())

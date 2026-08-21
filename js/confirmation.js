@@ -352,11 +352,81 @@ ${feeBlock}
 </body></html>`;
   }
 
+  // Conversion-friendly version for the DRIVE upload only. Google's HTML→Doc
+  // converter ignores @media rules and collapses grid/flex (the screen hint
+  // leaked into PDFs and the layout squashed) — plain bordered tables convert
+  // cleanly and read like the team's old Word-style JOB DETAILS form.
+  function buildDrive(job, type) {
+    const v = VARIANTS[type] || VARIANTS.tax;
+    const pay = calc(job, type);
+    const cash = pay.cash, num = pay.num;
+    const code = type === 'nontax' ? (job.jobIdNonTax || job.jobId || '') : (job.jobId || job.jobIdNonTax || '');
+    const issued = new Date().toISOString().slice(0, 10);
+    const multi = Array.isArray(job.modelFees) && job.modelFees.length > 1 ? job.modelFees : null;
+    const models = multi ? multi.map(mf => mf.model).filter(Boolean).join(', ')
+      : [job.model, job.freelance].filter(Boolean).join(', ');
+    const td = 'style="border:1px solid #444;padding:5px 8px;font-size:10.5pt"';
+    const lbl = `style="border:1px solid #444;padding:5px 8px;font-size:10.5pt;background:#f2f2f2;width:26%"`;
+    const sect = t => `<tr><td colspan="4" style="border:1px solid #444;padding:5px 8px;background:#d9d9d9;font-weight:bold;text-align:center;font-size:11pt">${esc(t)}</td></tr>`;
+    const r2 = (a, b) => `<tr><td ${lbl}><b>${esc(a)}</b></td><td colspan="3" ${td}>${esc(b == null ? '' : String(b)) || '-'}</td></tr>`;
+    const r4 = (a, b, c, d) => `<tr><td ${lbl}><b>${esc(a)}</b></td><td ${td}>${esc(b || '') || '-'}</td><td ${lbl}><b>${esc(c)}</b></td><td ${td}>${esc(d || '') || '-'}</td></tr>`;
+    const shootDates = (job.shootStart || '') + (job.shootEnd && job.shootEnd !== job.shootStart ? ' → ' + job.shootEnd : '');
+    const times = (job.timeStart || '') + (job.timeEnd ? ' – ' + job.timeEnd : '');
+    let feeRows = '';
+    if (multi) {
+      feeRows = multi.map(mf => `<tr><td ${lbl}><b>${esc(mf.model || '')}</b></td><td colspan="3" ${td}>${cash(num(mf.fee))}</td></tr>`).join('');
+      feeRows += r2('Total Fee' + (v.vat ? ' (Excl. 7% VAT)' : ''), cash(pay.fee));
+    } else {
+      feeRows = r2('Fee in THB' + (v.vat ? ' (Excluding 7% VAT)' : ''), cash(pay.fee));
+    }
+    return `<html><body style="font-family:Arial,sans-serif">
+<p style="text-align:center;margin:2px 0"><b style="font-size:13pt">${esc(v.company)}</b><br>
+<span style="font-size:9.5pt">${esc(v.address)}<br>${v.taxId ? 'Tax ID: ' + esc(v.taxId) + ' · ' : ''}Tel: ${esc(v.tel)}</span></p>
+<p style="text-align:center;margin:8px 0"><b style="font-size:14pt">CONFIRMATION</b><br>
+<span style="font-size:10pt">Date: ${issued} &nbsp; Job ID: <b>${esc(code) || '-'}</b> &nbsp; Booker: ${esc(job.booker || '-')}</span></p>
+<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%">
+${sect('CLIENT COMPANY DETAILS')}
+${r4('Company Name', job.companyName || job.client, 'Tax ID', job.clientTaxId)}
+${r2('Company Address', job.companyAddress)}
+${r4('Contact Person', job.contactPerson || job.clientName, 'Contact Number', job.contactNumber || job.phone)}
+${r2('Email', job.clientEmail || job.email)}
+${sect('JOB DETAILS')}
+${r2('Assignment Title', job.jobTitle)}
+${r4('Product', job.product, 'Role', job.role)}
+${r2('Model Name and Surname', models)}
+${r4('Media Usage', job.mediaUsage, 'Period of Usage', job.periodOfUsage)}
+${r4('Country/ies of Use', job.countryOfUse, 'Shooting Location', job.shootLocation)}
+${r4('Date of Shoot', shootDates, 'Time of Shoot', times)}
+${r4('Contracted Hours', job.contractHours ? job.contractHours + ' hours' : '', 'No. of Shoot', job.noOfShoot)}
+${sect('PAYMENT')}
+${feeRows}
+${r2('Overtime Fee', pay.otDisplay || '-')}
+${v.vat ? r4('Subtotal', cash(pay.subtotal), 'VAT 7%', cash(pay.vat)) : ''}
+${r2('TOTAL PAYMENT AMOUNT' + (v.vat ? ' (Incl. 7% VAT)' : ''), cash(pay.total))}
+${pay.whtOn ? r4('Less Withholding Tax 3%', '- ' + cash(pay.wht), 'NET AMOUNT TO TRANSFER', cash(pay.netPay)) : ''}
+${r4('Payment Term', job.paymentTerm, 'Payment Method', 'Cash / transfer / Cheque')}
+${r2('Cancellation Fee', v.cancellation)}
+${r2('Deposit Account', v.bank + ' — ' + v.accountName)}
+${job.remark ? r2('Remark', job.remark) : ''}
+</table>
+<p style="font-size:9pt;margin-top:10px"><b>Acknowledgement Agreement</b> — ${esc(ACK)}</p>
+<ol style="font-size:8.5pt;margin:4px 0 14px 18px">${TERMS.map(t => `<li>${esc(t)}</li>`).join('')}</ol>
+<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:26px;font-size:9.5pt;text-align:center">
+<tr><td style="width:33%">______________________<br>Morgan &amp; Preston Models Bangkok</td>
+<td style="width:33%">______________________<br>Model</td>
+<td style="width:33%">______________________<br>Client</td></tr>
+</table>
+<p style="text-align:center;font-size:8.5pt;color:#777">MP Models · mpmodelsbkk.com</p>
+</body></html>`;
+  }
+
   window.MPConfirmation = {
     defaultType,
     calc,
     // Render the confirmation HTML without opening a window (silent Drive save).
     render(job, type, opts) { return build(job, type || defaultType(job), opts || {}); },
+    // Table-based version for the Drive upload (converts cleanly to Doc/PDF).
+    renderDrive(job, type) { return buildDrive(job, type || defaultType(job)); },
     lastTitle() { return build.lastTitle; },
     types: [
       { key: 'tax', label: 'Tax Invoice' },
