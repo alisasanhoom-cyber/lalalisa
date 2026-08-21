@@ -658,29 +658,39 @@
       </div>
     </div>
 
-    <!-- MOTHER AGENCY (MAC) LEDGER — scouter + managers -->
+    <!-- MOTHER AGENCY (MAC) LEDGER + PLACEMENT SCHEDULE — scouter + managers -->
     <div class="wrap" id="view-mac" style="display:none">
-      <div class="controls">
-        <select id="mac-year"><option value="">All years</option></select>
-        <select id="mac-owner" class="manager-only hide-scouter"><option value="">All scouters</option></select>
-        <input type="search" id="mac-search" placeholder="Search model, agency, note…" style="min-width:190px">
-        <div class="right">
-          <button class="btn" id="mac-add">+ Add record</button>
-          <button class="link" id="mac-export">⬇ Export CSV</button>
-          <button class="link" id="mac-refresh">↻ Refresh</button>
+      <div class="controls" style="margin-bottom:10px">
+        <div class="seg">
+          <button class="seg-btn active" id="mac-seg-ledger">💰 MAC ledger</button>
+          <button class="seg-btn" id="mac-seg-sched">🧭 Placement schedule</button>
         </div>
       </div>
-      <!-- Wolf's scouting schedule — managers see everything; Wolf edits his own -->
-      <div class="card" id="mac-scout-sched" style="margin-bottom:14px;padding:14px 16px"></div>
-      <div class="stats" id="mac-stats"></div>
-      <div class="card">
-        <table>
-          <thead>
-            <tr><th>#</th><th>Period</th><th>Model</th><th>Agency</th><th class="num">Model amt</th><th class="num">Gross 10%</th><th class="num">Wolf 5%</th><th class="num">Expense</th><th>Status</th><th>Payment info</th><th></th></tr>
-          </thead>
-          <tbody id="mac-rows"></tbody>
-        </table>
-        <div class="empty" id="mac-empty" style="display:none">No records yet. Click “+ Add record”.</div>
+      <div id="mac-ledger-wrap">
+        <div class="controls">
+          <select id="mac-year"><option value="">All years</option></select>
+          <select id="mac-owner" class="manager-only hide-scouter"><option value="">All scouters</option></select>
+          <input type="search" id="mac-search" placeholder="Search model, agency, note…" style="min-width:190px">
+          <div class="right">
+            <button class="btn" id="mac-add">+ Add record</button>
+            <button class="link" id="mac-export">⬇ Export CSV</button>
+            <button class="link" id="mac-refresh">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="stats" id="mac-stats"></div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Period</th><th>Model</th><th>Agency</th><th class="num">Model amt</th><th class="num">Gross 10%</th><th class="num">Wolf 5%</th><th class="num">Expense</th><th>Status</th><th>Payment info</th><th></th></tr>
+            </thead>
+            <tbody id="mac-rows"></tbody>
+          </table>
+          <div class="empty" id="mac-empty" style="display:none">No records yet. Click “+ Add record”.</div>
+        </div>
+      </div>
+      <!-- Wolf's placement schedule — managers see everything; Wolf edits his own -->
+      <div id="mac-sched-wrap" style="display:none">
+        <div class="card" id="mac-scout-sched" style="padding:14px 16px"></div>
       </div>
     </div>
 

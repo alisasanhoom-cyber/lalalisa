@@ -3824,7 +3824,22 @@
       else scoutEntryDrawer(e);                          // managers edit any
     }));
   }
+  // Sub-tabs on the Mother Agency page: 1. MAC ledger  2. Placement schedule.
+  // Wolf lands on his planning board; managers land on the money.
+  let macSeg = null;   // resolved on first render
+  function applyMacSeg() {
+    if (macSeg === null) macSeg = role === 'scouter' ? 'sched' : 'ledger';
+    const lw = el('mac-ledger-wrap'), sw = el('mac-sched-wrap');
+    if (lw) lw.style.display = macSeg === 'ledger' ? 'block' : 'none';
+    if (sw) sw.style.display = macSeg === 'sched' ? 'block' : 'none';
+    const bl = el('mac-seg-ledger'), bs = el('mac-seg-sched');
+    if (bl) bl.classList.toggle('active', macSeg === 'ledger');
+    if (bs) bs.classList.toggle('active', macSeg === 'sched');
+  }
+  if (el('mac-seg-ledger')) el('mac-seg-ledger').addEventListener('click', () => { macSeg = 'ledger'; applyMacSeg(); });
+  if (el('mac-seg-sched')) el('mac-seg-sched').addEventListener('click', () => { macSeg = 'sched'; applyMacSeg(); renderMacScoutSched(); });
   function renderMac() {
+    applyMacSeg();
     renderMacScoutSched();
     const yearF = el('mac-year') ? el('mac-year').value : '';
     const ownerF = el('mac-owner') ? el('mac-owner').value : '';
