@@ -866,8 +866,12 @@
       <div id="d-code-warn" class="dup-warn" style="display:none"></div>
       <p style="margin:0 0 16px;font-size:11px;color:var(--grey)">Both codes are free to edit — retype to move a client from Tax (C) to Non-Tax (B), clear a code to free it, or type a freed code onto a new job to reuse it.</p>
       <div class="field two">
-        ${f('Booking Date', 'bookingDate', j?.bookingDate || '')}
-        ${f('Job Date', 'jobDate', j?.jobDate || '')}
+        ${(!j?.bookingDate || /^\d{4}-\d{2}-\d{2}$/.test(j.bookingDate))
+          ? f('Booking Date', 'bookingDate', j?.bookingDate || '', 'date')
+          : f('Booking Date — ⚠ text, pick from calendar', 'bookingDate', j.bookingDate)}
+        ${(!j?.jobDate || /^\d{4}-\d{2}-\d{2}$/.test(j.jobDate))
+          ? f('Job Date', 'jobDate', j?.jobDate || '', 'date')
+          : f('Job Date — ⚠ text, pick from calendar', 'jobDate', j.jobDate)}
       </div>
       <div class="field">
         <label>Shoot date(s) <span style="font-weight:400;color:var(--grey);font-size:11px">· click the shooting day(s) — they auto-appear on the Schedule so you never re-fill</span></label>
