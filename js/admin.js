@@ -127,7 +127,11 @@
       ...opts,
       headers: { 'Content-Type': 'application/json', 'x-admin-token': token, ...(opts.headers || {}) },
     });
-    if (res.status === 401) { sessionStorage.removeItem(STORE_KEY); showLogin(); throw new Error('unauthorized'); }
+    if (res.status === 401) {
+      sessionStorage.removeItem(STORE_KEY);
+      try { closeDrawer(); } catch (_) {}   // never leave a dead drawer over the login
+      showLogin(); throw new Error('unauthorized');
+    }
     const data = await res.json().catch(() => ({}));
     // A rejected write must NOT look like success — throw so callers' catch blocks
     // actually run (rollbacks, error messages) instead of silently "saving".
@@ -362,7 +366,10 @@
   //   Declined  → it drops off the board (declined is hidden there)
   async function setEntryStatus(id, status) {
     const patch = { status };
-    if (status === 'confirmed') patch.stage = 'shooting';   // move to the green Confirmed/Shooting box
+    // Confirmed promotes only BOOKINGS (jobs/options) to the Shooting column —
+    // a confirmed fitting/shortlist/casting keeps its own category (lock rule).
+    const ent = schedule.find(x => x.id === id);
+    if (status === 'confirmed' && ent && ['job', 'opt'].includes(schedCat(ent))) patch.stage = 'shooting';
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
     const e = schedule.find(x => x.id === id);
     if (e) { e.status = r.entry.status; e.stage = r.entry.stage; }
@@ -1545,6 +1552,15 @@
       } catch (e) { alert('Could not move: ' + (e.message || e)); }
     });
 
+    // Ploy: only materials fields actually persist (server whitelist) — grey out
+    // everything else so the form can't silently discard her typing.
+    if (role === 'designer') {
+      const keep = new Set(['d-materials', 'd-materialsNote', 'd-save']);
+      el('drawer-body').querySelectorAll('input, select, textarea, button').forEach(x => {
+        if (!keep.has(x.id)) x.disabled = true;
+      });
+    }
+
     openDrawer();
   }
 
@@ -1558,6 +1574,14 @@
     const existing = schedule.filter(e => e.jobRef === job.id);
     for (const e of existing) {
       if (!dates.includes(e.date)) {
+        // NEVER delete a booker's LEAD entry (casting/fitting/option/…) that
+        // merely got linked to this job — unlink it instead. Deleting it was
+        // silently erasing castings when a job was created from one.
+        if (e.casting || e.fitting || e.option || e.shortlist || e.priority) {
+          try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); } catch (_) {}
+          e.jobRef = '';
+          continue;
+        }
         try { await api('/api/schedule/' + e.id, { method: 'DELETE' }); } catch (_) {}
         schedule = schedule.filter(x => x.id !== e.id);
       }
@@ -1755,8 +1779,8 @@
         // Bring back the WHOLE hold, not just this one day.
         const members = e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup) : [e];
         for (const s of members) {
-          try { await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', stage: '' }) }); s.status = 'open'; s.stage = ''; }
-          catch (_) {}
+          try { await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', stage: '', keptOpen: true }) }); s.status = 'open'; s.stage = ''; s.keptOpen = true; }
+          catch (_) {}   // keptOpen: auto-decline must not instantly re-expire it
         }
         buildFilters(); renderSchedule();
       }));
@@ -1962,7 +1986,7 @@
     let patch;
     if (target === 'declined') patch = { status: 'declined' };
     else if (target === 'postponed') patch = { status: 'postponed' };
-    else { patch = { stage: target }; if (cur === 'declined' || cur === 'postponed') patch.status = 'open'; }
+    else { patch = { stage: target }; if (cur === 'declined' || cur === 'postponed') { patch.status = 'open'; patch.keptOpen = true; } }
     entries.forEach(e => {
       if (patch.status !== undefined) e.status = patch.status;
       if (patch.stage !== undefined) e.stage = patch.stage;
@@ -2768,7 +2792,7 @@
       const hold = brush === 'option' && days.length > 1;
       const hg = hold ? (crypto.randomUUID ? crypto.randomUUID() : 'h' + Date.now()) : '';
       for (const dt of days) {
-        const data = { ...base, date: dt, [field]: details || base.subject || '' };
+        const data = { ...base, date: dt, [field]: details || base.subject || ' ' };   // ' ' keeps the type tag alive
         if (forcedStage) data.stage = forcedStage;   // e.g. Go & See → its own board column
         else if (brush === 'shooting') data.stage = 'shooting';   // pin shooting to its board column
         if (plan) data.planGroup = plan;
@@ -3158,8 +3182,8 @@
         data.stage = activeType === 'priority' ? 'priority'                       // an admin block is never a shoot
           : data.status === 'confirmed' ? 'shooting'                              // confirmed booking → Confirmed/Shooting
           : (activeType ? TYPE2STAGE[activeType] : '');
-      } else if (becameConfirmed && (activeType || prevPrimary) && activeType !== 'priority' && e.stage !== 'goandsee') {
-        data.stage = 'shooting';                                                  // newly confirmed booking → Shooting column
+      } else if (becameConfirmed && ['job', 'option'].includes(activeType || prevPrimary)) {
+        data.stage = 'shooting';                                                  // newly confirmed BOOKING → Shooting column
       } else {
         data.stage = e.stage || '';                                               // LOCKED — category stays put
       }

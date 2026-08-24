@@ -102,6 +102,21 @@ async function login(email, password) {
     check('scouter edits his own', (await api('/api/schedule/' + sid, { method: 'PATCH', body: { note: 'mine' } }, scouter)).status === 200);
     check('scouter blocked from bulk-tag', (await api('/api/schedule/bulk', { method: 'PATCH', body: { ids: [bid], booker: 'X' } }, scouter)).status === 403);
 
+    console.log('— team-flow regressions —');
+    const dead = await api('/api/jobs', { method: 'POST', body: { jobTitle: 'x' } }, 'dead-token-123');
+    check('dead admin token on job create → 401 (not website-lead 400)', dead.status === 401, dead.status);
+    const c1r = await api('/api/next-code', {}, booker);
+    const c2r = await api('/api/next-code', {}, booker);
+    check('two bookers never get the same next code', c1r.body && c2r.body && c1r.body.tax !== c2r.body.tax, [c1r.body && c1r.body.tax, c2r.body && c2r.body.tax]);
+    const past = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+    const po = await api('/api/schedule', { method: 'POST', body: { date: past, models: 'Old Option', option: 'Client Y' } }, booker);
+    await api('/api/schedule', {}, booker);   // GET triggers auto-decline
+    let poNow = ((await api('/api/schedule', {}, booker)).body.schedule || []).find(e => e.id === po.body.entry.id);
+    check('past option auto-declines', poNow && poNow.status === 'declined');
+    await api('/api/schedule/' + po.body.entry.id, { method: 'PATCH', body: { status: 'open', keptOpen: true } }, booker);
+    poNow = ((await api('/api/schedule', {}, booker)).body.schedule || []).find(e => e.id === po.body.entry.id);
+    check('brought-back option STAYS open (keptOpen)', poNow && poNow.status === 'open', poNow && poNow.status);
+
     console.log('— settings —');
     await api('/api/settings', { method: 'PUT', body: { driveUploadUrl: 'https://example.com/exec', driveUploadKey: 'k' } }, master);
     const st = await api('/api/settings', {}, booker);

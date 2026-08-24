@@ -359,6 +359,8 @@ function nextCodes() {
   const jobs = load(JOBS_FILE);
   return { tax: nextCode('C', jobs), nonTax: nextCode('B', jobs) };
 }
+// Short-lived reservations handed out by /api/next-code (code → expiry ms).
+const codeHolds = Object.create(null);
 
 
 /* ===================================================================
@@ -428,6 +430,7 @@ function updateScheduleEntry(id, changes) {
   if (changes.internalNote !== undefined) entry.internalNote = text(changes.internalNote, 2000);
   if (changes.jobCreated !== undefined) entry.jobCreated = !!changes.jobCreated;
   if (changes.notified !== undefined) entry.notified = changes.notified ? String(changes.notified).slice(0, 30) : '';
+  if (changes.keptOpen !== undefined)  entry.keptOpen = !!changes.keptOpen;
   if (changes.endDate !== undefined)   entry.endDate = date(changes.endDate) || '';
   if (changes.place !== undefined)     entry.place = text(changes.place, 200);
   if (changes.planState !== undefined) entry.planState = ['planned', 'current', 'done'].includes(changes.planState) ? changes.planState : '';
@@ -662,6 +665,10 @@ async function handleApi(req, res) {
   // A website request is a LEAD, so it lands in the Schedule as an option —
   // not as a confirmed job in the Tracker.
   if (resource === 'jobs' && method === 'POST' && !getUser(req)) {
+    // A DEAD admin token (deploy wiped the session) must get a clean 401 so the
+    // app re-shows login — not fall into this public website-lead branch and
+    // confuse the booker with "fill in your name and pick a model".
+    if (req.headers['x-admin-token']) return reply(res, 401, { error: 'Session expired — please log in again.' });
     if (!body.clientName || !body.email || !body.modelSlug) {
       return reply(res, 400, { error: 'Please fill in your name, email and pick a model.' });
     }
@@ -846,7 +853,21 @@ async function handleApi(req, res) {
 
   // --- NEXT RUNNING CODE (team) ---------------------------------
   if (resource === 'next-code' && method === 'GET') {
-    return reply(res, 200, nextCodes());
+    // Reserve each issued code for 10 minutes so two bookers generating at
+    // the same moment can never receive the SAME next code (duplicate race).
+    const now = Date.now();
+    for (const k of Object.keys(codeHolds)) if (codeHolds[k] < now) delete codeHolds[k];
+    const codes = nextCodes();
+    const bump = c => {
+      const m = String(c || '').match(/^([CB])(\d+)$/i);
+      if (!m) return c;
+      let n = +m[2];
+      while (codeHolds[m[1].toUpperCase() + n]) n++;
+      const out = m[1].toUpperCase() + n;
+      codeHolds[out] = now + 10 * 60 * 1000;
+      return out;
+    };
+    return reply(res, 200, { tax: bump(codes.tax), nonTax: bump(codes.nonTax) });
   }
 
   // --- OTHER INCOME / COMMISSION (Director + Admin ONLY) --------
@@ -1172,7 +1193,8 @@ function autoDeclinePastOptions() {
   for (const e of list) {
     if (e.status === 'open'
         && /^\d{4}-\d{2}-\d{2}$/.test(e.date || '') && e.date < t
-        && e.option && !e.casting && !e.job) {
+        && e.option && !e.casting && !e.job
+        && !e.keptOpen) {   // a booker deliberately brought it back — leave it alone
       e.status = 'declined';
       e.autoDeclined = t;          // marks it as system-expired (vs a real client decline)
       changed++;
