@@ -735,6 +735,26 @@
   ['j-month', 'j-booker', 'j-invtype', 'j-search'].forEach(idc =>
     el(idc).addEventListener('input', renderJobs));
   el('j-refresh').addEventListener('click', loadAll);
+  // Ploy's master tick: sets/clears "collected" on every job the current
+  // filter shows (asks first — this touches many records at once).
+  const collectAll = el('collect-all');
+  if (collectAll) collectAll.addEventListener('change', async () => {
+    const want = collectAll.checked;
+    const list = filteredJobs().filter(j => !!j.collected !== want);
+    if (!list.length) return;
+    if (!confirm((want ? 'Tick' : 'Untick') + ' ALL ' + list.length + ' shown jobs as collected?')) {
+      collectAll.checked = !want; return;
+    }
+    collectAll.disabled = true;
+    for (let i = 0; i < list.length; i += 8) {
+      await Promise.all(list.slice(i, i + 8).map(j =>
+        api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify({ collected: want }) })
+          .then(() => { j.collected = want; }).catch(() => {})));
+    }
+    collectAll.disabled = false;
+    renderJobs();
+    toast((want ? 'Ticked ' : 'Unticked ') + list.length + ' jobs as collected');
+  });
 
   /* ---- Excel export (Aim: billing / ส่งเบิก needs the tracker as a file) ---- */
   // CSV with a UTF-8 BOM → opens directly in Excel with Thai text intact.

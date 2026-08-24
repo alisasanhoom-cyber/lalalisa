@@ -163,7 +163,10 @@
     .cd-jobs td{padding:6px 8px;border-bottom:1px solid #f3f3f3}
     .conf-icon{cursor:pointer;font-size:12px;opacity:.32;filter:grayscale(1);margin-right:2px;user-select:none}
     .conf-icon.done{opacity:1;filter:none}
-    .col-collected{width:34px;text-align:center}
+    /* The collected ✓ column belongs to Ploy alone (Lisa 2026-08-24) —
+       managers/bookers kept mistaking her ticks for row selectors. */
+    .col-collected{display:none;width:40px;text-align:center}
+    body.role-designer .col-collected{display:table-cell}
     .col-collected input{cursor:pointer;width:16px;height:16px}
     tr.row.collected{background:#f2f8f4}
     tr.row.collected .title-cell{color:var(--grey)}
@@ -527,7 +530,7 @@
         <table>
           <thead>
             <tr>
-              <th class="col-collected" style="width:52px" title="Ploy ticks this when the job's photos/videos are collected — it is NOT a row selector">📸✓</th>
+              <th class="col-collected" title="Collected (photos/videos) — the box below ticks or unticks ALL shown jobs at once">📸 <input type="checkbox" id="collect-all" title="Tick / untick ALL shown jobs as collected"></th>
               <th>Job Date</th><th>Job ID<br><span class="th-sub">Tax · C</span></th><th>Job ID<br><span class="th-sub">Non-Tax · B</span></th><th>Title</th><th>Model / Freelance</th>
               <th>Client</th><th>Booker</th><th class="num money">Budget</th>
             </tr>
