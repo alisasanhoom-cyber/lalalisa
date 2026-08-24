@@ -1124,10 +1124,16 @@
   // Enrich a job for the confirmation (per-model fee table, legacy code-grouping)
   // and resolve the form type — shared by the 👁 preview and the silent Drive save.
   function confirmationDocData(data, type) {
-    // The last form type used (incl. International) is remembered on the job so
-    // silent Drive re-uploads can't downgrade an intl confirmation to Tax form.
-    if (!type && ['tax', 'nontax', 'intl'].includes(data.confType)) type = data.confType;
-    if (!type) type = (data.jobId && !/b\s?\d/i.test(data.jobId)) ? 'tax' : (data.jobIdNonTax || /b\s?\d/i.test(data.jobId || '') ? 'nontax' : 'tax');
+    // The last form type used (incl. International) is remembered on the job —
+    // but only while it still MATCHES the job's code family. A job moved C→B
+    // must flip to Non-Tax even if 'tax' was remembered (Tawa: B1110 kept +VAT).
+    const hasC = !!(data.jobId && !/b\s?\d/i.test(data.jobId));
+    const hasB = !!(data.jobIdNonTax || /b\s?\d/i.test(data.jobId || ''));
+    let saved = ['tax', 'nontax', 'intl'].includes(data.confType) ? data.confType : '';
+    if (saved === 'tax' && !hasC) saved = '';
+    if (saved === 'nontax' && !hasB && hasC) saved = '';
+    if (!type && saved) type = saved;
+    if (!type) type = hasC ? 'tax' : (hasB ? 'nontax' : 'tax');
     // ONE job holding several models with their own rate/OT → per-model fee table.
     if (Array.isArray(data.lines) && data.lines.length > 1) {
       data.modelFees = data.lines.map(l => ({
@@ -1311,11 +1317,17 @@
           // opens LINE's share screen with the message ready — pick Aim, send.
           if (ok && (resp.sheetUrl || resp.pdfUrl)) {
             const line = mk('📤 LINE');
-            line.title = 'Send the confirmation link to Admin via LINE';
+            line.title = 'Copies the message + opens LINE. On a computer where LINE doesn\'t open, just paste (Cmd+V) into the chat — it\'s already copied.';
             line.onclick = () => {
               const msg = '📄 ' + (driveDocName(job) || doc.title) + '\n'
                 + (resp.sheetUrl ? resp.sheetUrl : '')
                 + (resp.pdfUrl ? '\nPDF: ' + resp.pdfUrl : '');
+              // Desktop browsers often can't launch the LINE app — copy first,
+              // so pasting into LINE desktop always works (Tawa's case).
+              try { (doc.win.navigator.clipboard || navigator.clipboard).writeText(msg); } catch (_) {}
+              const old = line.textContent;
+              line.textContent = '📋 copied — paste in LINE';
+              setTimeout(() => { line.textContent = old; }, 4000);
               doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
             };
           }
