@@ -46,10 +46,24 @@
     // Overtime display: incurred amount → condition text → hourly rate (Ness:
     // clients should always see the OT price per hour, like the old form).
     const otRate = num(job.overtimeRate);
-    // Display: incurred amount → condition text → hourly rate. A stale NUMBER on
-    // a lines/multi job is hidden (its OT already sits inside the model fees).
+    // Display: incurred amount WITH its hourly basis (Aim: the client must see
+    // the rate even when a fee is charged, e.g. "฿14,000 — 4h × ฿3,500/Hour")
+    // → else the booker's condition text → else the plain hourly rate. A stale
+    // NUMBER on a lines/multi job is hidden (its OT sits inside the fees).
     const otText = otNumeric && !otIsNumber ? '' : String(job.overtimeFee || '').trim();
-    const otDisplay = otIsNumber ? cash(ot) : (otText || (otRate ? cash(otRate) + '/Hour' : ''));
+    let otDisplay;
+    if (otIsNumber) {
+      let basis = '';
+      if (otRate > 0) {
+        const h = Math.round((ot / otRate) * 2) / 2;   // hours in half-hour steps
+        basis = Math.abs(ot - h * otRate) < 1 && h > 0
+          ? ' — ' + h + 'h × ' + cash(otRate) + '/Hour'
+          : ' (' + cash(otRate) + '/Hour)';
+      }
+      otDisplay = cash(ot) + basis;
+    } else {
+      otDisplay = otText || (otRate ? cash(otRate) + '/Hour' : '');
+    }
     return { v, num, fee, otIsNumber, ot, subtotal, vat, total, whtOn, wht, netPay, sym, cash, otDisplay };
   }
 
