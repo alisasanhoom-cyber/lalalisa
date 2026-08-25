@@ -81,7 +81,7 @@
     nontax: {
       title: 'Non-Tax Form',
       company: 'Morgan & Preston Co., Ltd. (Head office)',
-      address: '20/14 PromSri Alley, Khlong Tan Nuea, Watthana, Bangkok 10110',
+      address: '20/8 Leo Classic Place, PromSri Alley, Khlong Tan Nuea, Watthana, Bangkok 10110',
       taxId: '', tel: '+662-130 0357',
       vat: false, contactNumber: true,
       bank: 'SCB — Account number: 406-6-35187-5',
