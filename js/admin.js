@@ -1912,8 +1912,12 @@
       const list = groups[k];
       if (k === 'priority' && !list.length) return '';   // Priority column only appears when there's an admin task that day
       const inner = list.map(bcardHtml).join('') || '<div class="board-empty">—</div>';
+      // "+" on each column: bookers add straight into the category they want —
+      // type AND day are pre-filled, so no type-button step to get wrong.
+      const addable = !['waiting_payment', 'postponed', 'declined'].includes(k);
       return `<div class="board-col" data-stage="${k}">
-        <div class="board-col-head"><span class="dot" style="background:${color}"></span>${esc(label)}<span class="cnt">${list.length}</span></div>
+        <div class="board-col-head"><span class="dot" style="background:${color}"></span>${esc(label)}<span class="cnt">${list.length}</span>${addable
+          ? `<button type="button" class="col-add" data-stage="${k}" title="Add ${esc(label)} on this day" style="float:right;background:none;border:1px solid #c9c5ba;border-radius:6px;width:20px;height:20px;line-height:1;cursor:pointer;color:#5f6b66;font-weight:700">+</button>` : ''}</div>
         <div class="board-cards">${inner}</div>
       </div>`;
     }).join('');
@@ -1930,6 +1934,11 @@
     el('s-board').innerHTML = nav +
       `<p class="board-hint">Drag a booking between columns as its status changes — drop it in <b>Declined</b> or <b>Postponed</b> to set it aside (nothing is deleted), or drag it back out to bring it back. A multi-day hold moves as one. Tap a card to open it.</p>
        <div class="board">${cols}</div>`;
+    // Column "+" → add drawer with this column's type + this board day pre-set.
+    host.querySelectorAll('.col-add').forEach(b => b.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openAddSchedule(b.dataset.stage, dayDate);
+    }));
     const go = days => { dayDate = addDays(dayDate, days); renderBoard(); };
     el('b-prev').addEventListener('click', () => go(-1));
     el('b-next').addEventListener('click', () => go(1));
@@ -3280,7 +3289,7 @@
     renderSchedule();
   }
 
-  function openAddSchedule() {
+  function openAddSchedule(prefStage, prefDate) {
     el('d-title').textContent = 'Add schedule entry';
     el('drawer-body').innerHTML = `
       ${subjectScheduleField(null)}
@@ -3300,6 +3309,12 @@
     stageDays = {}; STAGE_BRUSHES.forEach(([b]) => stageDays[b] = new Set());
     activeBrush = 'shooting';
     stagePickerMonth = (calMonth || todayLocal().slice(0, 7));
+    // Board column "+" pre-fill: right brush selected + that board day picked.
+    // (Guard: the plain "+ Add entry" button passes a click EVENT here.)
+    if (typeof prefStage === 'string' && STAGE_BRUSHES.some(([b]) => b === prefStage)) {
+      activeBrush = prefStage;
+      if (isISODate(prefDate)) { stageDays[prefStage].add(prefDate); stagePickerMonth = prefDate.slice(0, 7); }
+    }
     renderStagePicker();
     const getDates = () => allStageDates();
     setupConflictCheck(getDates, null);
