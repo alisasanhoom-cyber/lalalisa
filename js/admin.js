@@ -1935,7 +1935,7 @@
       `<p class="board-hint">Drag a booking between columns as its status changes — drop it in <b>Declined</b> or <b>Postponed</b> to set it aside (nothing is deleted), or drag it back out to bring it back. A multi-day hold moves as one. Tap a card to open it.</p>
        <div class="board">${cols}</div>`;
     // Column "+" → add drawer with this column's type + this board day pre-set.
-    host.querySelectorAll('.col-add').forEach(b => b.addEventListener('click', ev => {
+    el('s-board').querySelectorAll('.col-add').forEach(b => b.addEventListener('click', ev => {
       ev.stopPropagation();
       openAddSchedule(b.dataset.stage, dayDate);
     }));
