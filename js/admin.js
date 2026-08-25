@@ -3391,6 +3391,8 @@
   function closeDrawer() { el('drawer').classList.remove('open'); el('drawer-bg').classList.remove('open'); }
   el('d-close').addEventListener('click', closeDrawer);
   el('drawer-bg').addEventListener('click', closeDrawer);
+  // Esc closes the drawer too — it's the first thing people try (Aim).
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
   document.querySelectorAll('.tab').forEach(tab =>
     tab.addEventListener('click', () => {
