@@ -606,7 +606,7 @@
         <td>${esc(j.client) || '—'}${j.leadSource ? ` <span class="src-badge" title="Lead source">${SOURCE_ICON[j.leadSource] || ''} ${esc(j.leadSource)}</span>` : ''}</td>
         <td>${esc(j.booker) || '—'}</td>
         <td class="num money">${budgetCell(j)}</td>
-        <td class="conf-cell"><span class="prev-icon" data-id="${j.id}" title="Open this job's confirmation form">👁</span><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span>${j.signedDocUrl ? `<a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''}</td>
+        <td class="conf-cell"><span class="prev-icon" data-id="${j.id}" title="Open this job's confirmation form">🔍</span><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span>${j.signedDocUrl ? `<a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''}</td>
       </tr>`;
     };
     // When viewing ALL months, group by month with a header (like the old monthly
