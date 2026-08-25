@@ -161,8 +161,17 @@
     .cd-jobs{width:100%;border-collapse:collapse;font-size:12.5px}
     .cd-jobs th{text-align:left;color:#8a8a8a;font-size:10.5px;text-transform:uppercase;padding:5px 8px;border-bottom:1px solid var(--line)}
     .cd-jobs td{padding:6px 8px;border-bottom:1px solid #f3f3f3}
-    .conf-icon{cursor:pointer;font-size:12px;opacity:.32;filter:grayscale(1);margin-right:2px;user-select:none}
-    .conf-icon.done{opacity:1;filter:none}
+    /* Confirmation column — real buttons, not tiny inline icons (Aim couldn't
+       find the 👁 preview when it sat squeezed in front of the title). */
+    .conf-cell{white-space:nowrap}
+    .conf-cell .conf-icon,.conf-cell .prev-icon,.conf-cell .signed-link{
+      display:inline-flex;align-items:center;cursor:pointer;font-size:14px;
+      padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;
+      margin:0 4px 0 0;user-select:none;text-decoration:none;vertical-align:middle;line-height:1}
+    .conf-cell .prev-icon:hover,.conf-cell .signed-link:hover{border-color:var(--teal)}
+    .conf-cell .conf-icon{opacity:.5;filter:grayscale(1)}
+    .conf-cell .conf-icon:hover{opacity:.85}
+    .conf-cell .conf-icon.done{opacity:1;filter:none;border-color:#bfe3d9;background:#f0faf7}
     /* The collected ✓ column belongs to Ploy alone (Lisa 2026-08-24) —
        managers/bookers kept mistaking her ticks for row selectors. */
     .col-collected{display:none;width:40px;text-align:center}
@@ -414,8 +423,6 @@
     .m-bulkbar select{padding:7px 10px;border:none;border-radius:8px;font-size:13px;background:#fff;color:#1a1a1a}
     .m-bulkbar .link{color:#9fd6cd}
     .m-sel{width:16px;height:16px;accent-color:var(--teal);cursor:pointer;flex:0 0 auto}
-    .prev-icon{cursor:pointer;font-size:12px;margin-left:4px;opacity:.55}
-    .prev-icon:hover{opacity:1}
     .signed-link{text-decoration:none;font-size:13px;cursor:pointer}
     .signed-link:hover{filter:brightness(1.2)}
     .brush-move-hint{background:#fdf3e7;border:1px solid #f0dcb0;color:#8a5a12;border-radius:8px;padding:8px 12px;font-size:12.5px;margin:8px 0}
@@ -531,7 +538,7 @@
           <thead>
             <tr>
               <th class="col-collected" title="Collected (photos/videos) — the box below ticks or unticks ALL shown jobs at once">📸 <input type="checkbox" id="collect-all" title="Tick / untick ALL shown jobs as collected"></th>
-              <th>Job Date</th><th>Job ID<br><span class="th-sub">Tax · C</span></th><th>Job ID<br><span class="th-sub">Non-Tax · B</span></th><th>Title</th><th>Model / Freelance</th>
+              <th>Job Date</th><th>Job ID<br><span class="th-sub">Tax · C</span></th><th>Job ID<br><span class="th-sub">Non-Tax · B</span></th><th title="👁 open the form · 📄 tick when the confirmation is made/sent">Confirm</th><th>Title</th><th>Model / Freelance</th>
               <th>Client</th><th>Booker</th><th class="num money">Budget</th>
             </tr>
           </thead>

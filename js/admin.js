@@ -601,7 +601,8 @@
         <td>${esc(j.jobDate) || '—'}</td>
         <td class="code-c">${esc(taxCode) || '<span class="code-dash">—</span>'}</td>
         <td class="code-b">${esc(nonTaxCode) || '<span class="code-dash">—</span>'}</td>
-        <td class="title-cell"><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span><span class="prev-icon" data-id="${j.id}" title="Preview this job's confirmation form">👁</span>${j.signedDocUrl ? ` <a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''} ${esc(j.jobTitle) || '—'}${webBadge}${usageBadge}${matBadge(j.materials)}${j.internalNote ? ' <span class="note-dot" title="Has an internal note">📝</span>' : ''}</td>
+        <td class="conf-cell"><span class="prev-icon" data-id="${j.id}" title="Open this job's confirmation form">👁</span><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span>${j.signedDocUrl ? `<a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''}</td>
+        <td class="title-cell">${esc(j.jobTitle) || '—'}${webBadge}${usageBadge}${matBadge(j.materials)}${j.internalNote ? ' <span class="note-dot" title="Has an internal note">📝</span>' : ''}</td>
         <td>${who}</td>
         <td>${esc(j.client) || '—'}${j.leadSource ? ` <span class="src-badge" title="Lead source">${SOURCE_ICON[j.leadSource] || ''} ${esc(j.leadSource)}</span>` : ''}</td>
         <td>${esc(j.booker) || '—'}</td>
@@ -616,7 +617,7 @@
       const months = Object.keys(byMonth).sort().reverse();   // newest month first
       el('j-rows').innerHTML = months.map(m => {
         const rows = byMonth[m].map(jobRowHtml).join('');
-        return `<tr class="month-head"><td colspan="9">📅 ${m === '(no month)' ? 'No month' : monthLabel(m)} · ${byMonth[m].length} jobs</td></tr>` + rows;
+        return `<tr class="month-head"><td colspan="10">📅 ${m === '(no month)' ? 'No month' : monthLabel(m)} · ${byMonth[m].length} jobs</td></tr>` + rows;
       }).join('');
     } else {
       // Single-month view: show the jobs PLUS marker rows for codes that fall inside
@@ -704,11 +705,11 @@
             if (runHome) {
               // These codes belong to another month's job — informational only, not free.
               out.push({ sort: (prefix === 'B' ? 0 : 100000) + runStart + 0.5, marker: true,
-                html: `<tr class="gap-row"><td class="col-collected"></td><td></td><td colspan="7">${prefix === 'C' ? '↳ ' : ''}${range} · 📅 ${monthLabel(runHome)}</td></tr>` });
+                html: `<tr class="gap-row"><td class="col-collected"></td><td></td><td colspan="8">${prefix === 'C' ? '↳ ' : ''}${range} · 📅 ${monthLabel(runHome)}</td></tr>` });
             } else {
               // Genuinely free — click to start a new job pre-filled with the first free code.
               out.push({ sort: (prefix === 'B' ? 0 : 100000) + runStart + 0.5, marker: true,
-                html: `<tr class="gap-row gap-free" data-newcode="${prefix + runStart}" title="Click to create a job with code ${prefix + runStart}"><td class="col-collected"></td><td></td><td colspan="7">${prefix === 'C' ? '↳ ' : ''}${range} · ⚪ free — <b>click to create</b> ${prefix + runStart}</td></tr>` });
+                html: `<tr class="gap-row gap-free" data-newcode="${prefix + runStart}" title="Click to create a job with code ${prefix + runStart}"><td class="col-collected"></td><td></td><td colspan="8">${prefix === 'C' ? '↳ ' : ''}${range} · ⚪ free — <b>click to create</b> ${prefix + runStart}</td></tr>` });
             }
             runStart = null;
           };
