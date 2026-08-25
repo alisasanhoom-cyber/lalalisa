@@ -1338,7 +1338,10 @@
             line.onclick = () => {
               const msg = '📄 ' + (driveDocName(job) || doc.title) + '\n'
                 + (resp.sheetUrl ? resp.sheetUrl : '')
-                + (resp.pdfUrl ? '\nPDF: ' + resp.pdfUrl : '');
+                + (resp.pdfUrl ? '\nPDF: ' + resp.pdfUrl : '')
+                // Month-folder link (script v9+) — Aim lands in e.g. 2026/8.AUGUST
+                // with every file of the job, instead of one lone file (Lisa).
+                + (resp.folderUrl ? '\n📁 ' + (resp.folderName || 'Folder') + ': ' + resp.folderUrl : '');
               // Desktop browsers can't open LINE's share screen from a web link —
               // line.me/R/share just redirects to LINE's homepage (Tawa's + Lisa's
               // case). So: copy the message, and on computers open the LINE APP
