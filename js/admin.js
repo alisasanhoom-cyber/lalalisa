@@ -1353,14 +1353,11 @@
               setTimeout(() => { line.textContent = old; }, 7000);
               if (/Android|iPhone|iPad|Mobile/i.test(doc.win.navigator.userAgent)) {
                 doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
-              } else {
-                try {
-                  const f = doc.win.document.createElement('iframe');
-                  f.style.display = 'none'; f.src = 'line://';   // focuses the installed LINE app; silently does nothing if not installed
-                  doc.win.document.body.appendChild(f);
-                  doc.win.setTimeout(() => { try { f.remove(); } catch (_) {} }, 3000);
-                } catch (_) {}
               }
+              // Desktop: clipboard only. The line:// app-focus trick made LINE on
+              // Windows open a share screen containing the literal text "line://"
+              // (Tawa sent that to Lisa) — copy + paste-yourself is the only flow
+              // that behaves the same on every machine.
             };
           }
         }, doc.win);
