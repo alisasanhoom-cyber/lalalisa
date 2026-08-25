@@ -1339,13 +1339,25 @@
               const msg = '📄 ' + (driveDocName(job) || doc.title) + '\n'
                 + (resp.sheetUrl ? resp.sheetUrl : '')
                 + (resp.pdfUrl ? '\nPDF: ' + resp.pdfUrl : '');
-              // Desktop browsers often can't launch the LINE app — copy first,
-              // so pasting into LINE desktop always works (Tawa's case).
+              // Desktop browsers can't open LINE's share screen from a web link —
+              // line.me/R/share just redirects to LINE's homepage (Tawa's + Lisa's
+              // case). So: copy the message, and on computers open the LINE APP
+              // itself (line:// scheme) instead of the useless homepage; phones
+              // still get the real share picker.
               try { (doc.win.navigator.clipboard || navigator.clipboard).writeText(msg); } catch (_) {}
               const old = line.textContent;
               line.textContent = '📋 copied — paste in LINE';
-              setTimeout(() => { line.textContent = old; }, 4000);
-              doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
+              setTimeout(() => { line.textContent = old; }, 7000);
+              if (/Android|iPhone|iPad|Mobile/i.test(doc.win.navigator.userAgent)) {
+                doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
+              } else {
+                try {
+                  const f = doc.win.document.createElement('iframe');
+                  f.style.display = 'none'; f.src = 'line://';   // focuses the installed LINE app; silently does nothing if not installed
+                  doc.win.document.body.appendChild(f);
+                  doc.win.setTimeout(() => { try { f.remove(); } catch (_) {} }, 3000);
+                } catch (_) {}
+              }
             };
           }
         }, doc.win);
