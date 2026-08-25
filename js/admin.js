@@ -1222,29 +1222,35 @@
   // Google's HTML→Doc converter mangled the form (screen hints leaked into the
   // PDF, the layout collapsed — Lisa: must be the exact app form). html2pdf
   // captures the REAL rendered form in a hidden iframe instead.
-  let h2pLoad = null;
-  function ensureHtml2pdf() {
-    if (window.html2pdf) return Promise.resolve();
-    if (!h2pLoad) h2pLoad = new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'js/vendor/html2pdf.bundle.min.js';
+  // hostWin: render in THAT window (the confirmation pop-up) when given. Rendering
+  // in the main tab froze it for Aim — she switches to the pop-up, Chrome pauses
+  // the backgrounded render, and it resumes as a several-second freeze the moment
+  // she comes back. The pop-up is foreground while she reads the form, so the
+  // render finishes there without ever blocking the app tab.
+  function ensureHtml2pdf(hostWin) {
+    const w = hostWin || window;
+    if (w.html2pdf) return Promise.resolve();
+    if (!w.__h2pLoad) w.__h2pLoad = new Promise((res, rej) => {
+      const s = w.document.createElement('script');
+      s.src = location.origin + '/js/vendor/html2pdf.bundle.min.js';   // pop-up is about:blank — relative URLs don't resolve there
       s.onload = res;
-      s.onerror = () => { h2pLoad = null; rej(new Error('html2pdf load failed')); };
-      document.head.appendChild(s);
+      s.onerror = () => { w.__h2pLoad = null; rej(new Error('html2pdf load failed')); };
+      w.document.head.appendChild(s);
     });
-    return h2pLoad;
+    return w.__h2pLoad;
   }
-  async function confPdfBase64(html) {
-    await ensureHtml2pdf();
-    const frame = document.createElement('iframe');
+  async function confPdfBase64(html, hostWin) {
+    const w = hostWin && !hostWin.closed ? hostWin : window;
+    await ensureHtml2pdf(w);
+    const frame = w.document.createElement('iframe');
     frame.style.cssText = 'position:fixed;left:-11000px;top:0;width:794px;height:1200px;border:0';
-    document.body.appendChild(frame);
+    w.document.body.appendChild(frame);
     try {
       const d = frame.contentDocument;
       d.open(); d.write(html); d.close();
-      await new Promise(r => setTimeout(r, 700));           // let logo/signature load
+      await new Promise(r => w.setTimeout(r, 700));         // let logo/signature load
       d.querySelectorAll('.print-btn,.hint,.conf-tools').forEach(x => x.remove());
-      const uri = await window.html2pdf().set({
+      const uri = await w.html2pdf().set({
         margin: [8, 8, 10, 8],
         image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { scale: 2.5, useCORS: true, windowWidth: 794 },
@@ -1252,12 +1258,12 @@
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(d.body).outputPdf('datauristring');
       return String(uri).split(',')[1] || '';
-    } finally { frame.remove(); }
+    } finally { try { frame.remove(); } catch (_) {} }      // host pop-up may already be closed
   }
-  async function driveUploadConfirmation(job, type, html, onStatus) {
+  async function driveUploadConfirmation(job, type, html, onStatus, hostWin) {
     if (!appSettings.driveUploadUrl) return;
     let pdfBase64 = '';
-    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type)); }
+    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type), hostWin); }
     catch (_) {}   // without it the script falls back to its own (table) version
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
@@ -1322,7 +1328,7 @@
       };
       if (appSettings.driveUploadUrl) {
         const st = mk('☁ saving to Drive…'); st.disabled = true;
-        driveUploadConfirmation(job, type, doc.html, (ok, resp) => {
+        driveUploadConfirmation(job, type, doc.html, (ok, resp) => {   // renders in the pop-up (doc.win) — never blocks the app tab
           st.textContent = ok ? '☁ in Drive ✓' : '☁ Drive failed';
           // Once the Drive copy exists, one tap sends Admin the link in LINE:
           // opens LINE's share screen with the message ready — pick Aim, send.
@@ -1342,7 +1348,7 @@
               doc.win.open('https://line.me/R/share?text=' + encodeURIComponent(msg), '_blank');
             };
           }
-        });
+        }, doc.win);
       }
       const style = d.createElement('style');
       style.textContent = '@media print{.conf-tools{display:none!important}}';
