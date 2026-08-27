@@ -101,6 +101,7 @@
       sessionStorage.setItem('mp_admin_bookername', data.bookerName || '');
       sessionStorage.setItem('mp_admin_email', (el('email') ? el('email').value : '').trim().toLowerCase());
       start();
+      try { window.mpEnablePush && window.mpEnablePush(); } catch (_) {}   // ask on the login tap (iPhone rule)
     } else {
       el('login-err').textContent = data.error || 'Incorrect email or password.';
     }
@@ -120,7 +121,11 @@
     token = ''; role = ''; showLogin();
   });
   function showLogin() { el('app').style.display = 'none'; el('login').style.display = 'flex'; }
-  function showApp()   { el('login').style.display = 'none'; el('app').style.display = 'block'; applyRole(); }
+  function showApp()   {
+    el('login').style.display = 'none'; el('app').style.display = 'block'; applyRole();
+    // Renew the push subscription quietly when permission was already given.
+    try { if (window.Notification && Notification.permission === 'granted') setTimeout(() => window.mpEnablePush && window.mpEnablePush(), 2000); } catch (_) {}
+  }
 
   async function api(path, opts = {}) {
     const res = await fetch(path, {
@@ -3403,6 +3408,25 @@
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
+  // Push: "ring" this phone when a new client job request arrives. Asked once
+  // right after login (iPhone only allows the permission ask on a tap), then
+  // renewed silently on later visits. Wolf/Ploy don't chase requests — skipped.
+  async function enablePush() {
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+      if (role === 'scouter' || role === 'designer') return;
+      if (Notification.permission === 'denied') return;
+      if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') return;
+      const reg = await navigator.serviceWorker.ready;
+      const { key } = await api('/api/push/key');
+      const b = String(key || '').replace(/-/g, '+').replace(/_/g, '/');
+      const raw = Uint8Array.from(atob(b + '='.repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0));
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+      await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON() }) });
+    } catch (_) { /* not supported / declined — the Requests badge still works */ }
+  }
+  window.mpEnablePush = enablePush;
+
   document.querySelectorAll('.tab').forEach(tab =>
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -4051,7 +4075,7 @@
         <div style="flex:1;position:relative;height:24px;background:#fbfbfb;border-left:1px solid #e8e8e8">${bars}</div></div>`;
     }).join('');
     const tl = pct(now);
-    return `<div style="margin-top:10px">
+    return `<div class="scout-gantt" style="margin-top:10px">
       <div style="display:flex"><div style="width:110px;flex:none"></div><div style="flex:1;display:flex">${head}</div></div>
       <div style="position:relative">${rows}
         ${tl >= 0 && tl <= 100 ? `<div style="position:absolute;top:0;bottom:0;left:calc(110px + (100% - 110px)*${(tl / 100).toFixed(4)});width:2px;background:#c74436;opacity:.65" title="Today"></div>` : ''}

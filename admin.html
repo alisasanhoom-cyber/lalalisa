@@ -433,6 +433,24 @@
       .stats{grid-template-columns:repeat(2,1fr)}
       .sched-row{grid-template-columns:1fr}
       .sched-row .k{display:block}
+      /* ---- phone polish (PWA): tabs scroll instead of crowding ---- */
+      .topbar{padding:0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+      .topbar::-webkit-scrollbar{display:none}
+      .topbar .brand-logo{height:24px;margin-right:8px;flex:0 0 auto}
+      .tab{padding:16px 9px;font-size:13px;white-space:nowrap;flex:0 0 auto}
+      #whoami{display:none}
+      .topbar .logout{white-space:nowrap;flex:0 0 auto}
+      .wrap{padding:14px 10px}
+      /* wide tables scroll inside their card — never crushed columns */
+      .card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      #view-jobs .card table{min-width:920px}
+      #view-requests .card table{min-width:760px}
+      /* Board: swipe column by column */
+      .board{scroll-snap-type:x proximity}
+      .board-col{scroll-snap-align:start}
+      /* Wolf's Gantt scrolls sideways instead of squeezing */
+      .scout-gantt{overflow-x:auto;-webkit-overflow-scrolling:touch}
+      .scout-gantt > div{min-width:560px}
     }
     /* Models directory — lined-up list */
     #m-grid{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}

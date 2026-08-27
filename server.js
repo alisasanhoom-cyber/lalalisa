@@ -16,6 +16,7 @@
    =================================================================== */
 
 const http   = require('http');
+const https  = require('https');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
@@ -364,6 +365,54 @@ function nextCodes() {
 const codeHolds = Object.create(null);
 // Flood guard for the public job-request form: ip → timestamps this hour.
 const reqFlood = Object.create(null);
+
+/* --- Web Push: "ring" the team's installed app on a new client request ---
+   Zero-dependency VAPID: pushes carry NO payload (so no message encryption
+   is needed) — the service worker shows a fixed "new job request" note and
+   the app fetches the details itself when opened. */
+const PUSH_KEYS_FILE = path.join(DATA_DIR, 'push_keys.json');
+const PUSH_SUBS_FILE = path.join(DATA_DIR, 'push_subs.json');
+const b64url = buf => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function vapidKeys() {
+  try { return JSON.parse(fs.readFileSync(PUSH_KEYS_FILE, 'utf8')); } catch (_) {}
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const pub = publicKey.export({ format: 'jwk' });
+  const keys = {
+    publicKey: b64url(Buffer.concat([Buffer.from([4]),
+      Buffer.from(pub.x, 'base64url'), Buffer.from(pub.y, 'base64url')])),
+    privateJwk: privateKey.export({ format: 'jwk' }),
+  };
+  try { fs.writeFileSync(PUSH_KEYS_FILE, JSON.stringify(keys)); } catch (_) {}
+  return keys;
+}
+function pushAll() {
+  let subs; try { subs = load(PUSH_SUBS_FILE); } catch (_) { subs = []; }
+  if (!Array.isArray(subs) || !subs.length) return;
+  const keys = vapidKeys();
+  let privKey;
+  try { privKey = crypto.createPrivateKey({ key: keys.privateJwk, format: 'jwk' }); } catch (_) { return; }
+  subs.forEach(s => {
+    try {
+      const aud = new URL(s.endpoint).origin;
+      const seg = o => b64url(Buffer.from(JSON.stringify(o)));
+      const unsigned = seg({ typ: 'JWT', alg: 'ES256' }) + '.'
+        + seg({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'mailto:lisa@mpmodelsbkk.com' });
+      const sig = crypto.sign('sha256', Buffer.from(unsigned), { key: privKey, dsaEncoding: 'ieee-p1363' });
+      const rq = https.request(s.endpoint, {
+        method: 'POST',
+        headers: { TTL: '86400', Urgency: 'high', 'Content-Length': 0,
+          Authorization: `vapid t=${unsigned + '.' + b64url(sig)}, k=${keys.publicKey}` },
+      }, resp => {
+        resp.resume();
+        if (resp.statusCode === 404 || resp.statusCode === 410) {   // subscription is dead — drop it
+          try { save(PUSH_SUBS_FILE, load(PUSH_SUBS_FILE).filter(x => x.endpoint !== s.endpoint)); } catch (_) {}
+        }
+      });
+      rq.on('error', () => {});
+      rq.end();
+    } catch (_) {}
+  });
+}
 
 
 /* ===================================================================
@@ -737,7 +786,13 @@ async function handleApi(req, res) {
     const list = load(REQUESTS_FILE);
     list.unshift(rec);
     save(REQUESTS_FILE, list);
+    try { pushAll(); } catch (_) {}   // ring the team's phones
     return reply(res, 201, { ok: true });
+  }
+
+  // Public VAPID key — needed by browsers to subscribe (not a secret by design).
+  if (resource === 'push' && id === 'key' && method === 'GET') {
+    return reply(res, 200, { key: vapidKeys().publicKey });
   }
 
   // Deploy version — the client polls this to auto-reload open tabs after a deploy.
@@ -928,6 +983,17 @@ async function handleApi(req, res) {
   // Sales, commission, net income the agency earns outside the model bookings.
   // This is money data: gated to managers on EVERY method, so bookers/designer
   // never even receive it in a response.
+  // --- WEB PUSH subscriptions (team phones that want the "ring") ---
+  if (resource === 'push' && id === 'subscribe' && method === 'POST') {
+    const sub = body && body.subscription;
+    if (!sub || !/^https:\/\//.test(String(sub.endpoint || ''))) return reply(res, 400, { error: 'Bad subscription.' });
+    let list; try { list = load(PUSH_SUBS_FILE); } catch (_) { list = []; }
+    list = list.filter(x => x.endpoint !== sub.endpoint);
+    list.push({ endpoint: String(sub.endpoint).slice(0, 600), keys: sub.keys || {}, email: user.email, created: new Date().toISOString() });
+    save(PUSH_SUBS_FILE, list);
+    return reply(res, 200, { ok: true });
+  }
+
   // --- CLIENT JOB REQUESTS (team view — bookers chase these leads) ---
   if (resource === 'requests') {
     if (method === 'GET') return reply(res, 200, { requests: load(REQUESTS_FILE) });

@@ -98,6 +98,13 @@ async function login(email, password) {
     check('sw.js served, never caches /api/', sw.ok && /startsWith\('\/api\/'\)/.test(swText));
     check('backend files still hidden (server.js 404)', (await fetch(BASE + '/server.js')).status === 404);
 
+    console.log('— web push —');
+    const pk = await api('/api/push/key');
+    check('VAPID public key served (65-byte P-256 point)', pk.status === 200 && typeof pk.body.key === 'string' && Buffer.from(pk.body.key.replace(/-/g, '+').replace(/_/g, '/') + '==', 'base64').length === 65, pk.body);
+    check('push subscribe needs login', (await api('/api/push/subscribe', { method: 'POST', body: { subscription: { endpoint: 'https://x.test/1' } } })).status === 401);
+    check('bad subscription rejected', (await api('/api/push/subscribe', { method: 'POST', body: { subscription: { endpoint: 'notaurl' } } }, booker)).status === 400);
+    check('booker subscribes ok', (await api('/api/push/subscribe', { method: 'POST', body: { subscription: { endpoint: 'https://push.invalid.test/sub1', keys: {} } } }, booker)).status === 200);
+
     console.log('— client job requests (public form) —');
     const rq = await api('/api/requests', { method: 'POST', body: { clientName: 'Test Client', lineId: '@test', projectType: 'Photoshoot', description: 'Lookbook' } });
     check('public request lands without login', rq.status === 201 && rq.body && rq.body.ok);

@@ -17,6 +17,24 @@ self.addEventListener('activate', e => {
   );
 });
 
+/* Push = "a new client job request arrived". Pushes carry no payload
+   (kept simple + encryption-free) — the note is fixed, the app shows details. */
+self.addEventListener('push', e => {
+  e.waitUntil(self.registration.showNotification('MP Models', {
+    body: '📩 New client job request — open Requests',
+    icon: '/images/mp-icon-192.png',
+    badge: '/images/mp-icon-192.png',
+    tag: 'mp-request',
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+    for (const w of ws) if (w.url.includes('/admin.html') && 'focus' in w) return w.focus();
+    return clients.openWindow('/admin.html');
+  }));
+});
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
