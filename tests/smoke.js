@@ -89,6 +89,15 @@ async function login(email, password) {
     check('designer PATCH cannot change budget', after && after.budget === 28000, after && after.budget);
     check('designer PATCH can tick collected', after && after.collected === true);
 
+    console.log('— PWA files —');
+    const man = await fetch(BASE + '/manifest.webmanifest');
+    let manBody = null; try { manBody = await man.json(); } catch (_) {}
+    check('manifest served + valid JSON with icons', man.ok && manBody && Array.isArray(manBody.icons) && manBody.start_url === '/admin.html');
+    const sw = await fetch(BASE + '/sw.js');
+    const swText = sw.ok ? await sw.text() : '';
+    check('sw.js served, never caches /api/', sw.ok && /startsWith\('\/api\/'\)/.test(swText));
+    check('backend files still hidden (server.js 404)', (await fetch(BASE + '/server.js')).status === 404);
+
     console.log('— client job requests (public form) —');
     const rq = await api('/api/requests', { method: 'POST', body: { clientName: 'Test Client', lineId: '@test', projectType: 'Photoshoot', description: 'Lookbook' } });
     check('public request lands without login', rq.status === 201 && rq.body && rq.body.ok);

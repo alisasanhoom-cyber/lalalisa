@@ -3397,6 +3397,12 @@
   // Esc closes the drawer too — it's the first thing people try (Aim).
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
+  // PWA: register the offline-fallback service worker (network-first — deploys
+  // land exactly as before; see sw.js). https only, so local dev is untouched.
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
   document.querySelectorAll('.tab').forEach(tab =>
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

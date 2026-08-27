@@ -1186,6 +1186,7 @@ const FILE_TYPES = {
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
   '.woff': 'font/woff', '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json',
 };
 
 function serveFile(req, res) {
@@ -1204,7 +1205,8 @@ function serveFile(req, res) {
   // under js/ css/ images/. Never the backend source, configs, data, docs, or the
   // model-code seed — those live at the root too and must NOT be publicly readable.
   const rel = filePath.slice(__dirname.length + 1).replace(/\\/g, '/');
-  const isPublicAsset = (rel.endsWith('.html') && !rel.includes('/')) || /^(js|css|images)\//.test(rel);
+  const isPublicAsset = (rel.endsWith('.html') && !rel.includes('/')) || /^(js|css|images)\//.test(rel)
+    || rel === 'sw.js' || rel === 'manifest.webmanifest';   // PWA files must live at root (sw.js scope = '/')
   if (!isPublicAsset) {
     res.writeHead(404, { 'Content-Type': 'text/html' });
     return res.end('<h1>404 — Page not found</h1>');
