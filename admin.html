@@ -260,21 +260,43 @@
     .board-empty{color:var(--faint,#9aa19d);font-size:11px;text-align:center;padding:10px 0}
     .board-hint{font-size:11.5px;color:var(--grey);margin:0 0 10px}
     @media (max-width:640px){ .board-col{flex-basis:200px} }
-    /* Phone portrait: tables show the essentials only — tapping a row opens the
-       full details anyway. No sideways scrolling needed to read the list. */
+    /* Phone portrait: ONE page wide — no sideways scrolling. Essentials only,
+       smaller type; tapping a row opens the full details anyway. */
     @media (max-width:640px){
-      #view-jobs .card table{min-width:0}
+      #view-jobs .card table{min-width:0;width:100%;table-layout:fixed}
       #view-jobs th:nth-child(6),#view-jobs td:nth-child(6),
       #view-jobs th:nth-child(7),#view-jobs td:nth-child(7),
       #view-jobs th:nth-child(8),#view-jobs td:nth-child(8),
       #view-jobs th:nth-child(10),#view-jobs td:nth-child(10){display:none}
-      #view-jobs th,#view-jobs td{padding:8px 7px;font-size:12.5px}
-      #view-requests .card table{min-width:0}
+      #view-jobs th,#view-jobs td{padding:7px 4px;font-size:11.5px}
+      /* long codes ("C3013 - PHOTO+VDO SHOOT") forced the page wide — show the
+         short code, cut the rest with … (the row tap shows everything) */
+      #view-jobs th:nth-child(2),#view-jobs td:nth-child(2){width:70px}
+      #view-jobs th:nth-child(3),#view-jobs td:nth-child(3),
+      #view-jobs th:nth-child(4),#view-jobs td:nth-child(4){width:62px}
+      #view-jobs td:nth-child(9){width:66px}
+      #view-jobs td.code-c,#view-jobs td.code-b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      #view-jobs td:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      #view-jobs td.title-cell,#view-jobs td.num{overflow:hidden;text-overflow:ellipsis}
+      #view-requests .card table{min-width:0;width:100%;table-layout:fixed}
       #view-requests th:nth-child(4),#view-requests td:nth-child(4),
       #view-requests th:nth-child(5),#view-requests td:nth-child(5),
       #view-requests th:nth-child(6),#view-requests td:nth-child(6),
       #view-requests th:nth-child(7),#view-requests td:nth-child(7){display:none}
-      .stat .n{font-size:16px}
+      #view-requests th,#view-requests td{padding:7px 5px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+      /* smaller everything else so a phone shows one clean page */
+      .wrap{padding:10px 8px}
+      .controls select,.controls input{padding:7px 9px;font-size:12px}
+      .btn{padding:8px 12px;font-size:13px}
+      .stats{gap:7px}
+      .stat{padding:9px 10px}
+      .stat .n{font-size:14.5px}
+      .stat .l{font-size:9.5px}
+      #m-cats{grid-template-columns:repeat(2,1fr);gap:8px}
+      .m-cat-tile{padding:12px 12px}
+      .m-cat-tile .nm{font-size:13.5px}
+      .m-cat-tile .ct{padding:2px 9px;font-size:11.5px}
+      .mac-stats .stat .n,.stat.money .n{font-size:13.5px}
     }
     .day-entry .line.sched-note{color:#333}
     .short-warn{background:#fdecec;border:1px solid #f5b5b5;border-radius:6px;padding:6px 8px;margin-top:5px;color:#a11;font-size:11.5px;font-weight:400}
