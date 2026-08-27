@@ -166,6 +166,8 @@
     renderSchedule();
     // Load the model directory quietly so Notify can auto-fill contacts anywhere.
     api('/api/models').then(r => { models = r.models || []; }).catch(() => {});
+    // Client job requests — quiet load so the tab badge shows new leads right away.
+    loadRequests().catch(() => {});
   }
 
   // Auto-refresh: the team all work at once, so pull fresh jobs + schedule in the
@@ -3402,6 +3404,8 @@
       const v = tab.dataset.view;
       el('view-jobs').style.display = v === 'jobs' ? 'block' : 'none';
       el('view-schedule').style.display = v === 'schedule' ? 'block' : 'none';
+      if (el('view-requests')) el('view-requests').style.display = v === 'requests' ? 'block' : 'none';
+      if (v === 'requests') loadRequests();
       el('view-models').style.display = v === 'models' ? 'block' : 'none';
       el('view-activity').style.display = v === 'activity' ? 'block' : 'none';
       if (el('view-income')) el('view-income').style.display = v === 'income' ? 'block' : 'none';
@@ -3413,6 +3417,152 @@
       if (v === 'clients') loadClients().then(renderClients);
       if (v === 'mac') loadMac();
     }));
+
+  /* ============= CLIENT JOB REQUESTS (public form → leads to chase) ===== */
+  let requests = [];
+  const REQ_STATUS = { new: 'New', contacted: 'Contacted', won: 'Won ✓', lost: 'Lost' };
+  const reqContact = r => [r.email, r.phone, r.lineId && 'LINE ' + r.lineId].filter(Boolean).join(' · ');
+
+  async function loadRequests() {
+    try { requests = (await api('/api/requests')).requests || []; } catch (_) { requests = []; }
+    await syncRequestOutcomes();
+    renderRequests();
+    updateReqBadge();
+  }
+  function updateReqBadge() {
+    const b = el('req-badge');
+    if (!b) return;
+    const n = requests.filter(r => r.status === 'new').length;
+    b.style.display = n ? 'inline-block' : 'none';
+    b.textContent = n;
+  }
+  // "Success or fail you can check on our schedules" (Lisa): a request converted
+  // to a schedule entry follows that entry — confirmed → Won, declined → Lost.
+  async function syncRequestOutcomes() {
+    for (const r of requests) {
+      if (!r.entryRef || ['won', 'lost'].includes(r.status)) continue;
+      const ent = schedule.find(e => e.id === r.entryRef);
+      if (!ent) continue;
+      const to = ent.status === 'confirmed' ? 'won' : ent.status === 'declined' ? 'lost' : '';
+      if (!to) continue;
+      try {
+        await api('/api/requests/' + r.id, { method: 'PATCH', body: JSON.stringify({ status: to }) });
+        r.status = to;
+      } catch (_) {}
+    }
+  }
+  function renderRequests() {
+    const rowsEl = el('req-rows');
+    if (!rowsEl) return;
+    const f = el('req-filter') ? el('req-filter').value : 'open';
+    const list = requests.filter(r => f === '' ? true : f === 'open' ? ['new', 'contacted'].includes(r.status) : r.status === f);
+    rowsEl.innerHTML = list.map(r => {
+      const when = String(r.created || '').slice(0, 10);
+      const dates = r.startDate ? r.startDate + (r.endDate && r.endDate !== r.startDate ? ' → ' + r.endDate : '') : (r.dateFlexible ? 'flexible' : '—');
+      return `<tr class="row" data-id="${r.id}">
+        <td>${esc(when)}</td>
+        <td><b>${esc(r.clientName)}</b>${r.company ? `<br><span style="font-size:12px;color:var(--grey)">${esc(r.company)}</span>` : ''}</td>
+        <td>${esc(r.projectType) || '—'}${r.modelsCount ? ` · ${esc(r.modelsCount)}` : ''}<br><span style="font-size:12px;color:var(--grey)">${esc(String(r.description || '').slice(0, 70))}${String(r.description || '').length > 70 ? '…' : ''}</span></td>
+        <td>${esc(dates)}${r.dateFlexible && r.startDate ? ' <span title="Dates are flexible">~</span>' : ''}</td>
+        <td>${esc(r.budget) || '—'}</td>
+        <td>${esc(r.foundVia) || '—'}</td>
+        <td>${esc(r.booker) || '—'}</td>
+        <td><span class="req-pill ${esc(r.status)}">${REQ_STATUS[r.status] || r.status}</span></td>
+      </tr>`;
+    }).join('');
+    el('req-empty').style.display = list.length ? 'none' : 'block';
+    rowsEl.querySelectorAll('tr.row').forEach(tr => tr.addEventListener('click', () => openRequest(tr.dataset.id)));
+  }
+  function openRequest(id) {
+    const r = requests.find(x => x.id === id);
+    if (!r) return;
+    const isMgr = role === 'master' || role === 'admin';
+    const dates = r.startDate ? r.startDate + (r.endDate && r.endDate !== r.startDate ? ' → ' + r.endDate : '') : '';
+    el('d-title').textContent = 'Job request — ' + (r.clientName || 'Client');
+    const row = (k, v) => v ? `<div><b>${k}</b> ${esc(v)}</div>` : '';
+    const linked = r.entryRef ? schedule.find(e => e.id === r.entryRef) : null;
+    el('drawer-body').innerHTML = `
+      <div class="req-detail">
+        ${row('Client', r.clientName)}${row('Company', r.company)}
+        ${row('Contact', reqContact(r))}
+        ${row('Type', r.projectType)}${row('Models', r.modelsCount)}
+        ${row('Dates', dates + (r.dateFlexible ? ' (flexible)' : ''))}
+        ${row('Location', r.location)}${row('Usage', r.usage)}
+        ${row('Budget', r.budget)}${row('Found us via', r.foundVia)}
+        ${r.description ? `<div style="margin-top:8px"><b>Project</b><br>${esc(r.description)}</div>` : ''}
+        ${r.notes ? `<div style="margin-top:8px"><b>Notes</b><br>${esc(r.notes)}</div>` : ''}
+        <div style="margin-top:8px;color:var(--grey);font-size:12px">Received ${esc(String(r.created || '').replace('T', ' ').slice(0, 16))}</div>
+      </div>
+      ${linked ? `<p style="font-size:13px;margin:0 0 12px">📅 In the schedule as <b>${esc((linked.option || linked.casting || linked.subject || 'entry'))}</b> — status <b>${esc(linked.status || 'open')}</b>. Won/Lost follows it automatically.</p>` : ''}
+      <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label style="font-size:12.5px">Status
+          <select id="rq-status" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px">
+            ${Object.entries(REQ_STATUS).map(([k, l]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${l}</option>`).join('')}
+          </select></label>
+        <label style="font-size:12.5px">Booker handling it
+          <input id="rq-booker" value="${esc(r.booker || sessionStorage.getItem('mp_admin_bookername') || '')}" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-sizing:border-box"></label>
+      </div>
+      <label style="font-size:12.5px;display:block;margin-top:12px">Note (what happened / what was quoted)
+        <textarea id="rq-note" style="width:100%;min-height:60px;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-sizing:border-box">${esc(r.statusNote || '')}</textarea></label>
+      <div class="drawer-actions">
+        <button class="btn" id="rq-save">Save</button>
+        ${!r.entryRef ? '<button class="btn ghost" id="rq-convert" title="Creates an Option in the Schedule with all the client\'s details — chase it from there">📅 Add to Schedule as Option</button>' : ''}
+        ${isMgr ? '<button class="link" id="rq-delete" style="color:var(--declined)">Delete</button>' : ''}
+      </div>`;
+    openDrawer();
+    const patch = async body => {
+      const resp = await api('/api/requests/' + r.id, { method: 'PATCH', body: JSON.stringify(body) });
+      Object.assign(r, resp.request || body);
+    };
+    el('rq-save').addEventListener('click', async () => {
+      const status = el('rq-status').value;
+      try {
+        await patch({ status, booker: el('rq-booker').value.trim(), statusNote: el('rq-note').value.trim() });
+        closeDrawer(); renderRequests(); updateReqBadge(); toast('Request saved');
+      } catch (e) { alert(e.message || 'Could not save.'); }
+    });
+    if (el('rq-convert')) el('rq-convert').addEventListener('click', async () => {
+      try {
+        const entry = {
+          date: isISODate(r.startDate) ? r.startDate : todayLocal(),
+          models: r.modelsCount || 'TBC',
+          option: `Client request: ${r.projectType || 'job'} for ${r.clientName}${r.company ? ' (' + r.company + ')' : ''}`,
+          note: `Contact: ${reqContact(r) || '-'}\n${r.description || ''}${r.usage ? '\nUsage: ' + r.usage : ''}${r.location ? '\nLocation: ' + r.location : ''}${r.budget ? '\nBudget: ' + r.budget : ''}`,
+          stage: 'option',
+          leadSource: ({ Instagram: 'Instagram', Facebook: 'Facebook', TikTok: 'Other', 'Google / Website': 'Website', LINE: 'LINE', Referral: 'Referral', 'Worked together before': 'Repeat client' })[r.foundVia] || 'Other',
+          clientType: r.foundVia === 'Worked together before' ? 'old' : 'new',
+          clientContact: reqContact(r),
+          booker: el('rq-booker').value.trim() || undefined,
+        };
+        const resp = await api('/api/schedule', { method: 'POST', body: JSON.stringify(entry) });
+        if (resp.entry) schedule.push(resp.entry);
+        await patch({ entryRef: (resp.entry || {}).id || '', status: r.status === 'new' ? 'contacted' : r.status, booker: el('rq-booker').value.trim() });
+        buildFilters(); renderSchedule();
+        closeDrawer(); renderRequests(); updateReqBadge();
+        toast('📅 Added to Schedule as an Option');
+      } catch (e) { alert(e.message || 'Could not create the schedule entry.'); }
+    });
+    if (el('rq-delete')) el('rq-delete').addEventListener('click', async () => {
+      if (!confirm('Delete this request?')) return;
+      try {
+        await api('/api/requests/' + r.id, { method: 'DELETE' });
+        requests = requests.filter(x => x.id !== r.id);
+        closeDrawer(); renderRequests(); updateReqBadge();
+      } catch (e) { alert(e.message || 'Could not delete.'); }
+    });
+  }
+  if (el('req-filter')) el('req-filter').addEventListener('change', renderRequests);
+  // The team keeps the tab open all day — refresh the leads badge every 5 min.
+  setInterval(() => {
+    if (document.hidden || role === 'scouter') return;
+    if (el('drawer').classList.contains('open')) return;
+    loadRequests().catch(() => {});
+  }, 300000);
+  if (el('req-copylink')) el('req-copylink').addEventListener('click', () => {
+    const link = location.origin + '/request.html';
+    try { navigator.clipboard.writeText(link); } catch (_) {}
+    toast('🔗 Form link copied — paste it to the client');
+  });
 
   /* ============= OTHER INCOME / COMMISSION (Director + Admin only) ===== */
   let income = [];

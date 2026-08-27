@@ -39,6 +39,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json'); // exchange rates et
 const INCOME_FILE   = path.join(DATA_DIR, 'income.json');   // other income / commission (Director+Admin ONLY — never sent to bookers)
 const CLIENTS_FILE  = path.join(DATA_DIR, 'clients.json');  // CRM client records (added directly, not only via jobs)
 const MAC_FILE      = path.join(DATA_DIR, 'mac.json');      // Mother-Agency-Commission ledger (per scouter)
+const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json'); // client job requests from the public form (leads to chase)
 // Exchange rates → THB (editable by managers). Foreign jobs convert for the THB total.
 const FX_DEFAULT = { USD: 35, EUR: 38, CNY: 5 };
 function loadSettings() {
@@ -361,6 +362,8 @@ function nextCodes() {
 }
 // Short-lived reservations handed out by /api/next-code (code → expiry ms).
 const codeHolds = Object.create(null);
+// Flood guard for the public job-request form: ip → timestamps this hour.
+const reqFlood = Object.create(null);
 
 
 /* ===================================================================
@@ -686,6 +689,50 @@ async function handleApi(req, res) {
     return reply(res, 201, { ok: true, entry });
   }
 
+  // --- CLIENT JOB REQUEST from the public form (no login) --------
+  // Bookers send clients the /request.html link (social media enquiries);
+  // the filled form lands in the Requests tab as a lead to chase.
+  if (resource === 'requests' && method === 'POST' && !getUser(req)) {
+    if (req.headers['x-admin-token']) return reply(res, 401, { error: 'Session expired — please log in again.' });
+    if (text(body.website)) return reply(res, 201, { ok: true });   // honeypot: bots fill it, humans never see it
+    const contact = text(body.email, 120) || text(body.phone, 40) || text(body.lineId, 60);
+    if (!text(body.clientName, 80) || !contact) {
+      return reply(res, 400, { error: 'Please fill in your name and at least one way to contact you.' });
+    }
+    // simple flood guard: max 10 public requests per IP per hour
+    const ip = String(req.socket.remoteAddress || '');
+    const now = Date.now();
+    reqFlood[ip] = (reqFlood[ip] || []).filter(t => now - t < 3600000);
+    if (reqFlood[ip].length >= 10) return reply(res, 429, { error: 'Too many requests — please try again later.' });
+    reqFlood[ip].push(now);
+    const rec = {
+      id: crypto.randomUUID(),
+      created: new Date().toISOString(),
+      status: 'new',                       // new → contacted → won | lost
+      clientName: text(body.clientName, 80),
+      company: text(body.company, 120),
+      email: text(body.email, 120),
+      phone: text(body.phone, 40),
+      lineId: text(body.lineId, 60),
+      projectType: text(body.projectType, 60),
+      description: text(body.description, 1000),
+      startDate: text(body.startDate, 20),
+      endDate: text(body.endDate, 20),
+      dateFlexible: !!body.dateFlexible,
+      budget: text(body.budget, 60),
+      modelsCount: text(body.modelsCount, 30),
+      usage: text(body.usage, 200),
+      location: text(body.location, 120),
+      foundVia: text(body.foundVia, 40),
+      notes: text(body.notes, 800),
+      booker: '', statusNote: '', entryRef: '', jobRef: '',
+    };
+    const list = load(REQUESTS_FILE);
+    list.unshift(rec);
+    save(REQUESTS_FILE, list);
+    return reply(res, 201, { ok: true });
+  }
+
   // Deploy version — the client polls this to auto-reload open tabs after a deploy.
   if (resource === 'version' && method === 'GET') {
     return reply(res, 200, { version: ASSET_VERSION });
@@ -874,6 +921,31 @@ async function handleApi(req, res) {
   // Sales, commission, net income the agency earns outside the model bookings.
   // This is money data: gated to managers on EVERY method, so bookers/designer
   // never even receive it in a response.
+  // --- CLIENT JOB REQUESTS (team view — bookers chase these leads) ---
+  if (resource === 'requests') {
+    if (method === 'GET') return reply(res, 200, { requests: load(REQUESTS_FILE) });
+    if (method === 'PATCH' && id) {
+      const list = load(REQUESTS_FILE);
+      const rec = list.find(x => x.id === id);
+      if (!rec) return reply(res, 404, { error: 'Request not found.' });
+      // Team edits only the tracking fields — the client's own answers stay as sent.
+      ['status', 'booker', 'statusNote', 'entryRef', 'jobRef'].forEach(k => {
+        if (k in body) rec[k] = text(body[k], k === 'statusNote' ? 500 : 80);
+      });
+      if (!['new', 'contacted', 'won', 'lost'].includes(rec.status)) rec.status = 'new';
+      rec.updated = new Date().toISOString();
+      save(REQUESTS_FILE, list);
+      logActivity(user, 'updated job request', `${rec.clientName} → ${rec.status}`);
+      return reply(res, 200, { ok: true, request: rec });
+    }
+    if (method === 'DELETE' && id) {
+      if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+      save(REQUESTS_FILE, load(REQUESTS_FILE).filter(x => x.id !== id));
+      logActivity(user, 'deleted job request', id);
+      return reply(res, 200, { ok: true });
+    }
+  }
+
   if (resource === 'income') {
     if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
     if (method === 'GET') return reply(res, 200, { income: load(INCOME_FILE) });

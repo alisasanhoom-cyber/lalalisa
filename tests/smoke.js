@@ -89,6 +89,22 @@ async function login(email, password) {
     check('designer PATCH cannot change budget', after && after.budget === 28000, after && after.budget);
     check('designer PATCH can tick collected', after && after.collected === true);
 
+    console.log('— client job requests (public form) —');
+    const rq = await api('/api/requests', { method: 'POST', body: { clientName: 'Test Client', lineId: '@test', projectType: 'Photoshoot', description: 'Lookbook' } });
+    check('public request lands without login', rq.status === 201 && rq.body && rq.body.ok);
+    const rqBad = await api('/api/requests', { method: 'POST', body: { clientName: 'No Contact Guy' } });
+    check('request without any contact rejected', rqBad.status === 400);
+    await api('/api/requests', { method: 'POST', body: { clientName: 'Bot', email: 'b@b.b', website: 'http://spam' } });
+    const rqList = (await api('/api/requests', {}, booker)).body.requests || [];
+    check('booker sees the request; honeypot submission NOT stored',
+      rqList.some(r => r.clientName === 'Test Client' && r.status === 'new') && !rqList.some(r => r.clientName === 'Bot'), rqList.map(r => r.clientName));
+    const rqId = (rqList.find(r => r.clientName === 'Test Client') || {}).id;
+    const rqPatch = await api('/api/requests/' + rqId, { method: 'PATCH', body: { status: 'contacted', booker: 'Ness', clientName: 'HACKED' } }, booker);
+    check('booker updates tracking fields; client answers untouchable',
+      rqPatch.body && rqPatch.body.request && rqPatch.body.request.status === 'contacted' && rqPatch.body.request.clientName === 'Test Client');
+    check('scouter cannot see requests', (await api('/api/requests', {}, scouter)).status === 403);
+    check('request delete is manager-only', (await api('/api/requests/' + rqId, { method: 'DELETE' }, booker)).status === 403);
+
     console.log('— scouter sandbox —');
     const se = await api('/api/schedule', { method: 'POST', body: { date: '2026-09-01', endDate: '2026-11-30', models: 'Scout Test', subject: 'KAT Shanghai', place: 'China', planState: 'planned', stage: 'shooting' } }, scouter);
     const sid = se.body && se.body.entry && se.body.entry.id;

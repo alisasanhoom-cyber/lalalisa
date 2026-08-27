@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Request | Morgan &amp; Preston Models Bangkok</title>
+  <meta name="description" content="Tell us about your project — we'll get back to you with models and rates.">
+  <meta property="og:image" content="images/mp-logo.png">
+  <link rel="icon" type="image/png" href="images/mp-logo.png">
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body{background:var(--grey-light,#f4f5f7)}
+    .req-wrap{max-width:760px;margin:0 auto;padding:26px 18px 60px}
+    .req-head{text-align:center;padding:26px 0 6px}
+    .req-head img{height:52px}
+    .req-head h1{font-family:'Playfair Display',serif;font-size:26px;margin:16px 0 6px}
+    .req-head p{color:#6b6b6b;font-size:14px;margin:0}
+    .req-card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:26px 24px;margin-top:22px}
+    .req-card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#1b998b;margin:0 0 16px}
+    .form-row{display:flex;gap:14px;flex-wrap:wrap}
+    .form-group{flex:1 1 220px;margin-bottom:14px}
+    .form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+    .form-group label .th{font-weight:400;color:#8a8a8a}
+    .form-group input,.form-group select,.form-group textarea{width:100%;padding:11px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-family:inherit;background:#fff;box-sizing:border-box}
+    .form-group textarea{min-height:90px;resize:vertical}
+    .req-star{color:#1b998b}
+    .flex-check{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-top:-4px;margin-bottom:14px}
+    .flex-check input{width:auto}
+    .req-send{width:100%;background:#1b998b;color:#fff;border:none;border-radius:9px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:6px}
+    .req-send:hover{opacity:.92}
+    .req-send[disabled]{opacity:.6;cursor:default}
+    .req-err{color:#c0392b;font-size:13.5px;margin-top:12px;display:none;text-align:center}
+    .req-success{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:46px 24px;text-align:center;display:none;margin-top:22px}
+    .req-success .tick{font-size:46px;color:#1b998b;line-height:1}
+    .req-success h2{font-family:'Playfair Display',serif;margin:14px 0 8px}
+    .req-success p{color:#6b6b6b;font-size:14.5px;margin:0}
+    .hp{position:absolute;left:-9000px;top:-9000px}
+  </style>
+</head>
+<body>
+  <div class="req-wrap">
+    <div class="req-head">
+      <img src="images/mp-logo.png" alt="Morgan &amp; Preston Models Bangkok"
+           onerror="this.outerHTML='<div style=&quot;font-family:Playfair Display,serif;font-size:20px;font-weight:700&quot;>MP MODELS BANGKOK</div>'">
+      <h1>Job Request</h1>
+      <p>Tell us about your project — our booking team will get back to you the same day.<br>
+         <span style="font-size:13px">กรอกรายละเอียดงานของคุณ ทีมงานจะติดต่อกลับภายในวันเดียวกันค่ะ</span></p>
+    </div>
+
+    <form id="req-form">
+      <!-- honeypot: humans never see this field -->
+      <input class="hp" type="text" name="website" id="f-website" tabindex="-1" autocomplete="off">
+
+      <div class="req-card">
+        <h2>Contact · ข้อมูลติดต่อ</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Your Name <span class="th">ชื่อ</span> <span class="req-star">*</span></label>
+            <input type="text" id="f-clientName" maxlength="80" required placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label>Company / Brand <span class="th">บริษัท/แบรนด์</span></label>
+            <input type="text" id="f-company" maxlength="120" placeholder="Company name">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="f-email" maxlength="120" placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label>Phone <span class="th">โทร</span></label>
+            <input type="tel" id="f-phone" maxlength="40" placeholder="+66 XX XXX XXXX">
+          </div>
+          <div class="form-group">
+            <label>LINE ID</label>
+            <input type="text" id="f-lineId" maxlength="60" placeholder="@yourline">
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:#8a8a8a;margin:0">* Please give at least one way to reach you · ขอช่องทางติดต่ออย่างน้อย 1 ช่องทางค่ะ</p>
+      </div>
+
+      <div class="req-card">
+        <h2>The Job · รายละเอียดงาน</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Type of Work <span class="th">ประเภทงาน</span> <span class="req-star">*</span></label>
+            <select id="f-projectType" required>
+              <option value="" disabled selected>Select…</option>
+              <option>Photoshoot</option>
+              <option>Video / TVC</option>
+              <option>Photo + Video</option>
+              <option>Event</option>
+              <option>Fitting</option>
+              <option>Fashion Show</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Models Needed <span class="th">จำนวนนายแบบ/นางแบบ</span></label>
+            <input type="text" id="f-modelsCount" maxlength="30" placeholder="e.g. 2 female, 1 male">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tell us about the project <span class="th">เล่ารายละเอียดงาน</span> <span class="req-star">*</span></label>
+          <textarea id="f-description" maxlength="1000" required placeholder="Product / brand, style, what the models will do…"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Shoot Date <span class="th">วันถ่าย</span></label>
+            <input type="date" id="f-startDate">
+          </div>
+          <div class="form-group">
+            <label>Until <span class="th">ถึงวันที่</span></label>
+            <input type="date" id="f-endDate">
+          </div>
+        </div>
+        <label class="flex-check"><input type="checkbox" id="f-dateFlexible"> Dates are flexible · วันยังไม่แน่นอน</label>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Location <span class="th">สถานที่</span></label>
+            <input type="text" id="f-location" maxlength="120" placeholder="Bangkok, studio, on location…">
+          </div>
+          <div class="form-group">
+            <label>Media Usage <span class="th">สื่อที่ใช้</span></label>
+            <input type="text" id="f-usage" maxlength="200" placeholder="Online / TV / billboard, country, how long">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Budget <span class="th">งบประมาณ</span></label>
+            <select id="f-budget">
+              <option value="" selected>Prefer to discuss</option>
+              <option>Under ฿10,000</option>
+              <option>฿10,000–฿20,000</option>
+              <option>฿20,000–฿50,000</option>
+              <option>฿50,000–฿100,000</option>
+              <option>฿100,000+</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>How did you find us? <span class="th">รู้จักเราจาก</span></label>
+            <select id="f-foundVia">
+              <option value="" selected>Select…</option>
+              <option>Instagram</option>
+              <option>Facebook</option>
+              <option>TikTok</option>
+              <option>Google / Website</option>
+              <option>LINE</option>
+              <option>Referral</option>
+              <option>Worked together before</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Anything else? <span class="th">อื่นๆ</span></label>
+          <textarea id="f-notes" maxlength="800" style="min-height:60px" placeholder="References, special requirements…"></textarea>
+        </div>
+      </div>
+
+      <button class="req-send" id="req-send" type="submit">Send Request · ส่งคำขอ</button>
+      <div class="req-err" id="req-err"></div>
+    </form>
+
+    <div class="req-success" id="req-success">
+      <div class="tick">✓</div>
+      <h2>Request received!</h2>
+      <p>Thank you — our booking team will contact you the same day.<br>ได้รับคำขอแล้วค่ะ ทีมงานจะติดต่อกลับภายในวันเดียวกันค่ะ</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const $ = id => document.getElementById(id);
+      $('req-form').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const err = $('req-err');
+        err.style.display = 'none';
+        const body = {
+          website: $('f-website').value,
+          clientName: $('f-clientName').value.trim(),
+          company: $('f-company').value.trim(),
+          email: $('f-email').value.trim(),
+          phone: $('f-phone').value.trim(),
+          lineId: $('f-lineId').value.trim(),
+          projectType: $('f-projectType').value,
+          modelsCount: $('f-modelsCount').value.trim(),
+          description: $('f-description').value.trim(),
+          startDate: $('f-startDate').value,
+          endDate: $('f-endDate').value,
+          dateFlexible: $('f-dateFlexible').checked,
+          location: $('f-location').value.trim(),
+          usage: $('f-usage').value.trim(),
+          budget: $('f-budget').value,
+          foundVia: $('f-foundVia').value,
+          notes: $('f-notes').value.trim(),
+        };
+        if (!body.email && !body.phone && !body.lineId) {
+          err.textContent = 'Please give at least one way to contact you (email, phone or LINE). · ขอช่องทางติดต่ออย่างน้อย 1 ช่องทางค่ะ';
+          err.style.display = 'block';
+          return;
+        }
+        const btn = $('req-send');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          const r = await fetch('/api/requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.error || 'Something went wrong — please try again.');
+          document.getElementById('req-form').style.display = 'none';
+          document.querySelector('.req-head p').style.display = 'none';
+          $('req-success').style.display = 'block';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+          err.textContent = e.message;
+          err.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Send Request · ส่งคำขอ';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
