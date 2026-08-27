@@ -88,30 +88,41 @@
         <h2>The Job · รายละเอียดงาน</h2>
         <div class="form-row">
           <div class="form-group">
-            <label>Type of Work <span class="th">ประเภทงาน</span> <span class="req-star">*</span></label>
+            <label>1 · What's the product? <span class="th">สินค้า</span> <span class="req-star">*</span></label>
+            <input type="text" id="f-product" maxlength="120" required placeholder="e.g. Jewellery, skincare, clothing…">
+          </div>
+          <div class="form-group">
+            <label>2 · Photoshoot or Video? <span class="th">ถ่ายภาพหรือวิดีโอ</span> <span class="req-star">*</span></label>
             <select id="f-projectType" required>
               <option value="" disabled selected>Select…</option>
               <option>Photoshoot</option>
               <option>Video / TVC</option>
-              <option>Photo + Video</option>
+              <option>Both — Photo + Video</option>
               <option>Event</option>
               <option>Fitting</option>
               <option>Fashion Show</option>
               <option>Other</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Models Needed <span class="th">จำนวนนายแบบ/นางแบบ</span></label>
-            <input type="text" id="f-modelsCount" maxlength="30" placeholder="e.g. 2 female, 1 male">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Tell us about the project <span class="th">เล่ารายละเอียดงาน</span> <span class="req-star">*</span></label>
-          <textarea id="f-description" maxlength="1000" required placeholder="Product / brand, style, what the models will do…"></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Shoot Date <span class="th">วันถ่าย</span></label>
+            <label>3 · Models needed <span class="th">จำนวนนายแบบ/นางแบบ</span></label>
+            <input type="text" id="f-modelsCount" maxlength="60" placeholder="e.g. 1 or 2 models, female">
+          </div>
+          <div class="form-group">
+            <label>4 · Half day or full day? <span class="th">ครึ่งวันหรือเต็มวัน</span></label>
+            <select id="f-halfFull">
+              <option value="" selected>Not sure yet</option>
+              <option>Half day (4 hrs)</option>
+              <option>Full day (8+1 hrs)</option>
+              <option>More than one day</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>5 · Job date <span class="th">วันถ่าย</span></label>
             <input type="date" id="f-startDate">
           </div>
           <div class="form-group">
@@ -119,18 +130,48 @@
             <input type="date" id="f-endDate">
           </div>
         </div>
-        <label class="flex-check"><input type="checkbox" id="f-dateFlexible"> Dates are flexible · วันยังไม่แน่นอน</label>
+        <label class="flex-check"><input type="checkbox" id="f-dateFlexible"> Dates not confirmed yet · วันยังไม่แน่นอน (tbc)</label>
+        <div class="form-group">
+          <label>6 · Shooting location <span class="th">สถานที่ถ่าย</span></label>
+          <input type="text" id="f-location" maxlength="200" placeholder="e.g. Studio in Bangkok / cafe / hotel, which city">
+        </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Location <span class="th">สถานที่</span></label>
-            <input type="text" id="f-location" maxlength="120" placeholder="Bangkok, studio, on location…">
+            <label>7 · Media usage <span class="th">สื่อที่ใช้</span></label>
+            <input type="text" id="f-usage" maxlength="200" placeholder="e.g. Online / social media / TV / billboard">
           </div>
           <div class="form-group">
-            <label>Media Usage <span class="th">สื่อที่ใช้</span></label>
-            <input type="text" id="f-usage" maxlength="200" placeholder="Online / TV / billboard, country, how long">
+            <label>8 · Country of usage <span class="th">ประเทศที่ใช้สื่อ</span></label>
+            <input type="text" id="f-countryOfUse" maxlength="120" placeholder="e.g. Thailand / GCC / worldwide">
           </div>
         </div>
         <div class="form-row">
+          <div class="form-group">
+            <label>9 · Period of usage <span class="th">ระยะเวลาใช้สื่อ</span></label>
+            <select id="f-periodOfUsage">
+              <option value="" selected>Select…</option>
+              <option>6 months</option>
+              <option>1 year</option>
+              <option>1–2 years</option>
+              <option>2 years</option>
+              <option>Longer / buyout</option>
+              <option>Not sure</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>10 · Number of outfits <span class="th">จำนวนชุด</span></label>
+            <input type="text" id="f-outfits" maxlength="30" placeholder="e.g. 1–2">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>11 · Will there be bikinis or lingerie? <span class="th">มีชุดว่ายน้ำ/ชุดชั้นในไหม</span></label>
+            <select id="f-bikinis">
+              <option value="" selected>Select…</option>
+              <option>No</option>
+              <option>Yes</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>Budget <span class="th">งบประมาณ</span></label>
             <select id="f-budget">
@@ -142,24 +183,24 @@
               <option>฿100,000+</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>How did you find us? <span class="th">รู้จักเราจาก</span></label>
-            <select id="f-foundVia">
-              <option value="" selected>Select…</option>
-              <option>Instagram</option>
-              <option>Facebook</option>
-              <option>TikTok</option>
-              <option>Google / Website</option>
-              <option>LINE</option>
-              <option>Referral</option>
-              <option>Worked together before</option>
-              <option>Other</option>
-            </select>
-          </div>
+        </div>
+        <div class="form-group">
+          <label>Anything else about the project? <span class="th">รายละเอียดเพิ่มเติม</span></label>
+          <textarea id="f-description" maxlength="1000" placeholder="Style, references, what the models will do…"></textarea>
         </div>
         <div class="form-group" style="margin-bottom:0">
-          <label>Anything else? <span class="th">อื่นๆ</span></label>
-          <textarea id="f-notes" maxlength="800" style="min-height:60px" placeholder="References, special requirements…"></textarea>
+          <label>How did you find us? <span class="th">รู้จักเราจาก</span></label>
+          <select id="f-foundVia">
+            <option value="" selected>Select…</option>
+            <option>Instagram</option>
+            <option>Facebook</option>
+            <option>TikTok</option>
+            <option>Google / Website</option>
+            <option>LINE</option>
+            <option>Referral</option>
+            <option>Worked together before</option>
+            <option>Other</option>
+          </select>
         </div>
       </div>
 
@@ -189,16 +230,22 @@
           phone: $('f-phone').value.trim(),
           lineId: $('f-lineId').value.trim(),
           projectType: $('f-projectType').value,
+          product: $('f-product').value.trim(),
           modelsCount: $('f-modelsCount').value.trim(),
+          halfFull: $('f-halfFull').value,
           description: $('f-description').value.trim(),
           startDate: $('f-startDate').value,
           endDate: $('f-endDate').value,
           dateFlexible: $('f-dateFlexible').checked,
           location: $('f-location').value.trim(),
           usage: $('f-usage').value.trim(),
+          countryOfUse: $('f-countryOfUse').value.trim(),
+          periodOfUsage: $('f-periodOfUsage').value,
+          outfits: $('f-outfits').value.trim(),
+          bikinis: $('f-bikinis').value,
           budget: $('f-budget').value,
           foundVia: $('f-foundVia').value,
-          notes: $('f-notes').value.trim(),
+          notes: '',
         };
         if (!body.email && !body.phone && !body.lineId) {
           err.textContent = 'Please give at least one way to contact you (email, phone or LINE). · ขอช่องทางติดต่ออย่างน้อย 1 ช่องทางค่ะ';

@@ -3462,7 +3462,7 @@
       return `<tr class="row" data-id="${r.id}">
         <td>${esc(when)}</td>
         <td><b>${esc(r.clientName)}</b>${r.company ? `<br><span style="font-size:12px;color:var(--grey)">${esc(r.company)}</span>` : ''}</td>
-        <td>${esc(r.projectType) || '—'}${r.modelsCount ? ` · ${esc(r.modelsCount)}` : ''}<br><span style="font-size:12px;color:var(--grey)">${esc(String(r.description || '').slice(0, 70))}${String(r.description || '').length > 70 ? '…' : ''}</span></td>
+        <td>${esc(r.projectType) || '—'}${r.modelsCount ? ` · ${esc(r.modelsCount)}` : ''}<br><span style="font-size:12px;color:var(--grey)">${esc([r.product, r.halfFull, String(r.description || '').slice(0, 50)].filter(Boolean).join(' · ').slice(0, 80))}</span></td>
         <td>${esc(dates)}${r.dateFlexible && r.startDate ? ' <span title="Dates are flexible">~</span>' : ''}</td>
         <td>${esc(r.budget) || '—'}</td>
         <td>${esc(r.foundVia) || '—'}</td>
@@ -3485,9 +3485,13 @@
       <div class="req-detail">
         ${row('Client', r.clientName)}${row('Company', r.company)}
         ${row('Contact', reqContact(r))}
-        ${row('Type', r.projectType)}${row('Models', r.modelsCount)}
-        ${row('Dates', dates + (r.dateFlexible ? ' (flexible)' : ''))}
-        ${row('Location', r.location)}${row('Usage', r.usage)}
+        ${row('Product', r.product)}${row('Type', r.projectType)}
+        ${row('Models', r.modelsCount)}${row('Half / full day', r.halfFull)}
+        ${row('Dates', dates + (r.dateFlexible ? ' (tbc)' : ''))}
+        ${row('Location', r.location)}
+        ${row('Media usage', r.usage)}${row('Country of usage', r.countryOfUse)}
+        ${row('Period of usage', r.periodOfUsage)}${row('Outfits', r.outfits)}
+        ${row('Bikinis / lingerie', r.bikinis)}
         ${row('Budget', r.budget)}${row('Found us via', r.foundVia)}
         ${r.description ? `<div style="margin-top:8px"><b>Project</b><br>${esc(r.description)}</div>` : ''}
         ${r.notes ? `<div style="margin-top:8px"><b>Notes</b><br>${esc(r.notes)}</div>` : ''}
@@ -3527,7 +3531,17 @@
           date: isISODate(r.startDate) ? r.startDate : todayLocal(),
           models: r.modelsCount || 'TBC',
           option: `Client request: ${r.projectType || 'job'} for ${r.clientName}${r.company ? ' (' + r.company + ')' : ''}`,
-          note: `Contact: ${reqContact(r) || '-'}\n${r.description || ''}${r.usage ? '\nUsage: ' + r.usage : ''}${r.location ? '\nLocation: ' + r.location : ''}${r.budget ? '\nBudget: ' + r.budget : ''}`,
+          note: `Contact: ${reqContact(r) || '-'}`
+            + (r.product ? `\nProduct: ${r.product}` : '')
+            + (r.halfFull ? `\nDay: ${r.halfFull}` : '')
+            + (r.location ? `\nLocation: ${r.location}` : '')
+            + (r.usage ? `\nMedia: ${r.usage}` : '')
+            + (r.countryOfUse ? `\nCountry: ${r.countryOfUse}` : '')
+            + (r.periodOfUsage ? `\nPeriod: ${r.periodOfUsage}` : '')
+            + (r.outfits ? `\nOutfits: ${r.outfits}` : '')
+            + (r.bikinis ? `\nBikinis/lingerie: ${r.bikinis}` : '')
+            + (r.budget ? `\nBudget: ${r.budget}` : '')
+            + (r.description ? `\n${r.description}` : ''),
           stage: 'option',
           leadSource: ({ Instagram: 'Instagram', Facebook: 'Facebook', TikTok: 'Other', 'Google / Website': 'Website', LINE: 'LINE', Referral: 'Referral', 'Worked together before': 'Repeat client' })[r.foundVia] || 'Other',
           clientType: r.foundVia === 'Worked together before' ? 'old' : 'new',
