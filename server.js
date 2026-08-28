@@ -75,7 +75,17 @@ const CLIENT_KEYS = [
 //                          job's own fee), but NOT the aggregate revenue totals
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ACTIVITY_FILE = path.join(DATA_DIR, 'activity.json');
-const sessions = Object.create(null);   // login token -> { email, name, role }
+// Login token -> { email, name, role, ts }. PERSISTED to the volume so a deploy
+// no longer logs the whole team out mid-work (Tawa lost saves that way 2026-08-28).
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+let sessions = Object.create(null);
+try { sessions = Object.assign(Object.create(null), JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'))); } catch (_) {}
+function saveSessions() {
+  // prune: sessions older than 30 days die (rotation still possible via logout)
+  const cut = Date.now() - 30 * 24 * 3600 * 1000;
+  for (const t of Object.keys(sessions)) if ((sessions[t].ts || 0) < cut) delete sessions[t];
+  try { fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions)); } catch (_) {}
+}
 
 // Append an audit event (who did what, when). Director/Admin can review these.
 function logActivity(user, action, detail) {
@@ -654,8 +664,9 @@ async function handleApi(req, res) {
     const user = findUser(body.email, body.password);
     if (!user) return reply(res, 401, { error: 'Wrong email or password' });
     const token = crypto.randomUUID();
-    const session = { email: user.email, name: user.name, role: user.role, bookerName: user.bookerName || '' };
+    const session = { email: user.email, name: user.name, role: user.role, bookerName: user.bookerName || '', ts: Date.now() };
     sessions[token] = session;
+    saveSessions();
     logActivity(session, 'login', '');
     return reply(res, 200, { ok: true, token, email: user.email, name: user.name, role: user.role,
       bookerName: user.bookerName || '' });
@@ -663,7 +674,7 @@ async function handleApi(req, res) {
   // --- LOGOUT: invalidate the session server-side ----------------
   if (resource === 'logout' && method === 'POST') {
     const t = req.headers['x-admin-token'];
-    if (t && sessions[t]) delete sessions[t];
+    if (t && sessions[t]) { delete sessions[t]; saveSessions(); }
     return reply(res, 200, { ok: true });
   }
 
