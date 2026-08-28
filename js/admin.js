@@ -1595,24 +1595,19 @@
   // on every save: removes the job's old shoot entries, then adds one per current date.
   async function syncShootDates(job) {
     if (!job) return;
-    const dates = Array.isArray(job.shootDates) ? job.shootDates : [];
-    // Remove existing schedule entries linked to this job whose date is no longer set.
-    const existing = schedule.filter(e => e.jobRef === job.id);
-    for (const e of existing) {
-      if (!dates.includes(e.date)) {
-        // NEVER delete a booker's LEAD entry (casting/fitting/option/…) that
-        // merely got linked to this job — unlink it instead. Deleting it was
-        // silently erasing castings when a job was created from one.
-        if (e.casting || e.fitting || e.option || e.shortlist || e.priority) {
-          try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); } catch (_) {}
-          e.jobRef = '';
-          continue;
-        }
-        try { await api('/api/schedule/' + e.id, { method: 'DELETE' }); } catch (_) {}
-        schedule = schedule.filter(x => x.id !== e.id);
-      }
+    let dates = (Array.isArray(job.shootDates) ? job.shootDates : []).filter(isISODate);
+    // Tawa's Body Glove (2026-08-28): he typed the shoot-start date but didn't
+    // tick the calendar picker → shootDates was EMPTY, so the sync deleted his
+    // option and created nothing. If the picker is empty but the job has a real
+    // date, that date IS the shoot date.
+    if (!dates.length) {
+      const fb = [job.shootStart, job.jobDate].find(isISODate);
+      if (fb) dates = [fb];
     }
-    // Add a shooting entry for any date that doesn't already have one.
+    let failed = 0;
+    const existing = schedule.filter(e => e.jobRef === job.id);
+    // CREATE / link first, DELETE after — the old order (delete first) could
+    // vanish a booking with nothing to replace it when a later call failed.
     const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const modelStr = job.model || job.freelance || '';
     for (const dt of dates) {
@@ -1623,8 +1618,10 @@
         && norm(e.models) === norm(modelStr)
         && (e.job || e.stage === 'shooting' || e.status === 'confirmed'));
       if (clash) {
-        try { await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, stage: 'shooting', jobCreated: true }) }); } catch (_) {}
-        clash.jobRef = job.id; clash.stage = 'shooting'; clash.jobCreated = true;
+        try {
+          await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, stage: 'shooting', jobCreated: true }) });
+          clash.jobRef = job.id; clash.stage = 'shooting'; clash.jobCreated = true;
+        } catch (err) { if (err.message === 'unauthorized') return; failed++; }
         continue;
       }
       const body = {
@@ -1635,8 +1632,29 @@
       try {
         const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(body) });
         if (r.entry) schedule.push(r.entry);
-      } catch (_) {}
+      } catch (err) { if (err.message === 'unauthorized') return; failed++; }
     }
+    // Now remove linked entries whose date is no longer a shoot date.
+    for (const e of existing) {
+      if (!dates.includes(e.date)) {
+        // NEVER delete a booker's LEAD entry that merely got linked to this job —
+        // unlink it instead. Leads live in the TEXT fields *or* only in the STAGE
+        // (Board-created entries have a stage but empty text — Tawa's case).
+        const leadStage = ['casting', 'goandsee', 'shortlist', 'option', 'fitting', 'priority'].includes(e.stage);
+        if (leadStage || e.casting || e.fitting || e.option || e.shortlist || e.priority) {
+          try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); e.jobRef = ''; }
+          catch (err) { if (err.message === 'unauthorized') return; failed++; }
+          continue;
+        }
+        try {
+          await api('/api/schedule/' + e.id, { method: 'DELETE' });
+          schedule = schedule.filter(x => x.id !== e.id);
+        } catch (err) { if (err.message === 'unauthorized') return; failed++; }
+      }
+    }
+    // Never fail silently — a half-synced schedule must be visible, and saving
+    // the job again re-runs the whole sync (self-healing).
+    if (failed) alert('⚠ The job was saved, but its schedule entries could not all be updated.\nOpen the job and press Save again to retry.');
   }
 
   /* ================= 6. SCHEDULE ================= */
