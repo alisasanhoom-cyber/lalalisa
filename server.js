@@ -1264,6 +1264,8 @@ function serveFile(req, res) {
     res.writeHead(302, { Location: '/admin.html' });
     return res.end();
   }
+  // Clean bio-friendly address for the client job-request form.
+  if (name === '/request' || name === '/request/') name = '/request.html';
   const filePath = path.normalize(path.join(__dirname, name));
   if (!filePath.startsWith(__dirname + path.sep)) return reply(res, 403, { error: 'Forbidden' });
 
