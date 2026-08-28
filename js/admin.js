@@ -4062,7 +4062,10 @@
     items.forEach(i => { const k = (String(i.models || '').split(/[,\n]/)[0] || '—').trim() || '—'; (byModel[k] = byModel[k] || []).push(i); });
     const head = months.map(m =>
       `<div style="flex:1;border-left:1px solid #e8e8e8;font-size:9.5px;color:#999;padding-left:3px;overflow:hidden">${m.toLocaleString('en', { month: 'short' })}${m.getMonth() === 0 || m === months[0] ? ' ' + String(m.getFullYear()).slice(2) : ''}</div>`).join('');
-    const rows = Object.keys(byModel).sort().map(name => {
+    // Rows ordered by each model's earliest placement date — not alphabet (Wolf).
+    const rows = Object.keys(byModel)
+      .sort((a, b) => Math.min.apply(null, byModel[a].map(i => i.s)) - Math.min.apply(null, byModel[b].map(i => i.s)))
+      .map(name => {
       const bars = byModel[name].map(i => {
         const l = pct(i.s), w = Math.max(2, pct(i.t) - l + 100 / months.length / 30);
         const c = COLORS[i.planState] || COLORS.current;
