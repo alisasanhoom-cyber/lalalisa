@@ -1268,11 +1268,16 @@
       return String(uri).split(',')[1] || '';
     } finally { try { frame.remove(); } catch (_) {} }      // host pop-up may already be closed
   }
-  async function driveUploadConfirmation(job, type, html, onStatus, hostWin, scale) {
+  async function driveUploadConfirmation(job, type, html, onStatus, hostWin, scale, skipPdf) {
     if (!appSettings.driveUploadUrl) { if (onStatus) onStatus(false, {}); return; }
     let pdfBase64 = '';
-    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type), hostWin, scale); }
-    catch (_) {}   // without it the script falls back to its own (table) version
+    // skipPdf: send the SHEET grid only — the v9 script keeps the existing PDF
+    // untouched when neither pdfBase64 nor html is sent. Used by auto-save so
+    // the heavy canvas render never runs while a booker is mid-click.
+    if (!skipPdf) {
+      try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type), hostWin, scale); }
+      catch (_) {}   // without it the script falls back to its own (table) version
+    }
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
@@ -1281,7 +1286,7 @@
         jobDate: job.jobDate || '',
         code: job.jobId || job.jobIdNonTax || '',
         pdfBase64: pdfBase64,                       // the EXACT rendered form
-        html: MPConfirmation.renderDrive ? MPConfirmation.renderDrive(job, type) : '',  // fallback only
+        html: skipPdf ? '' : (MPConfirmation.renderDrive ? MPConfirmation.renderDrive(job, type) : ''),  // fallback only; empty on grid-only saves so the script keeps the current PDF
         grid: MPConfirmation.sheetGrid ? MPConfirmation.sheetGrid(job, type) : null,    // form-styled Sheet
         sheet: confSheetRows(job, type),            // fallback for old script versions
       }),
@@ -1289,16 +1294,24 @@
       .then(r => onStatus && onStatus(!!(r && r.ok), r || {}))
       .catch(() => onStatus && onStatus(false, {}));
   }
-  // Tawa: editing a job must overwrite its Drive copies right away.
-  // The PDF render blocks the page for a moment, so saves are QUEUED: one at a
-  // time, after a short pause so clicking around right after Save stays smooth
-  // (Tawa: "แก้ใบงานแล้วกดหน้าใหม่มันค้าง"), and at a lighter render scale.
-  const driveQueue = new Map();   // job id -> latest record
-  let drivePumpBusy = false;
+  // Tawa: editing a job must overwrite its Drive copies right away — but the
+  // PDF render blocks the page, and she kept hitting that freeze mid-click.
+  // So auto-save is TWO-STAGE now:
+  //   1) instantly: upload the SHEET grid only (cheap, no canvas — Drive Sheet
+  //      is current within a second, PDF stays the previous version for now);
+  //   2) the PDF re-render waits until the booker has been completely idle for
+  //      8s (no mouse/keys, tab visible, no drawer open) — it never runs while
+  //      anyone is actually working.
+  const driveQueue = new Map();      // job id -> latest record (stage 1: sheet)
+  const drivePdfQueue = new Map();   // job id -> latest record (stage 2: pdf)
+  let drivePumpBusy = false, drivePdfBusy = false, lastUserAct = Date.now();
+  ['pointerdown', 'keydown', 'mousemove', 'touchstart', 'wheel'].forEach(ev =>
+    document.addEventListener(ev, () => { lastUserAct = Date.now(); }, { passive: true }));
   function autoDriveSave(jobRec) {
     try {
       if (!jobRec || !jobRec.confirmationMade || !appSettings.driveUploadUrl) return;
       driveQueue.set(jobRec.id || 'one', jobRec);
+      drivePdfQueue.set(jobRec.id || 'one', jobRec);
       pumpDriveQueue();
     } catch (_) {}
   }
@@ -1308,16 +1321,30 @@
     if (!next) return;
     drivePumpBusy = true;
     driveQueue.delete(next[0]);
-    await new Promise(r => setTimeout(r, 1200));            // let the UI settle after Save
     try {
       const { data, type } = confirmationDocData({ ...next[1] });
-      const html = MPConfirmation.render(data, type);
-      await new Promise(done => driveUploadConfirmation(data, type, html,
-        ok => { if (ok) toast('☁ Confirmation updated in Drive'); done(); }, null, 1.75));
+      await new Promise(done => driveUploadConfirmation(data, type, '',
+        ok => { if (ok) toast('☁ Sheet updated in Drive'); done(); }, null, 0, true));   // grid only — instant
     } catch (_) {}
     drivePumpBusy = false;
     pumpDriveQueue();
   }
+  setInterval(async () => {
+    if (drivePdfBusy || !drivePdfQueue.size) return;
+    if (document.hidden) return;
+    if (Date.now() - lastUserAct < 8000) return;            // hands still on — wait
+    if (el('drawer').classList.contains('open')) return;
+    const next = drivePdfQueue.entries().next().value;
+    drivePdfBusy = true;
+    drivePdfQueue.delete(next[0]);
+    try {
+      const { data, type } = confirmationDocData({ ...next[1] });
+      const html = MPConfirmation.render(data, type);
+      await new Promise(done => driveUploadConfirmation(data, type, html,
+        ok => { if (ok) toast('☁ PDF updated in Drive'); done(); }, null, 1.75));
+    } catch (_) {}
+    drivePdfBusy = false;
+  }, 2000);
   // Drive filename in the team's own convention: <code>-<Title>_<Model, Model>.
   function driveDocName(job) {
     if (!job) return '';
