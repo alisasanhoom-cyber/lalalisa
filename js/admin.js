@@ -1163,7 +1163,10 @@
     } else {
       // Legacy: multiple SEPARATE job records sharing one code → one confirmation
       // listing every model + their fee.
-      const pc = jj => { const m = String(jj.jobId || jj.jobIdNonTax || '').match(/([CB])\s?(\d{3,})/i); return m ? m[1].toUpperCase() + m[2] : ''; };
+      // The code key keeps the usage-fee suffix: C1119, C1119/1 and C1119/2 are
+      // SEPARATE papers (Lisa 2026-08-31 — Craig appeared twice, two jobs merged).
+      // Only records with the LITERAL same code (legacy multi-model rows) group.
+      const pc = jj => { const m = String(jj.jobId || jj.jobIdNonTax || '').match(/([CB])\s?(\d{3,})(?:\s*\/\s*(\d+))?/i); return m ? m[1].toUpperCase() + m[2] + (m[3] ? '/' + m[3] : '') : ''; };
       const myCode = pc(data);
       if (myCode) {
         const group = jobs.filter(x => pc(x) === myCode);
@@ -1346,10 +1349,14 @@
     drivePdfBusy = false;
   }, 2000);
   // Drive filename in the team's own convention: <code>-<Title>_<Model, Model>.
+  // Usage-fee codes write their slash as a dash ("C1119/2" → "C1119-2") so the
+  // replace-by-code sweep can match them — a "/" can't exist in a filename, and
+  // the old space-stripping made "C11192", which the script could never match
+  // (that's why slash-code jobs piled up duplicate papers).
   function driveDocName(job) {
     if (!job) return '';
     const clean = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const code = clean(job.jobId || job.jobIdNonTax).replace(/\s+/g, '');
+    const code = clean(String(job.jobId || job.jobIdNonTax || '').replace(/\s*\/\s*/g, '-')).replace(/\s+/g, '');
     const models = (Array.isArray(job.lines) && job.lines.length
       ? job.lines.map(l => l.name) : [job.model || job.freelance])
       .filter(Boolean).map(clean).join(', ');
