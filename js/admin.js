@@ -1247,7 +1247,7 @@
     });
     return w.__h2pLoad;
   }
-  async function confPdfBase64(html, hostWin) {
+  async function confPdfBase64(html, hostWin, scale) {
     const w = hostWin && !hostWin.closed ? hostWin : window;
     await ensureHtml2pdf(w);
     const frame = w.document.createElement('iframe');
@@ -1261,17 +1261,17 @@
       const uri = await w.html2pdf().set({
         margin: [8, 8, 10, 8],
         image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2.5, useCORS: true, windowWidth: 794 },
+        html2canvas: { scale: scale || 2.5, useCORS: true, windowWidth: 794 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'] },
       }).from(d.body).outputPdf('datauristring');
       return String(uri).split(',')[1] || '';
     } finally { try { frame.remove(); } catch (_) {} }      // host pop-up may already be closed
   }
-  async function driveUploadConfirmation(job, type, html, onStatus, hostWin) {
-    if (!appSettings.driveUploadUrl) return;
+  async function driveUploadConfirmation(job, type, html, onStatus, hostWin, scale) {
+    if (!appSettings.driveUploadUrl) { if (onStatus) onStatus(false, {}); return; }
     let pdfBase64 = '';
-    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type), hostWin); }
+    try { pdfBase64 = await confPdfBase64(html || MPConfirmation.render(job, type), hostWin, scale); }
     catch (_) {}   // without it the script falls back to its own (table) version
     fetch(appSettings.driveUploadUrl, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' },
@@ -1290,13 +1290,33 @@
       .catch(() => onStatus && onStatus(false, {}));
   }
   // Tawa: editing a job must overwrite its Drive copies right away.
+  // The PDF render blocks the page for a moment, so saves are QUEUED: one at a
+  // time, after a short pause so clicking around right after Save stays smooth
+  // (Tawa: "แก้ใบงานแล้วกดหน้าใหม่มันค้าง"), and at a lighter render scale.
+  const driveQueue = new Map();   // job id -> latest record
+  let drivePumpBusy = false;
   function autoDriveSave(jobRec) {
     try {
       if (!jobRec || !jobRec.confirmationMade || !appSettings.driveUploadUrl) return;
-      const { data, type } = confirmationDocData({ ...jobRec });
-      const html = MPConfirmation.render(data, type);
-      driveUploadConfirmation(data, type, html, ok => { if (ok) toast('☁ Confirmation updated in Drive'); });
+      driveQueue.set(jobRec.id || 'one', jobRec);
+      pumpDriveQueue();
     } catch (_) {}
+  }
+  async function pumpDriveQueue() {
+    if (drivePumpBusy) return;
+    const next = driveQueue.entries().next().value;
+    if (!next) return;
+    drivePumpBusy = true;
+    driveQueue.delete(next[0]);
+    await new Promise(r => setTimeout(r, 1200));            // let the UI settle after Save
+    try {
+      const { data, type } = confirmationDocData({ ...next[1] });
+      const html = MPConfirmation.render(data, type);
+      await new Promise(done => driveUploadConfirmation(data, type, html,
+        ok => { if (ok) toast('☁ Confirmation updated in Drive'); done(); }, null, 1.75));
+    } catch (_) {}
+    drivePumpBusy = false;
+    pumpDriveQueue();
   }
   // Drive filename in the team's own convention: <code>-<Title>_<Model, Model>.
   function driveDocName(job) {
@@ -3413,8 +3433,20 @@
   }
 
   /* ================= 7. DRAWER + TABS ================= */
-  function openDrawer()  { el('drawer').classList.add('open'); el('drawer-bg').classList.add('open'); }
-  function closeDrawer() { el('drawer').classList.remove('open'); el('drawer-bg').classList.remove('open'); }
+  // Phone back button/gesture closes the drawer instead of leaving the app
+  // (Tawa: in the installed app there was no way back from a form). A history
+  // entry is pushed when the drawer opens; popping it closes the drawer.
+  let drawerHist = false;
+  function reallyCloseDrawer() { el('drawer').classList.remove('open'); el('drawer-bg').classList.remove('open'); }
+  function openDrawer()  {
+    el('drawer').classList.add('open'); el('drawer-bg').classList.add('open');
+    if (!drawerHist) { try { history.pushState({ mpDrawer: 1 }, ''); drawerHist = true; } catch (_) {} }
+  }
+  function closeDrawer() {
+    if (drawerHist) { drawerHist = false; try { history.back(); return; } catch (_) {} }
+    reallyCloseDrawer();
+  }
+  window.addEventListener('popstate', () => { drawerHist = false; reallyCloseDrawer(); });
   el('d-close').addEventListener('click', closeDrawer);
   el('drawer-bg').addEventListener('click', closeDrawer);
   // Esc closes the drawer too — it's the first thing people try (Aim).
