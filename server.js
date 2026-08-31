@@ -868,9 +868,10 @@ async function handleApi(req, res) {
       logActivity(user, 'imported model codes', `${applied} set, ${already} already had one`);
       return reply(res, 200, { ok: true, applied, already, total: models.length, seeded: Object.keys(seed).length });
     }
-    // Create / edit / delete: managers + the graphic designer. Bookers view only.
-    const canEditModels = isManager || user.role === 'designer';
-    if (!canEditModels) return reply(res, 403, { error: 'View only — ask Admin or the designer to edit contacts.' });
+    // Create / edit / delete: the whole team (Lisa 2026-08-31 — Ness asked).
+    // Scouter never reaches here (his gate allows GET only).
+    const canEditModels = isManager || user.role === 'designer' || user.role === 'booker';
+    if (!canEditModels) return reply(res, 403, { error: 'View only.' });
     // Bulk update (Ploy's cleanup): set status and/or category on MANY models in one
     // write. POST { __bulk:true, ids:[...], set:{ status?, category? } }.
     if (method === 'POST' && body && body.__bulk) {

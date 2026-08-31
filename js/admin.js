@@ -4310,7 +4310,7 @@
   let mStatus = '';   // quick availability filter driven by the chips
   let mSelected = new Set();   // bulk-selected model ids (checkboxes)
   let mCat = '';      // active category: '' = show the category tiles, else drill into one
-  const canEditModels = () => ['master', 'admin', 'designer'].includes(role);   // booker + scouter view only
+  const canEditModels = () => ['master', 'admin', 'designer', 'booker'].includes(role);   // whole team edits (Lisa 2026-08-31); scouter view only
   async function loadModels() {
     try { models = (await api('/api/models')).models || []; } catch (_) { models = []; }
     // fill the category filter once

@@ -98,6 +98,9 @@ async function login(email, password) {
     check('sw.js served, never caches /api/', sw.ok && /startsWith\('\/api\/'\)/.test(swText));
     check('backend files still hidden (server.js 404)', (await fetch(BASE + '/server.js')).status === 404);
 
+    const bmod = await api('/api/models', { method: 'POST', body: { name: 'Booker Made Model' } }, booker);
+    check('booker can edit the model directory (Lisa 2026-08-31)', bmod.status === 200 || bmod.status === 201, bmod.status);
+
     console.log('— web push —');
     const pk = await api('/api/push/key');
     check('VAPID public key served (65-byte P-256 point)', pk.status === 200 && typeof pk.body.key === 'string' && Buffer.from(pk.body.key.replace(/-/g, '+').replace(/_/g, '/') + '==', 'base64').length === 65, pk.body);
