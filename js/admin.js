@@ -3448,6 +3448,7 @@
   }
   window.addEventListener('popstate', () => { drawerHist = false; reallyCloseDrawer(); });
   el('d-close').addEventListener('click', closeDrawer);
+  if (el('d-back')) el('d-back').addEventListener('click', closeDrawer);   // visible ‹ Back button (Lisa)
   el('drawer-bg').addEventListener('click', closeDrawer);
   // Esc closes the drawer too — it's the first thing people try (Aim).
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
