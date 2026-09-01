@@ -1285,7 +1285,7 @@ function serveFile(req, res) {
   // under js/ css/ images/. Never the backend source, configs, data, docs, or the
   // model-code seed — those live at the root too and must NOT be publicly readable.
   const rel = filePath.slice(__dirname.length + 1).replace(/\\/g, '/');
-  const isPublicAsset = (rel.endsWith('.html') && !rel.includes('/')) || /^(js|css|images)\//.test(rel)
+  const isPublicAsset = (rel.endsWith('.html') && !rel.includes('/')) || /^(js|css|images|newsletter)\//.test(rel)
     || rel === 'sw.js' || rel === 'manifest.webmanifest';   // PWA files must live at root (sw.js scope = '/')
   if (!isPublicAsset) {
     res.writeHead(404, { 'Content-Type': 'text/html' });
