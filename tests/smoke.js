@@ -100,6 +100,13 @@ async function login(email, password) {
 
     const bmod = await api('/api/models', { method: 'POST', body: { name: 'Booker Made Model' } }, booker);
     check('booker can edit the model directory (Lisa 2026-08-31)', bmod.status === 200 || bmod.status === 201, bmod.status);
+    const am = await api('/api/models', { method: 'POST', body: { name: 'Auto Coded Talent', category: 'Talents' } }, booker);
+    check('new model auto-gets a real code (MPyy-11-001)', am.body && am.body.model && /^MP\d{2}-11-001$/.test(am.body.model.modelCode), am.body && am.body.model && am.body.model.modelCode);
+    const am2 = await api('/api/models', { method: 'POST', body: { name: 'Auto Coded Talent 2', category: 'Talents' } }, booker);
+    check('running number increments (…-002)', am2.body && am2.body.model && /-11-002$/.test(am2.body.model.modelCode), am2.body && am2.body.model && am2.body.model.modelCode);
+    const noCat = await api('/api/models', { method: 'POST', body: { name: 'No Category Person' } }, booker);
+    const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);
+    check('⚙ Auto code PATCH mints per category (Kids → -07-001)', auto.body && auto.body.model && /-07-001$/.test(auto.body.model.modelCode), auto.body && auto.body.model && auto.body.model.modelCode);
 
     console.log('— web push —');
     const pk = await api('/api/push/key');

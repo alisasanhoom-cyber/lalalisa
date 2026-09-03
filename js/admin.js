@@ -4529,8 +4529,11 @@
     el('d-title').textContent = m ? (edit ? 'Edit model' : m.name) : 'Add model';
     el('drawer-body').innerHTML = `
       <div class="field"><label>Model Code <span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0">· same code Aim uses in FlowAccount</span></label>
-        <input id="md-modelCode" value="${esc((m && m.modelCode) || '')}" placeholder="e.g. MP26-08-001" ${edit ? '' : 'readonly'}></div>
-      ${m && !m.modelCode && m.modelNo ? `<p style="margin:-8px 0 12px;color:#b06a1a;font-size:11.5px">No code from the master sheet yet — temporary ref MP-${String(m.modelNo).padStart(4, '0')}</p>` : ''}
+        <div style="display:flex;gap:8px">
+          <input id="md-modelCode" value="${esc((m && m.modelCode) || '')}" placeholder="e.g. MP26-11-013" ${edit ? '' : 'readonly'} style="flex:1">
+          ${edit && m && !m.modelCode ? '<button class="btn ghost" id="md-gencode" title="Mints the next running code for this model\'s category (MPyy-cat-nnn)">⚙ Auto code</button>' : ''}
+        </div></div>
+      ${m && !m.modelCode && m.modelNo ? `<p style="margin:-8px 0 12px;color:#b06a1a;font-size:11.5px">No real code yet — temporary ref MP-${String(m.modelNo).padStart(4, '0')}. Set the Category, then press ⚙ Auto code.</p>` : ''}
       <div class="field two">
         ${modelField('Name', 'name', m && m.name, 'as bookers type it')}
         ${modelField('Nickname', 'nickname', m && m.nickname)}
@@ -4582,6 +4585,24 @@
       };
       nameEl.addEventListener('input', checkDup);
       checkDup();
+
+      // ⚙ Auto code: server mints the next MPyy-cat-nnn for this model's category.
+      if (el('md-gencode')) el('md-gencode').addEventListener('click', async () => {
+        const cat = el('md-category').value === '—' ? '' : el('md-category').value;
+        if (!cat) { alert('Pick a Category first — the code\'s middle number comes from it.'); return; }
+        try {
+          const r = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ modelCode: '__auto__', category: cat }) });
+          if (r.model && r.model.modelCode) {
+            Object.assign(m, r.model);
+            el('md-modelCode').value = r.model.modelCode;
+            el('md-gencode').style.display = 'none';
+            toast('Code assigned: ' + r.model.modelCode);
+            renderModels();
+          } else {
+            alert('No running number exists for the category “' + cat + '” yet — type the code by hand this once (e.g. MP26-05-001) and the counter continues from it.');
+          }
+        } catch (e) { alert(e.message || 'Could not generate.'); }
+      });
 
       el('md-save').addEventListener('click', async () => {
         const F = ['name', 'nickname', 'country', 'phone', 'whatsapp', 'line', 'email', 'ig', 'visaType', 'visaExpiry', 'workPermit', 'compCard', 'arrival', 'departure', 'note', 'motherAgency', 'age', 'location', 'modelCode', 'scouter'];

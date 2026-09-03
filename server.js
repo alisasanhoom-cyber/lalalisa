@@ -524,10 +524,29 @@ function nextModelNo(list) {
   const max = (list || []).reduce((m, x) => Math.max(m, parseInt(x.modelNo, 10) || 0), 0);
   return max + 1;
 }
+// Model-code convention (decoded from the 2,267 existing codes, Ploy 2026-09-03):
+// MP{yy}-{category#}-{running#}. The middle number IS the category:
+const MODEL_CODE_CAT = { 'MP Models': '01', 'Freelancer': '02', 'Thai Models': '03',
+  'Kids': '07', 'Direct Models': '08', 'Body Talent': '09', 'Transgender': '10', 'Talents': '11' };
+function nextModelCode(category, list) {
+  const g = MODEL_CODE_CAT[category];
+  if (!g) return '';                                    // unknown category → leave for a hand-set code
+  const yy = String(new Date().getFullYear()).slice(2);
+  const pref = 'MP' + yy + '-' + g + '-';
+  let max = 0;
+  (list || load(MODELS_FILE)).forEach(m => {
+    const mm = String(m.modelCode || '').match(/^MP(\d{2})-(\d{2})-(\d{3})$/);
+    if (mm && ('MP' + mm[1] + '-' + mm[2] + '-') === pref) max = Math.max(max, +mm[3]);
+  });
+  return pref + String(max + 1).padStart(3, '0');
+}
 function buildModel(input, list) {
   const m = { id: crypto.randomUUID() };
   MODEL_FIELDS.forEach(k => { m[k] = text(input[k], MODEL_LONG[k] || 200); });
-  m.modelNo = nextModelNo(list || load(MODELS_FILE));
+  const all = list || load(MODELS_FILE);
+  m.modelNo = nextModelNo(all);
+  // New models get their real code straight away — same running format as always.
+  if (!m.modelCode) m.modelCode = nextModelCode(m.category, all);
   return m;
 }
 // CRM client record (managers only). Contact/marketing data — never money.
@@ -608,6 +627,11 @@ function updateModel(id, changes) {
     const wanted = String(changes.name || '').trim().toLowerCase();
     const clash = wanted && list.find(x => x.id !== id && String(x.name || '').trim().toLowerCase() === wanted);
     if (clash) return { __duplicate: text(changes.name) };
+  }
+  // '__auto__' mints the next real code in the house convention (MPyy-cat-nnn).
+  if (changes.modelCode === '__auto__') {
+    changes = { ...changes, modelCode: nextModelCode(changes.category !== undefined ? text(changes.category, 40) : m.category, list) };
+    if (!changes.modelCode) delete changes.modelCode;   // unknown category — leave as is
   }
   MODEL_FIELDS.forEach(k => { if (changes[k] !== undefined) m[k] = text(changes[k], MODEL_LONG[k] || 200); });
   save(MODELS_FILE, list);
