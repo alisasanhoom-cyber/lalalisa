@@ -3,6 +3,7 @@
   Send the "Models in Town" newsletter through Lisa's own Gmail — no paid services.
 
   Usage:
+    node scripts/send-newsletter.js --draft                # put the newsletter in Gmail Drafts
     node scripts/send-newsletter.js --test                 # send ONLY to lisa@ (preview)
     node scripts/send-newsletter.js --send                 # send today's batch (default 400)
     node scripts/send-newsletter.js --send --limit 500     # bigger batch
@@ -109,11 +110,45 @@ function buildMime(to, html) {
   ].join('\r\n');
 }
 
+/* ---------- IMAP APPEND: place a full-fidelity draft in Gmail Drafts ---------- */
+function imapCreateDraft(auth, mime) {
+  return new Promise((resolve, reject) => {
+    const sock = tls.connect(993, 'imap.gmail.com', { servername: 'imap.gmail.com' });
+    let buffer = '', stage = 0, finished = false;
+    const fail = (msg) => { if (!finished) { finished = true; sock.destroy(); reject(new Error(msg)); } };
+    sock.setTimeout(30000, () => fail('IMAP timeout'));
+    sock.on('error', (e) => fail(e.message));
+    sock.on('data', (chunk) => {
+      buffer += chunk.toString();
+      if (stage === 0 && /^\* OK/m.test(buffer)) {
+        buffer = '';
+        stage = 1;
+        sock.write(`a1 LOGIN "${auth.user}" "${auth.pass}"\r\n`);
+      } else if (stage === 1 && /^a1 /m.test(buffer)) {
+        if (!/^a1 OK/m.test(buffer)) return fail('IMAP login failed — check the app password');
+        buffer = '';
+        stage = 2;
+        sock.write(`a2 APPEND "[Gmail]/Drafts" (\\Draft) {${Buffer.byteLength(mime)}}\r\n`);
+      } else if (stage === 2 && buffer.includes('+')) {
+        buffer = '';
+        stage = 3;
+        sock.write(mime + '\r\n');
+      } else if (stage === 3 && /^a2 /m.test(buffer)) {
+        if (!/^a2 OK/m.test(buffer)) return fail('IMAP APPEND failed: ' + buffer.trim());
+        finished = true;
+        sock.write('a3 LOGOUT\r\n');
+        sock.end();
+        resolve();
+      }
+    });
+  });
+}
+
 /* ---------- main ---------- */
 (async () => {
   const args = process.argv.slice(2);
   const mode = args.includes('--test') ? 'test' : args.includes('--send') ? 'send'
-    : args.includes('--status') ? 'status' : 'help';
+    : args.includes('--draft') ? 'draft' : args.includes('--status') ? 'status' : 'help';
   if (mode === 'help') {
     console.log('Usage: --test | --send [--limit N] | --status  (see top of file)');
     process.exit(0);
@@ -142,6 +177,12 @@ function buildMime(to, html) {
   }
   const auth = { user: FROM_EMAIL, pass };
   const html = fs.readFileSync(HTML_FILE, 'utf8');
+
+  if (mode === 'draft') {
+    await imapCreateDraft(auth, buildMime(FROM_EMAIL, html));
+    console.log('Draft created — open Gmail > Drafts. The newsletter is there with all pictures.');
+    return;
+  }
 
   const targets = mode === 'test' ? [FROM_EMAIL] : remaining.slice(0, limit);
   console.log(mode === 'test'
