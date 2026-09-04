@@ -75,6 +75,33 @@ const CLIENT_KEYS = [
 //                          job's own fee), but NOT the aggregate revenue totals
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ACTIVITY_FILE = path.join(DATA_DIR, 'activity.json');
+// SAFETY NET 1 — the trash can: every deleted job/schedule/model record is kept
+// here (latest 800) with who deleted it and when, so ANY deletion can be undone.
+const TRASH_FILE = path.join(DATA_DIR, 'trash.json');
+function trashPut(kind, rec, user) {
+  try {
+    let t; try { t = JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8')); } catch (_) { t = []; }
+    t.unshift({ kind, rec, by: (user && user.email) || '', at: new Date().toISOString() });
+    fs.writeFileSync(TRASH_FILE, JSON.stringify(t.slice(0, 800)));
+  } catch (_) {}
+}
+// SAFETY NET 2 — hourly snapshots: a rolling 24-hour ring of full data copies on
+// the volume (hour N overwrites yesterday's hour N — bounded size, 24h granular).
+const SNAP_DIR = path.join(DATA_DIR, 'snapshots');
+function hourlySnapshot() {
+  try {
+    fs.mkdirSync(SNAP_DIR, { recursive: true });
+    const out = {};
+    fs.readdirSync(DATA_DIR).forEach(f => {
+      if (!f.endsWith('.json') || f === 'sessions.json') return;
+      try { out[f] = fs.readFileSync(path.join(DATA_DIR, f), 'utf8'); } catch (_) {}
+    });
+    fs.writeFileSync(path.join(SNAP_DIR, 'hour-' + String(new Date().getHours()).padStart(2, '0') + '.json'),
+      JSON.stringify({ when: new Date().toISOString(), files: out }));
+  } catch (_) {}
+}
+setInterval(hourlySnapshot, 3600 * 1000);
+setTimeout(hourlySnapshot, 30 * 1000);   // one snapshot shortly after every boot too
 // Login token -> { email, name, role, ts }. PERSISTED to the volume so a deploy
 // no longer logs the whole team out mid-work (Tawa lost saves that way 2026-08-28).
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
@@ -937,8 +964,10 @@ async function handleApi(req, res) {
       return reply(res, 200, { ok: true, model: m });
     }
     if (method === 'DELETE' && id) {
+      const gone = load(MODELS_FILE).find(x => x.id === id);
+      if (gone) trashPut('model', gone, user);
       save(MODELS_FILE, load(MODELS_FILE).filter(x => x.id !== id));
-      logActivity(user, 'deleted model', id);
+      logActivity(user, 'deleted model', gone ? gone.name : id);
       return reply(res, 200, { ok: true });
     }
   }
@@ -1049,8 +1078,33 @@ async function handleApi(req, res) {
     }
     if (method === 'DELETE' && id) {
       if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+      const goneReq = load(REQUESTS_FILE).find(x => x.id === id);
+      if (goneReq) trashPut('request', goneReq, user);
       save(REQUESTS_FILE, load(REQUESTS_FILE).filter(x => x.id !== id));
-      logActivity(user, 'deleted job request', id);
+      logActivity(user, 'deleted job request', goneReq ? goneReq.clientName : id);
+      return reply(res, 200, { ok: true });
+    }
+  }
+
+  // --- TRASH CAN (Director/Admin): everything deleted, restorable -----
+  if (resource === 'trash') {
+    if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
+    let t; try { t = JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8')); } catch (_) { t = []; }
+    if (method === 'GET') return reply(res, 200, { trash: t.slice(0, 200) });
+    if (method === 'POST' && body && body.at && body.kind) {
+      const i = t.findIndex(x => x.at === body.at && x.kind === body.kind);
+      if (i < 0) return reply(res, 404, { error: 'Not found in trash.' });
+      const FILES = { job: JOBS_FILE, schedule: SCHEDULE_FILE, model: MODELS_FILE,
+        request: REQUESTS_FILE, income: INCOME_FILE, client: CLIENTS_FILE, mac: MAC_FILE };
+      const file = FILES[t[i].kind];
+      if (!file) return reply(res, 400, { error: 'Unknown kind.' });
+      const list = load(file);
+      if (!list.some(x => x.id === t[i].rec.id)) list.unshift(t[i].rec);
+      save(file, list);
+      const rec = t[i].rec;
+      t.splice(i, 1);
+      try { fs.writeFileSync(TRASH_FILE, JSON.stringify(t)); } catch (_) {}
+      logActivity(user, 'restored from trash', `${body.kind} ${rec.name || rec.jobTitle || rec.clientName || rec.date || rec.id}`);
       return reply(res, 200, { ok: true });
     }
   }
@@ -1075,6 +1129,8 @@ async function handleApi(req, res) {
       return reply(res, 200, { ok: true, income: rec });
     }
     if (method === 'DELETE' && id) {
+      const goneInc = load(INCOME_FILE).find(x => x.id === id);
+      if (goneInc) trashPut('income', goneInc, user);
       save(INCOME_FILE, load(INCOME_FILE).filter(x => x.id !== id));
       logActivity(user, 'deleted other income', id);
       return reply(res, 200, { ok: true });
@@ -1104,6 +1160,8 @@ async function handleApi(req, res) {
       return reply(res, 200, { ok: true, client: rec });
     }
     if (method === 'DELETE' && id) {
+      const goneCli = load(CLIENTS_FILE).find(x => x.id === id);
+      if (goneCli) trashPut('client', goneCli, user);
       save(CLIENTS_FILE, load(CLIENTS_FILE).filter(x => x.id !== id));
       logActivity(user, 'deleted client', id);
       return reply(res, 200, { ok: true });
@@ -1142,6 +1200,7 @@ async function handleApi(req, res) {
       const list = load(MAC_FILE);
       const rec = list.find(x => x.id === id);
       if (rec && isScouter && !mine(rec)) return reply(res, 403, { error: 'Not your record.' });
+      if (rec) trashPut('mac', rec, user);
       save(MAC_FILE, list.filter(x => x.id !== id));
       return reply(res, 200, { ok: true });
     }
@@ -1189,6 +1248,7 @@ async function handleApi(req, res) {
       // Bookers manage their own jobs fully (create/edit/delete). The designer stays read-only.
       if (user.role === 'designer') return reply(res, 403, { error: 'View only — the graphic designer cannot delete jobs.' });
       const target = load(JOBS_FILE).find(j => j.id === id);
+      if (target) trashPut('job', target, user);
       const ok = deleteJob(id);
       if (ok) {
         // Cascade: remove the schedule entries this job auto-created for its shoot
@@ -1268,6 +1328,7 @@ async function handleApi(req, res) {
     if (method === 'DELETE' && id) {
       const target = load(SCHEDULE_FILE).find(e => e.id === id);
       if (isScouter && (!target || (target.createdBy !== user.email && target.booker !== user.name))) return reply(res, 403, { error: 'Not allowed.' });
+      if (target) trashPut('schedule', target, user);
       const ok = deleteScheduleEntry(id);
       if (ok) logActivity(user, 'deleted schedule', target ? `${target.date} ${target.models}`.trim() : id);
       return ok ? reply(res, 200, { ok: true })

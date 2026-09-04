@@ -108,6 +108,17 @@ async function login(email, password) {
     const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);
     check('⚙ Auto code PATCH mints per category (Kids → -07-001)', auto.body && auto.body.model && /-07-001$/.test(auto.body.model.modelCode), auto.body && auto.body.model && auto.body.model.modelCode);
 
+    console.log('— trash can —');
+    const trJob = await api('/api/schedule', { method: 'POST', body: { date: '2026-12-24', models: 'Trash Test', casting: 'to be deleted' } }, booker);
+    await api('/api/schedule/' + trJob.body.entry.id, { method: 'DELETE' }, booker);
+    const trList = (await api('/api/trash', {}, master)).body.trash || [];
+    const trEnt = trList.find(x => x.kind === 'schedule' && x.rec && x.rec.models === 'Trash Test');
+    check('deleted entry lands in the trash can', !!trEnt, trList.length);
+    check('trash is manager-only', (await api('/api/trash', {}, booker)).status === 403);
+    const rest = await api('/api/trash', { method: 'POST', body: { at: trEnt && trEnt.at, kind: 'schedule' } }, master);
+    const back = ((await api('/api/schedule', {}, booker)).body.schedule || []).some(e => e.models === 'Trash Test');
+    check('restore from trash brings the entry back', rest.status === 200 && back);
+
     console.log('— web push —');
     const pk = await api('/api/push/key');
     check('VAPID public key served (65-byte P-256 point)', pk.status === 200 && typeof pk.body.key === 'string' && Buffer.from(pk.body.key.replace(/-/g, '+').replace(/_/g, '/') + '==', 'base64').length === 65, pk.body);
