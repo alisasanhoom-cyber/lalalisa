@@ -3572,12 +3572,13 @@
   function renderRequests() {
     const rowsEl = el('req-rows');
     if (!rowsEl) return;
-    const f = el('req-filter') ? el('req-filter').value : 'open';
+    const f = el('req-filter') ? el('req-filter').value : '';
     const list = requests.filter(r => f === '' ? true : f === 'open' ? ['new', 'contacted'].includes(r.status) : r.status === f);
     rowsEl.innerHTML = list.map(r => {
       const when = String(r.created || '').slice(0, 10);
       const dates = r.startDate ? r.startDate + (r.endDate && r.endDate !== r.startDate ? ' → ' + r.endDate : '') : (r.dateFlexible ? 'flexible' : '—');
-      return `<tr class="row" data-id="${r.id}">
+      const closed = ['won', 'lost'].includes(r.status);
+      return `<tr class="row${closed ? ' req-closed' : ''}" data-id="${r.id}" ${r.statusNote ? `title="${esc(r.statusNote)}"` : ''}>
         <td>${esc(when)}</td>
         <td><b>${esc(r.clientName)}</b>${r.company ? `<br><span style="font-size:12px;color:var(--grey)">${esc(r.company)}</span>` : ''}</td>
         <td>${esc(r.projectType) || '—'}${r.modelsCount ? ` · ${esc(r.modelsCount)}` : ''}<br><span style="font-size:12px;color:var(--grey)">${esc([r.product, r.halfFull, String(r.description || '').slice(0, 50)].filter(Boolean).join(' · ').slice(0, 80))}</span></td>

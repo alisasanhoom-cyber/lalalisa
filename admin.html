@@ -175,6 +175,8 @@
     .req-pill.contacted{background:#e6f0fa;color:#2a5f9e;border:1px solid #c5dcf2}
     .req-pill.won{background:#e7f4ec;color:#1f7a44;border:1px solid #bfe0cd}
     .req-pill.lost{background:#fbe8e6;color:#c74436;border:1px solid #f0c8c2}
+    tr.req-closed td{opacity:.55}
+    tr.req-closed td:last-child{opacity:1}   /* the Won/Lost pill stays fully readable */
     .req-detail{background:#f7fbfa;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:14px}
     .req-detail b{display:inline-block;min-width:110px;color:var(--grey);font-weight:600;font-size:12px}
 
@@ -616,9 +618,9 @@
     <!-- ============ CLIENT JOB REQUESTS ============ -->
     <div class="wrap" id="view-requests" style="display:none">
       <div class="controls">
-        <select id="req-filter">
-          <option value="open" selected>New + Contacted</option>
-          <option value="">All statuses</option>
+        <select id="req-filter" title="Everything always shows by default — a request never disappears from this list">
+          <option value="" selected>All requests</option>
+          <option value="open">New + Contacted only</option>
           <option value="new">New</option>
           <option value="contacted">Contacted</option>
           <option value="won">Won ✓</option>

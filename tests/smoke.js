@@ -133,8 +133,9 @@ async function login(email, password) {
     check('request without any contact rejected', rqBad.status === 400);
     await api('/api/requests', { method: 'POST', body: { clientName: 'Bot', email: 'b@b.b', website: 'http://spam' } });
     const rqList = (await api('/api/requests', {}, booker)).body.requests || [];
-    check('booker sees the request; honeypot submission NOT stored',
-      rqList.some(r => r.clientName === 'Test Client' && r.status === 'new') && !rqList.some(r => r.clientName === 'Bot'), rqList.map(r => r.clientName));
+    check('booker sees the request; honeypot submission stored FLAGGED, never dropped (autofill-safe)',
+      rqList.some(r => r.clientName === 'Test Client' && r.status === 'new')
+      && rqList.some(r => r.clientName === 'Bot' && /anti-spam/.test(r.statusNote || '')), rqList.map(r => [r.clientName, r.statusNote]));
     const rqId = (rqList.find(r => r.clientName === 'Test Client') || {}).id;
     const rqPatch = await api('/api/requests/' + rqId, { method: 'PATCH', body: { status: 'contacted', booker: 'Ness', clientName: 'HACKED' } }, booker);
     check('booker updates tracking fields; client answers untouchable',

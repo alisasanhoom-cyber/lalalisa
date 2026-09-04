@@ -805,7 +805,10 @@ async function handleApi(req, res) {
   // the filled form lands in the Requests tab as a lead to chase.
   if (resource === 'requests' && method === 'POST' && !getUser(req)) {
     if (req.headers['x-admin-token']) return reply(res, 401, { error: 'Session expired — please log in again.' });
-    if (text(body.website)) return reply(res, 201, { ok: true });   // honeypot: bots fill it, humans never see it
+    // Honeypot: bots fill the hidden field — but browser AUTOFILL can too, and a
+    // real client's request must NEVER be silently dropped. Save it flagged
+    // instead; a human decides if it's spam (and even deletes land in the trash).
+    const suspectSpam = !!text(body.website);
     const contact = text(body.email, 120) || text(body.phone, 40) || text(body.lineId, 60);
     if (!text(body.clientName, 80) || !contact) {
       return reply(res, 400, { error: 'Please fill in your name and at least one way to contact you.' });
@@ -843,12 +846,13 @@ async function handleApi(req, res) {
       outfits: text(body.outfits, 30),
       foundVia: text(body.foundVia, 40),
       notes: text(body.notes, 800),
-      booker: '', statusNote: '', entryRef: '', jobRef: '',
+      booker: '', statusNote: suspectSpam ? '⚠ auto: hidden anti-spam field was filled — could be a bot OR browser autofill. Check before contacting.' : '',
+      entryRef: '', jobRef: '',
     };
     const list = load(REQUESTS_FILE);
     list.unshift(rec);
     save(REQUESTS_FILE, list);
-    try { pushAll(); } catch (_) {}   // ring the team's phones
+    if (!suspectSpam) { try { pushAll(); } catch (_) {} }   // ring the team's phones (not for suspected spam)
     return reply(res, 201, { ok: true });
   }
 
