@@ -330,11 +330,17 @@ function updateJob(id, changes) {
   const jobs = load(JOBS_FILE);
   const job = jobs.find(j => j.id === id);
   if (!job) return null;
+  // Two people had the same job open → the second save must WARN, not silently
+  // overwrite the first person's work (the last silent-loss path, 2026-09-04).
+  if (changes._seen !== undefined && job.updated && changes._seen && changes._seen !== job.updated) {
+    return { __conflict: true };
+  }
 
   const editable = ['status', 'confirmed', 'bookingDate', 'jobDate', 'budget', 'currency',
     'jobId', 'jobIdNonTax', 'jobTitle', 'model', 'freelance', 'client',
     'booker', 'notes', 'month', 'materials', 'materialsNote', 'collected', 'confirmationMade', 'shootDates', 'shootDays', 'whtMode', 'internalNote', ...CLIENT_KEYS];
 
+  job.updated = new Date().toISOString();
   for (const key of editable) {
     if (changes[key] === undefined) continue;
     if (key === 'budget')         job.budget = number(changes.budget);
@@ -500,6 +506,10 @@ function updateScheduleEntry(id, changes) {
   const list = load(SCHEDULE_FILE);
   const entry = list.find(e => e.id === id);
   if (!entry) return null;
+  if (changes._seen !== undefined && entry.updated && changes._seen && changes._seen !== entry.updated) {
+    return { __conflict: true };
+  }
+  entry.updated = new Date().toISOString();
   if (changes.date !== undefined) { entry.date = date(changes.date); entry.month = monthOf(entry.date) || entry.month; }
   if (changes.booker !== undefined)  entry.booker = text(changes.booker, 40);
   if (changes.status !== undefined && LEAD_STATUSES.includes(changes.status)) entry.status = changes.status;
@@ -1239,6 +1249,7 @@ async function handleApi(req, res) {
         : body;
       const before = load(JOBS_FILE).find(j => j.id === id) || {};
       const job = updateJob(id, patch);
+      if (job && job.__conflict) return reply(res, 409, { error: 'Someone else saved this job while you had it open. Close the form and reopen it to see their changes, then make yours again.', conflict: true });
       if (job) {
         const what = user.role === 'designer'
           ? 'materials → ' + (job.materials || 'not checked')
@@ -1322,6 +1333,7 @@ async function handleApi(req, res) {
         Object.keys(body).forEach(k => { if (!allow.includes(k)) delete body[k]; });
       }
       const entry = updateScheduleEntry(id, body);
+      if (entry && entry.__conflict) return reply(res, 409, { error: 'Someone else saved this entry while you had it open. Close the form and reopen it to see their changes, then make yours again.', conflict: true });
       if (entry) {
         const what = diffSummary(before, entry, body, SCHED_DIFF_FIELDS);
         logActivity(user, 'edited schedule', `${entry.date} ${entry.models || ''} — ${what || 'updated'}`.trim());

@@ -108,6 +108,15 @@ async function login(email, password) {
     const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);
     check('⚙ Auto code PATCH mints per category (Kids → -07-001)', auto.body && auto.body.model && /-07-001$/.test(auto.body.model.modelCode), auto.body && auto.body.model && auto.body.model.modelCode);
 
+    console.log('— edit-collision guard —');
+    const col1 = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'first editor', _seen: '' } }, booker);
+    const seen1 = col1.body && col1.body.job && col1.body.job.updated;
+    await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'second editor won', _seen: seen1 } }, master);
+    const stale = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'stale overwrite attempt', _seen: seen1 } }, booker);
+    check('stale save is refused with 409, not silently overwritten', stale.status === 409 && stale.body && stale.body.conflict, stale.status);
+    const kept = ((await api('/api/jobs', {}, master)).body.jobs || []).find(j => j.id === jid);
+    check('the other person\'s work survived', kept && kept.notes === 'second editor won', kept && kept.notes);
+
     console.log('— trash can —');
     const trJob = await api('/api/schedule', { method: 'POST', body: { date: '2026-12-24', models: 'Trash Test', casting: 'to be deleted' } }, booker);
     await api('/api/schedule/' + trJob.body.entry.id, { method: 'DELETE' }, booker);

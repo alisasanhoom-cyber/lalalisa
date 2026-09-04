@@ -1564,7 +1564,7 @@
       let saved;
       try {
         if (j) {
-          const r = await api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify(data) });
+          const r = await api('/api/jobs/' + j.id, { method: 'PATCH', body: JSON.stringify({ ...data, _seen: j.updated || '' }) });
           Object.assign(j, r.job); saved = j;
           // Tawa: an edited job overwrites its confirmation copies in Drive.
           autoDriveSave(saved);
@@ -3363,7 +3363,7 @@
       if (data.endDate && data.endDate < data.date) { alert('"Until" must be after "From".'); return; }
       try {
         if (isNew) { const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(data) }); schedule.push(r.entry); }
-        else { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(e, r.entry); }
+        else { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ ...data, _seen: e.updated || '' }) }); Object.assign(e, r.entry); }
         buildFilters(); renderSchedule(); if (el('mac-scout-sched')) renderMacScoutSched(); closeDrawer();
       } catch (err) { alert('Could not save: ' + ((err.body && err.body.error) || 'please try again.')); }
     });
