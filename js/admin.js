@@ -3560,9 +3560,12 @@
       if (!ent) continue;
       const to = ent.status === 'confirmed' ? 'won' : ent.status === 'declined' ? 'lost' : '';
       if (!to) continue;
+      // Leave a trail — an auto-flip must never look like someone deleted it.
+      const note = ((r.statusNote ? r.statusNote + '\n' : '')
+        + `auto: schedule entry ${ent.date || ''} was ${ent.status} → ${to}`).slice(0, 480);
       try {
-        await api('/api/requests/' + r.id, { method: 'PATCH', body: JSON.stringify({ status: to }) });
-        r.status = to;
+        await api('/api/requests/' + r.id, { method: 'PATCH', body: JSON.stringify({ status: to, statusNote: note }) });
+        r.status = to; r.statusNote = note;
       } catch (_) {}
     }
   }
