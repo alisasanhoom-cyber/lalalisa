@@ -3551,23 +3551,15 @@
     b.style.display = n ? 'inline-block' : 'none';
     b.textContent = n;
   }
-  // "Success or fail you can check on our schedules" (Lisa): a request converted
-  // to a schedule entry follows that entry — confirmed → Won, declined → Lost.
-  async function syncRequestOutcomes() {
-    for (const r of requests) {
-      if (!r.entryRef || ['won', 'lost'].includes(r.status)) continue;
-      const ent = schedule.find(e => e.id === r.entryRef);
-      if (!ent) continue;
-      const to = ent.status === 'confirmed' ? 'won' : ent.status === 'declined' ? 'lost' : '';
-      if (!to) continue;
-      // Leave a trail — an auto-flip must never look like someone deleted it.
-      const note = ((r.statusNote ? r.statusNote + '\n' : '')
-        + `auto: schedule entry ${ent.date || ''} was ${ent.status} → ${to}`).slice(0, 480);
-      try {
-        await api('/api/requests/' + r.id, { method: 'PATCH', body: JSON.stringify({ status: to, statusNote: note }) });
-        r.status = to; r.statusNote = note;
-      } catch (_) {}
-    }
+  // Status is the BOOKERS' record (New/Contacted; Won/Lost only by hand) — the
+  // system never changes it (Lisa 2026-09-04: a declined option ≠ a lost brief).
+  // The linked schedule entry's state shows as INFO on the row instead.
+  async function syncRequestOutcomes() { /* auto-flips removed by design */ }
+  function reqScheduleInfo(r) {
+    if (!r.entryRef) return '';
+    const ent = schedule.find(e => e.id === r.entryRef);
+    if (!ent) return '';
+    return `<br><span style="font-size:10.5px;color:var(--grey)">📅 schedule: ${esc(ent.status || 'open')}${ent.date ? ' · ' + esc(ent.date) : ''}</span>`;
   }
   function renderRequests() {
     const rowsEl = el('req-rows');
@@ -3586,7 +3578,7 @@
         <td>${esc(r.budget) || '—'}</td>
         <td>${esc(r.foundVia) || '—'}</td>
         <td>${esc(r.booker) || '—'}</td>
-        <td><span class="req-pill ${esc(r.status)}">${REQ_STATUS[r.status] || r.status}</span></td>
+        <td><span class="req-pill ${esc(r.status)}">${REQ_STATUS[r.status] || r.status}</span>${reqScheduleInfo(r)}</td>
       </tr>`;
     }).join('');
     el('req-empty').style.display = list.length ? 'none' : 'block';
