@@ -2020,7 +2020,18 @@
   function renderBoard() {
     let cards = boardCards();
     const boardMonth = el('s-month') ? el('s-month').value : 'all';
-    if (!boardAll) cards = cards.filter(c => c.dates.includes(dayDate));   // just this day
+    if (!boardAll) {
+      cards = cards.filter(c => c.dates.includes(dayDate));   // just this day
+      // On a single day, a multi-day set shows THAT day's own status/column —
+      // Tawa declined 9 Sep but the card kept showing the 8th's "Confirmed"
+      // (Lisa 2026-09-07: "what they change was not live").
+      cards.forEach(c => {
+        if (c.ids.length > 1) {
+          const own = c.ids.map(id => schedule.find(x => x.id === id)).find(x => x && x.date === dayDate);
+          if (own) { c.rep = own; if (STAGE_KEYS.includes(own.stage)) c.stage = own.stage; }
+        }
+      });
+    }
     // "All days" respects the month selector (Lisa 2026-09-07) — all days of
     // Sep 2026, not the whole year. Month "all" still shows everything.
     else if (boardMonth && boardMonth !== 'all') cards = cards.filter(c => c.dates.some(d => String(d).startsWith(boardMonth)));
