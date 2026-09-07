@@ -1996,7 +1996,11 @@
   }
   function renderBoard() {
     let cards = boardCards();
+    const boardMonth = el('s-month') ? el('s-month').value : 'all';
     if (!boardAll) cards = cards.filter(c => c.dates.includes(dayDate));   // just this day
+    // "All days" respects the month selector (Lisa 2026-09-07) — all days of
+    // Sep 2026, not the whole year. Month "all" still shows everything.
+    else if (boardMonth && boardMonth !== 'all') cards = cards.filter(c => c.dates.some(d => String(d).startsWith(boardMonth)));
     const groups = {}; STAGE_KEYS.forEach(k => groups[k] = []);
     const lastKey = 'declined';   // catch any stray stage
     // Declined / Postponed have their own columns; everything else goes by its stage.
@@ -2023,7 +2027,7 @@
     const nice = isNaN(d) ? dayDate : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
     const nav = `<div class="day-nav board-nav">
         <button class="link" id="b-prev">◀ Prev day</button>
-        <b style="min-width:210px;text-align:center">${boardAll ? 'All days' : esc(nice)}</b>
+        <b style="min-width:210px;text-align:center">${boardAll ? 'All days' + (boardMonth && boardMonth !== 'all' ? ' · ' + esc(monthLabel(boardMonth)) : '') : esc(nice)}</b>
         <button class="link" id="b-next">Next day ▶</button>
         <button class="link" id="b-today">Today</button>
         <input type="date" id="b-jump" value="${dayDate}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px" ${boardAll ? 'disabled' : ''}>
