@@ -371,6 +371,36 @@
   // Auto-pilot: the Status drop-down drives the Board so nobody has to re-tag by hand.
   //   Confirmed → the booking jumps to "Confirmed / Shooting"
   //   Declined  → it drops off the board (declined is hidden there)
+  // Delete ONE day of a multi-day set, or the whole set — the booker chooses
+  // (Lisa 2026-09-07, urgent: job confirmed 8th, option on the 9th must go alone).
+  async function deleteHoldAware(e) {
+    const group = e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup) : [e];
+    if (group.length > 1) {
+      const days = group.map(x => x.date).sort();
+      if (confirm(`This day (${e.date}) is part of a ${group.length}-day set (${days[0]} → ${days[days.length - 1]}).\n\nOK = delete ONLY ${e.date} (the other days stay)\nCancel = more options`)) {
+        await api('/api/schedule/' + e.id, { method: 'DELETE' });
+        schedule = schedule.filter(x => x.id !== e.id);
+        const rest = schedule.filter(x => x.holdGroup === e.holdGroup);
+        if (rest.length === 1) {
+          try { const r = await api('/api/schedule/' + rest[0].id, { method: 'PATCH', body: JSON.stringify({ holdGroup: '', holdStart: '', holdEnd: '' }) }); Object.assign(rest[0], r.entry); } catch (_) {}
+        } else if (rest.length) {
+          const ds = rest.map(x => x.date).sort();
+          for (const s of rest) {
+            try { const r = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ holdStart: ds[0], holdEnd: ds[ds.length - 1] }) }); Object.assign(s, r.entry); } catch (_) {}
+          }
+        }
+        return true;
+      }
+      if (!confirm(`Delete the WHOLE ${group.length}-day set (${days.join(', ')})?`)) return false;
+      for (const g of group) { try { await api('/api/schedule/' + g.id, { method: 'DELETE' }); } catch (_) {} }
+      schedule = schedule.filter(x => x.holdGroup !== e.holdGroup);
+      return true;
+    }
+    if (!confirm('Delete this entry?')) return false;
+    await api('/api/schedule/' + e.id, { method: 'DELETE' });
+    schedule = schedule.filter(x => x.id !== e.id);
+    return true;
+  }
   async function setEntryStatus(id, status) {
     const patch = { status };
     // Confirmed promotes only BOOKINGS (jobs/options) to the Shooting column —
@@ -380,15 +410,8 @@
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
     const e = schedule.find(x => x.id === id);
     if (e) { e.status = r.entry.status; e.stage = r.entry.stage; }
-    // A multi-day hold moves as ONE booking — declining/postponing/reopening one
-    // day applies to every held day (same as dragging the hold on the Board).
-    if (e && e.holdGroup) {
-      const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
-      for (const s of siblings) {
-        try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify(patch) }); s.status = rs.entry.status; s.stage = rs.entry.stage; }
-        catch (_) {}
-      }
-    }
+    // Status is PER-DAY (Lisa 2026-09-07, urgent): confirm the 8th, decline just
+    // the 9th. Dragging the card on the Board still moves the whole hold as one.
   }
   // Auto-pilot: confirming an OPTION books it. Decline the other held days of the
   // same option, then drop a confirmed Job into the Job Tracker (fee added later).
@@ -3152,16 +3175,8 @@
     el('drawer-body').querySelectorAll('.day-del').forEach(b =>
       b.addEventListener('click', async () => {
         const e = schedule.find(x => x.id === b.dataset.id);
-        if (e && e.holdGroup) {
-          const group = schedule.filter(x => x.holdGroup === e.holdGroup);
-          if (!confirm(`This is part of a ${group.length}-day hold (${e.holdStart} → ${e.holdEnd}). Delete ALL ${group.length} days?`)) return;
-          for (const g of group) await api('/api/schedule/' + g.id, { method: 'DELETE' });
-          schedule = schedule.filter(x => x.holdGroup !== e.holdGroup);
-        } else {
-          if (!confirm('Delete this entry?')) return;
-          await api('/api/schedule/' + b.dataset.id, { method: 'DELETE' });
-          schedule = schedule.filter(x => x.id !== b.dataset.id);
-        }
+        if (!e) return;
+        if (!(await deleteHoldAware(e))) return;
         renderSchedule();
         if (focused) closeDrawer(); else reopen();   // the focused booking is gone → close
       }));
@@ -3305,6 +3320,9 @@
       // the Board showing one thing and the calendar another.
       if (e.holdGroup) {
         const sibPatch = { ...data }; delete sibPatch.date;
+        // Status (and its stage) is PER-DAY — only text/type edits cover the set.
+        delete sibPatch.status;
+        if (!typeChanged) delete sibPatch.stage;
         const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
         for (const s of siblings) {
           try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify(sibPatch) }); Object.assign(s, rs.entry); }
@@ -3314,9 +3332,7 @@
       done();
     });
     el('d-del').addEventListener('click', async () => {
-      if (!confirm('Delete this entry?')) return;
-      await api('/api/schedule/' + id, { method: 'DELETE' });
-      schedule = schedule.filter(x => x.id !== id);
+      if (!(await deleteHoldAware(e))) return;
       done();
     });
     openDrawer();
