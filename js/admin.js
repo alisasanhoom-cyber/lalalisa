@@ -3324,6 +3324,12 @@
       } else {
         data.stage = e.stage || '';                                               // LOCKED — category stays put
       }
+      // Go & See was missing from TYPE2STAGE (Lisa's Kin entry, 2026-09-08):
+      // the Casting button + "go & see" wording = the Go & See column.
+      if (data.stage === 'casting' && isGoSee(data.casting)) data.stage = 'goandsee';
+      // Leaving a type: its old text must not linger and re-claim the category
+      // (Kin kept job-text after moving to Go&See → snapped back to Job).
+      if (activeType && typeChanged && prevPrimary && prevPrimary !== activeType) data[prevPrimary] = '';
       const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(data) });
       Object.assign(e, r.entry);
       // A multi-day hold is ONE booking — apply the same edit to its other days
