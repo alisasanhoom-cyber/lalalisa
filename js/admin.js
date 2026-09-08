@@ -2504,10 +2504,10 @@
   // Details box. On save, the details are filed into each tagged type's column
   // (so the calendar chips + per-type counts still work). No type tagged → the
   // text is kept as a plain Note.
-  const SCHED_CATS = [['job', 'Job'], ['shortlist', 'Shortlist'], ['fitting', 'Fitting'], ['casting', 'Casting'], ['option', 'Option'], ['priority', 'Priority (admin task)']];
+  const SCHED_CATS = [['job', 'Job'], ['shortlist', 'Shortlist'], ['fitting', 'Fitting'], ['casting', 'Casting'], ['gosee', 'Go & See'], ['option', 'Option'], ['priority', 'Priority (admin task)']];
   // One type per entry, resolved by the shared schedCat (honours the board stage too),
   // so the drawer opens on the SAME type Month/Board show — and re-saving clears stale tags.
-  const CAT2KEY = { job: 'job', short: 'shortlist', fit: 'fitting', cast: 'casting', gosee: 'casting', opt: 'option', prio: 'priority' };
+  const CAT2KEY = { job: 'job', short: 'shortlist', fit: 'fitting', cast: 'casting', gosee: 'gosee', opt: 'option', prio: 'priority' };
   function typeDetailsSection(entry) {
     const primary = entry ? (CAT2KEY[schedCat(entry)] || null) : null;
     const active = primary ? [primary] : [];
@@ -2544,12 +2544,14 @@
   function collectTypeDetails() {
     const details = el('d-details') ? el('d-details').value : '';
     const active = [...document.querySelectorAll('.cat-btn.active')].map(b => b.dataset.cat);
-    const out = {}; SCHED_CATS.forEach(([k]) => out[k] = '');
+    const out = {}; SCHED_CATS.forEach(([k]) => { if (k !== 'gosee') out[k] = ''; });
     if (active.length) {
       // The tag lives in the type field's TEXT — an empty Details box must not
       // erase the tag (Lisa's Karine entry lost its type and jumped category).
       const fill = details || (typeof schedSubject === 'function' ? schedSubject() : '') || ' ';
-      active.forEach(k => out[k] = fill); out.note = '';
+      // Go & See has no field of its own: its text lives in `casting`, its
+      // identity in stage 'goandsee' (Aim 2026-09-08: needs a REAL button).
+      active.forEach(k => out[k === 'gosee' ? 'casting' : k] = fill); out.note = '';
     }
     else { out.note = details; }
     out._activeType = active[0] || '';   // which button is on, even with empty text
@@ -3308,11 +3310,12 @@
       // to another category. The stage is rewritten ONLY when the booker
       // explicitly clicked a DIFFERENT type button (that keeps Aim's fix — a
       // changed type still clears a stale stage from an old drag/brush).
-      const TYPE2STAGE = { job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', option: 'option', priority: 'priority' };
+      const TYPE2STAGE = { job: 'shooting', shortlist: 'shortlist', fitting: 'fitting', casting: 'casting', gosee: 'goandsee', option: 'option', priority: 'priority' };
       const activeType = data._activeType; delete data._activeType;
       const prevPrimary = CAT2KEY[schedCat(e)] || '';
       // The chosen tag survives an empty Details box: old text → subject → ' '.
-      if (activeType) data[activeType] = (el('d-details') ? el('d-details').value : '') || e[activeType] || data.subject || ' ';
+      const activeField = activeType === 'gosee' ? 'casting' : activeType;
+      if (activeType) data[activeField] = (el('d-details') ? el('d-details').value : '') || e[activeField] || data.subject || ' ';
       const typeChanged = activeType !== prevPrimary;
       const becameConfirmed = data.status === 'confirmed' && e.status !== 'confirmed';
       if (typeChanged) {
@@ -3329,7 +3332,8 @@
       if (data.stage === 'casting' && isGoSee(data.casting)) data.stage = 'goandsee';
       // Leaving a type: its old text must not linger and re-claim the category
       // (Kin kept job-text after moving to Go&See → snapped back to Job).
-      if (activeType && typeChanged && prevPrimary && prevPrimary !== activeType) data[prevPrimary] = '';
+      const prevField = prevPrimary === 'gosee' ? 'casting' : prevPrimary;
+      if (activeType && typeChanged && prevField && prevField !== activeField) data[prevField] = '';
       const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(data) });
       Object.assign(e, r.entry);
       // A multi-day hold is ONE booking — apply the same edit to its other days
