@@ -4636,7 +4636,7 @@
             toast('Code assigned: ' + r.model.modelCode);
             renderModels();
           } else {
-            alert('No running number exists for the category “' + cat + '” yet — type the code by hand this once (e.g. MP26-05-001) and the counter continues from it.');
+            alert('No code exists for the category “' + cat + '” yet — type this FIRST code by hand (e.g. MP26-06-001, pick an unused middle number). From the next model on, ⚙ Auto code continues the counter automatically.');
           }
         } catch (e) { alert(e.message || 'Could not generate.'); }
       });

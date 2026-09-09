@@ -566,8 +566,20 @@ function nextModelNo(list) {
 const MODEL_CODE_CAT = { 'MP Models': '01', 'Freelancer': '02', 'Thai Models': '03',
   'Kids': '07', 'Direct Models': '08', 'Body Talent': '09', 'Transgender': '10', 'Talents': '11' };
 function nextModelCode(category, list) {
-  const g = MODEL_CODE_CAT[category];
-  if (!g) return '';                                    // unknown category → leave for a hand-set code
+  let g = MODEL_CODE_CAT[category];
+  if (!g) {
+    // Category not in the historic map (Talents (Old) / Plus Size / MC):
+    // LEARN its number from the newest existing code of that category — the
+    // first hand-typed code decides, the counter runs from it (Ploy 2026-09-08).
+    let best = null;
+    (list || load(MODELS_FILE)).forEach(m => {
+      if ((m.category || '') !== category) return;
+      const mm = String(m.modelCode || '').match(/^MP(\d{2})-(\d{2})-(\d{3})$/);
+      if (mm && (!best || mm[1] > best[1] || (mm[1] === best[1] && mm[3] > best[3]))) best = mm;
+    });
+    if (best) g = best[2];
+  }
+  if (!g) return '';                                    // truly nothing to learn from yet
   const yy = String(new Date().getFullYear()).slice(2);
   const pref = 'MP' + yy + '-' + g + '-';
   let max = 0;

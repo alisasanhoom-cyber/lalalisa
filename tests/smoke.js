@@ -107,6 +107,9 @@ async function login(email, password) {
     const noCat = await api('/api/models', { method: 'POST', body: { name: 'No Category Person' } }, booker);
     const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);
     check('⚙ Auto code PATCH mints per category (Kids → -07-001)', auto.body && auto.body.model && /-07-001$/.test(auto.body.model.modelCode), auto.body && auto.body.model && auto.body.model.modelCode);
+    await api('/api/models', { method: 'POST', body: { name: 'Old Talent Seed', category: 'Talents (Old)', modelCode: 'MP26-05-001' } }, booker);
+    const learn = await api('/api/models', { method: 'POST', body: { name: 'Old Talent Next', category: 'Talents (Old)' } }, booker);
+    check('unmapped category LEARNS its number from the newest code (→ -05-002)', learn.body && learn.body.model && /-05-002$/.test(learn.body.model.modelCode), learn.body && learn.body.model && learn.body.model.modelCode);
 
     console.log('— edit-collision guard —');
     const col1 = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'first editor', _seen: '' } }, booker);
