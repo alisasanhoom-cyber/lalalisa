@@ -403,10 +403,8 @@
   }
   async function setEntryStatus(id, status) {
     const patch = { status };
-    // Confirmed promotes only BOOKINGS (jobs/options) to the Shooting column —
-    // a confirmed fitting/shortlist/casting keeps its own category (lock rule).
-    const ent = schedule.find(x => x.id === id);
-    if (status === 'confirmed' && ent && ['job', 'opt'].includes(schedCat(ent))) patch.stage = 'shooting';
+    // NO auto-move (Lisa 2026-09-10): confirming changes the status only — the
+    // entry keeps its column until a human drags it or picks a type.
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
     const e = schedule.find(x => x.id === id);
     if (e) { e.status = r.entry.status; e.stage = r.entry.stage; }
@@ -3317,13 +3315,10 @@
       const activeField = activeType === 'gosee' ? 'casting' : activeType;
       if (activeType) data[activeField] = (el('d-details') ? el('d-details').value : '') || e[activeField] || data.subject || ' ';
       const typeChanged = activeType !== prevPrimary;
-      const becameConfirmed = data.status === 'confirmed' && e.status !== 'confirmed';
       if (typeChanged) {
-        data.stage = activeType === 'priority' ? 'priority'                       // an admin block is never a shoot
-          : data.status === 'confirmed' ? 'shooting'                              // confirmed booking → Confirmed/Shooting
+        // Explicit type pick → that type's column. NO auto-move on confirm (Lisa 2026-09-10).
+        data.stage = activeType === 'priority' ? 'priority'
           : (activeType ? TYPE2STAGE[activeType] : '');
-      } else if (becameConfirmed && ['job', 'option'].includes(activeType || prevPrimary)) {
-        data.stage = 'shooting';                                                  // newly confirmed BOOKING → Shooting column
       } else {
         data.stage = e.stage || '';                                               // LOCKED — category stays put
       }
