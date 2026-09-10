@@ -168,6 +168,13 @@ async function login(email, password) {
     check('scouter edits his own', (await api('/api/schedule/' + sid, { method: 'PATCH', body: { note: 'mine' } }, scouter)).status === 200);
     check('scouter blocked from bulk-tag', (await api('/api/schedule/bulk', { method: 'PATCH', body: { ids: [bid], booker: 'X' } }, scouter)).status === 403);
 
+    console.log('— scouter model contact book —');
+    const mb = await api('/api/macbook', { method: 'POST', body: { intCode: 'INT099', nickname: 'TESTFACE', name: 'Test Face', rate: 'B' } }, scouter);
+    check('scouter adds to his contact book', mb.status === 201 && mb.body.model.owner === 'scouter@mpmodelsbkk.com');
+    check('booker cannot see the contact book', (await api('/api/macbook', {}, booker)).status === 403);
+    const mbl = (await api('/api/macbook', {}, master)).body.models || [];
+    check('manager sees the book', mbl.some(x => x.intCode === 'INT099'));
+
     console.log('— team-flow regressions —');
     const dead = await api('/api/jobs', { method: 'POST', body: { jobTitle: 'x' } }, 'dead-token-123');
     check('dead admin token on job create → 401 (not website-lead 400)', dead.status === 401, dead.status);

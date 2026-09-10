@@ -4239,15 +4239,84 @@
   let macSeg = null;   // resolved on first render
   function applyMacSeg() {
     if (macSeg === null) macSeg = role === 'scouter' ? 'sched' : 'ledger';
-    const lw = el('mac-ledger-wrap'), sw = el('mac-sched-wrap');
+    const lw = el('mac-ledger-wrap'), sw = el('mac-sched-wrap'), bw = el('mac-book-wrap');
     if (lw) lw.style.display = macSeg === 'ledger' ? 'block' : 'none';
     if (sw) sw.style.display = macSeg === 'sched' ? 'block' : 'none';
-    const bl = el('mac-seg-ledger'), bs = el('mac-seg-sched');
+    if (bw) bw.style.display = macSeg === 'book' ? 'block' : 'none';
+    const bl = el('mac-seg-ledger'), bs = el('mac-seg-sched'), bb = el('mac-seg-book');
     if (bl) bl.classList.toggle('active', macSeg === 'ledger');
     if (bs) bs.classList.toggle('active', macSeg === 'sched');
+    if (bb) bb.classList.toggle('active', macSeg === 'book');
   }
+  /* ---- Model contact book (Wolf's international roster, Lisa 2026-09-10) ---- */
+  let macBook = [];
+  async function loadMacBook() {
+    try { macBook = (await api('/api/macbook')).models || []; } catch (_) { macBook = []; }
+    renderMacBook();
+  }
+  function renderMacBook() {
+    const host = el('mac-book');
+    if (!host) return;
+    const term = (el('macbook-search') ? el('macbook-search').value : '').trim().toLowerCase();
+    const list = macBook
+      .filter(m => !term || [m.intCode, m.name, m.nickname, m.nationality, m.location, m.agencyStatus, m.nextPlan].join(' ').toLowerCase().includes(term))
+      .sort((a, b) => String(a.intCode || 'zz').localeCompare(String(b.intCode || 'zz')));
+    host.innerHTML = list.map(m => `
+      <div class="m-row" data-id="${m.id}">
+        <div class="m-r-id" style="min-width:250px">
+          ${m.intCode ? `<span class="m-no">${esc(m.intCode)}</span>` : ''}
+          <span class="m-name">${esc(m.nickname || m.name || '—')}</span>
+          <span class="m-nick">${esc(m.nickname ? (m.name || '') : '')}</span>
+          ${m.rate ? `<span class="m-badge mp" title="Rate class">${esc(m.rate)}</span>` : ''}
+        </div>
+        <div class="m-r-meta">
+          ${m.nationality ? `<span class="m-c">🌍 ${esc(m.nationality)}${m.sex ? ' · ' + esc(m.sex) : ''}</span>` : ''}
+          ${m.location ? `<span class="m-c">📍 ${esc(m.location)}</span>` : ''}
+          ${m.agencyStatus ? `<span class="m-c">🏢 ${esc(m.agencyStatus)}</span>` : ''}
+          ${m.visaStatus ? `<span class="m-c">🛂 ${esc(m.visaStatus)}</span>` : ''}
+          ${m.nextPlan ? `<span class="m-c">➡ ${esc(m.nextPlan)}</span>` : ''}
+        </div>
+      </div>`).join('') || '<div class="empty" style="padding:30px">No models yet — press “+ Add model”.</div>';
+    host.querySelectorAll('.m-row').forEach(r => r.addEventListener('click', () => macBookDrawer(macBook.find(x => x.id === r.dataset.id))));
+  }
+  function macBookDrawer(m) {
+    el('d-title').textContent = m ? (m.nickname || m.name || 'Model') : 'Add model';
+    const fld = (label, id, val, ph) => `<div class="field"><label>${label}</label><input id="mb-${id}" value="${esc(val || '')}" placeholder="${ph || ''}"></div>`;
+    el('drawer-body').innerHTML = `
+      <div class="field two">${fld('Code (INT…)', 'intCode', m && m.intCode, 'INT031')}${fld('Rate class', 'rate', m && m.rate, 'A+ / B / C')}</div>
+      <div class="field two">${fld('Nickname', 'nickname', m && m.nickname)}${fld('Full name', 'name', m && m.name)}</div>
+      <div class="field two">${fld('Nationality', 'nationality', m && m.nationality)}${fld('Sex', 'sex', m && m.sex, 'F / M')}</div>
+      <div class="field two">${fld('Current location', 'location', m && m.location)}${fld('Current agency / status', 'agencyStatus', m && m.agencyStatus, 'e.g. KAT SH')}</div>
+      <div class="field two">${fld('Visa status', 'visaStatus', m && m.visaStatus)}${fld('Next plan', 'nextPlan', m && m.nextPlan)}</div>
+      <div class="field two">${fld('WhatsApp', 'whatsapp', m && m.whatsapp)}${fld('Phone', 'phone', m && m.phone)}</div>
+      <div class="field two">${fld('Email', 'email', m && m.email)}${fld('Instagram', 'ig', m && m.ig)}</div>
+      <div class="field"><label>Extra info</label><textarea id="mb-info" rows="2">${esc(m && m.info || '')}</textarea></div>
+      <div class="drawer-actions">
+        <button class="btn" id="mb-save">${m ? 'Save' : 'Add model'}</button>
+        ${m ? '<button class="link" id="mb-del" style="color:var(--declined)">Delete</button>' : ''}
+      </div>`;
+    openDrawer();
+    el('mb-save').addEventListener('click', async () => {
+      const F = ['intCode', 'name', 'nickname', 'nationality', 'sex', 'rate', 'location', 'agencyStatus', 'visaStatus', 'nextPlan', 'info', 'whatsapp', 'email', 'ig', 'phone'];
+      const data = {}; F.forEach(k => data[k] = el('mb-' + k).value);
+      if (!data.name.trim() && !data.nickname.trim()) { alert('Please enter a name.'); return; }
+      try {
+        if (m) { const r = await api('/api/macbook/' + m.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(m, r.model); }
+        else { const r = await api('/api/macbook', { method: 'POST', body: JSON.stringify(data) }); macBook.push(r.model); }
+        closeDrawer(); renderMacBook();
+      } catch (e) { if (e.message !== 'unauthorized') alert('Could not save: ' + e.message); }
+    });
+    if (m && el('mb-del')) el('mb-del').addEventListener('click', async () => {
+      if (!confirm('Delete ' + (m.nickname || m.name) + ' from the contact book?')) return;
+      try { await api('/api/macbook/' + m.id, { method: 'DELETE' }); macBook = macBook.filter(x => x.id !== m.id); closeDrawer(); renderMacBook(); }
+      catch (e) { if (e.message !== 'unauthorized') alert('Could not delete: ' + e.message); }
+    });
+  }
+  if (el('macbook-add')) el('macbook-add').addEventListener('click', () => macBookDrawer(null));
+  if (el('macbook-search')) el('macbook-search').addEventListener('input', renderMacBook);
   if (el('mac-seg-ledger')) el('mac-seg-ledger').addEventListener('click', () => { macSeg = 'ledger'; applyMacSeg(); });
   if (el('mac-seg-sched')) el('mac-seg-sched').addEventListener('click', () => { macSeg = 'sched'; applyMacSeg(); renderMacScoutSched(); });
+  if (el('mac-seg-book')) el('mac-seg-book').addEventListener('click', () => { macSeg = 'book'; applyMacSeg(); loadMacBook(); });
   function renderMac() {
     applyMacSeg();
     renderMacScoutSched();

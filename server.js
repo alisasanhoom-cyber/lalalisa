@@ -40,6 +40,7 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json'); // exchange rates et
 const INCOME_FILE   = path.join(DATA_DIR, 'income.json');   // other income / commission (Director+Admin ONLY — never sent to bookers)
 const CLIENTS_FILE  = path.join(DATA_DIR, 'clients.json');  // CRM client records (added directly, not only via jobs)
 const MAC_FILE      = path.join(DATA_DIR, 'mac.json');      // Mother-Agency-Commission ledger (per scouter)
+const MACBOOK_FILE  = path.join(DATA_DIR, 'mac_models.json'); // scouter's own model CONTACT BOOK (Wolf's INTER-MODELS)
 const REQUESTS_FILE = path.join(DATA_DIR, 'requests.json'); // client job requests from the public form (leads to chase)
 // Exchange rates → THB (editable by managers). Foreign jobs convert for the THB total.
 const FX_DEFAULT = { USD: 35, EUR: 38, CNY: 5 };
@@ -906,6 +907,7 @@ async function handleApi(req, res) {
   const isScouter = user.role === 'scouter';
   if (isScouter) {
     const allowed = resource === 'mac'
+      || resource === 'macbook'
       // Scouter can WRITE schedule too — but only his own scouting entries
       // (ownership + field whitelist enforced inside the schedule handlers).
       || resource === 'schedule'
@@ -1121,7 +1123,7 @@ async function handleApi(req, res) {
       const i = t.findIndex(x => x.at === body.at && x.kind === body.kind);
       if (i < 0) return reply(res, 404, { error: 'Not found in trash.' });
       const FILES = { job: JOBS_FILE, schedule: SCHEDULE_FILE, model: MODELS_FILE,
-        request: REQUESTS_FILE, income: INCOME_FILE, client: CLIENTS_FILE, mac: MAC_FILE };
+        request: REQUESTS_FILE, income: INCOME_FILE, client: CLIENTS_FILE, mac: MAC_FILE, macmodel: MACBOOK_FILE };
       const file = FILES[t[i].kind];
       if (!file) return reply(res, 400, { error: 'Unknown kind.' });
       const list = load(file);
@@ -1196,6 +1198,48 @@ async function handleApi(req, res) {
 
   // --- MOTHER AGENCY (MAC) LEDGER — scouters + managers --------
   // A scouter sees & edits ONLY their own records; managers see all scouters'.
+  // --- SCOUTER'S MODEL CONTACT BOOK (Wolf's international roster) -----
+  if (resource === 'macbook') {
+    if (!isManager && !isScouter) return reply(res, 403, { error: 'Not allowed.' });
+    const ownRec = r => String(r.owner || '').toLowerCase() === String(user.email || '').toLowerCase();
+    const F = ['intCode', 'name', 'nickname', 'nationality', 'sex', 'rate', 'location', 'agencyStatus', 'visaStatus', 'nextPlan', 'info', 'whatsapp', 'email', 'ig', 'phone'];
+    if (method === 'GET') {
+      let list = load(MACBOOK_FILE);
+      if (isScouter) list = list.filter(ownRec);
+      return reply(res, 200, { models: list });
+    }
+    if (method === 'POST') {
+      const list = load(MACBOOK_FILE);
+      const m = { id: crypto.randomUUID(), created: new Date().toISOString(),
+        owner: isScouter ? user.email : (text(body.owner, 120) || user.email),
+        ownerName: isScouter ? user.name : (text(body.ownerName, 80) || user.name) };
+      F.forEach(k => m[k] = text(body[k], k === 'info' ? 600 : 200));
+      list.push(m); save(MACBOOK_FILE, list);
+      logActivity(user, 'added MAC model', m.name || m.nickname || '');
+      return reply(res, 201, { ok: true, model: m });
+    }
+    if (method === 'PATCH' && id) {
+      const list = load(MACBOOK_FILE);
+      const m = list.find(x => x.id === id);
+      if (!m) return reply(res, 404, { error: 'Not found.' });
+      if (isScouter && !ownRec(m)) return reply(res, 403, { error: 'Not your record.' });
+      F.forEach(k => { if (body[k] !== undefined) m[k] = text(body[k], k === 'info' ? 600 : 200); });
+      save(MACBOOK_FILE, list);
+      logActivity(user, 'edited MAC model', m.name || m.nickname || '');
+      return reply(res, 200, { ok: true, model: m });
+    }
+    if (method === 'DELETE' && id) {
+      const list = load(MACBOOK_FILE);
+      const m = list.find(x => x.id === id);
+      if (!m) return reply(res, 404, { error: 'Not found.' });
+      if (isScouter && !ownRec(m)) return reply(res, 403, { error: 'Not your record.' });
+      trashPut('macmodel', m, user);
+      save(MACBOOK_FILE, list.filter(x => x.id !== id));
+      logActivity(user, 'deleted MAC model', m.name || id);
+      return reply(res, 200, { ok: true });
+    }
+  }
+
   if (resource === 'mac') {
     if (!isManager && !isScouter) return reply(res, 403, { error: 'Not allowed.' });
     const mine = r => String(r.owner || '').toLowerCase() === String(user.email || '').toLowerCase();

@@ -766,6 +766,7 @@
         <div class="seg">
           <button class="seg-btn active" id="mac-seg-ledger">💰 MAC ledger</button>
           <button class="seg-btn" id="mac-seg-sched">🧭 Placement schedule</button>
+          <button class="seg-btn" id="mac-seg-book">📒 Model contact</button>
         </div>
       </div>
       <div id="mac-ledger-wrap">
@@ -793,6 +794,13 @@
       <!-- Wolf's placement schedule — managers see everything; Wolf edits his own -->
       <div id="mac-sched-wrap" style="display:none">
         <div class="card" id="mac-scout-sched" style="padding:14px 16px"></div>
+      </div>
+      <div id="mac-book-wrap" style="display:none">
+        <div class="controls">
+          <input type="search" id="macbook-search" placeholder="Search name, agency, location…" style="min-width:200px">
+          <div class="right"><button class="btn" id="macbook-add">+ Add model</button></div>
+        </div>
+        <div class="card" id="mac-book" style="padding:0"></div>
       </div>
     </div>
 
