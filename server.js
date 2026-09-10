@@ -340,7 +340,7 @@ function updateJob(id, changes) {
     'jobId', 'jobIdNonTax', 'jobTitle', 'model', 'freelance', 'client',
     'booker', 'notes', 'month', 'materials', 'materialsNote', 'collected', 'confirmationMade', 'shootDates', 'shootDays', 'whtMode', 'internalNote', ...CLIENT_KEYS];
 
-  job.updated = new Date().toISOString();
+  job.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');   // unique per save — same-millisecond saves can't slip the collision guard
   for (const key of editable) {
     if (changes[key] === undefined) continue;
     if (key === 'budget')         job.budget = number(changes.budget);
@@ -509,7 +509,7 @@ function updateScheduleEntry(id, changes) {
   if (changes._seen !== undefined && entry.updated && changes._seen && changes._seen !== entry.updated) {
     return { __conflict: true };
   }
-  entry.updated = new Date().toISOString();
+  entry.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
   if (changes.date !== undefined) { entry.date = date(changes.date); entry.month = monthOf(entry.date) || entry.month; }
   if (changes.booker !== undefined)  entry.booker = text(changes.booker, 40);
   if (changes.status !== undefined && LEAD_STATUSES.includes(changes.status)) entry.status = changes.status;
