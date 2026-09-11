@@ -2843,6 +2843,10 @@
   ];
   let stageDays = null;          // { casting:Set, fitting:Set, ... }
   let activeBrush = 'casting';
+  // Days painted by a board-column "+" preset (not by hand). If the booker then
+  // presses a DIFFERENT type button, these move automatically — the hint-only
+  // flow filed Aim's Priority as a Job three times (Lisa 2026-09-11).
+  let presetPaint = null;   // { stage, dates:Set } or null once the booker paints manually
   let stagePickerMonth = null;
   const allStageDates = () => {
     const s = new Set();
@@ -2864,7 +2868,18 @@
       return `<button type="button" class="cat-btn${activeBrush === brush ? ' active' : ''}" data-brush="${brush}" data-cat="${brush}">${label}${n ? ` · ${n}` : ''}</button>`;
     }).join('');
     bhost.querySelectorAll('.cat-btn').forEach(b =>
-      b.addEventListener('click', () => { activeBrush = b.dataset.brush; renderStagePicker(); }));
+      b.addEventListener('click', () => {
+        activeBrush = b.dataset.brush;
+        // The preset day follows the chosen type automatically (no hint to miss).
+        if (presetPaint && presetPaint.stage !== activeBrush
+            && stageDays[presetPaint.stage] && stageDays[presetPaint.stage].size
+            && [...stageDays[presetPaint.stage]].every(d => presetPaint.dates.has(d))) {
+          stageDays[presetPaint.stage].forEach(d => stageDays[activeBrush].add(d));
+          stageDays[presetPaint.stage].clear();
+          presetPaint = { stage: activeBrush, dates: new Set(stageDays[activeBrush]) };
+        }
+        renderStagePicker();
+      }));
     // If days sit on ONE other brush and the active brush has none, offer a
     // one-click transfer. (Aim painted 7 days on the default Shooting brush,
     // then clicked Priority — the days silently stayed as a Job.)
@@ -2912,6 +2927,7 @@
       c.addEventListener('click', () => {
         const ds = c.dataset.d;
         const inActive = stageDays[activeBrush].has(ds);
+        presetPaint = null;   // hand-painting takes over — no more auto-moving
         STAGE_BRUSHES.forEach(([brush]) => stageDays[brush].delete(ds));   // a day belongs to one stage
         if (!inActive) stageDays[activeBrush].add(ds);
         renderStagePicker();
@@ -3445,9 +3461,13 @@
     stagePickerMonth = (calMonth || todayLocal().slice(0, 7));
     // Board column "+" pre-fill: right brush selected + that board day picked.
     // (Guard: the plain "+ Add entry" button passes a click EVENT here.)
+    presetPaint = null;
     if (typeof prefStage === 'string' && STAGE_BRUSHES.some(([b]) => b === prefStage)) {
       activeBrush = prefStage;
-      if (isISODate(prefDate)) { stageDays[prefStage].add(prefDate); stagePickerMonth = prefDate.slice(0, 7); }
+      if (isISODate(prefDate)) {
+        stageDays[prefStage].add(prefDate); stagePickerMonth = prefDate.slice(0, 7);
+        presetPaint = { stage: prefStage, dates: new Set([prefDate]) };
+      }
     }
     renderStagePicker();
     const getDates = () => allStageDates();
