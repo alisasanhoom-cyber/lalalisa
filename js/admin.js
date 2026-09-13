@@ -1753,6 +1753,7 @@
   let dayDate = todayLocal();   // the day shown in Day view AND the Board
   let boardAll = false;         // Board: false = one day at a time, true = whole pipeline
   let calMonth = null;          // 'YYYY-MM' shown in the Calendar view (nav is free of data)
+  let yoYear = null;            // year shown in the "All months" year overview (Lisa 2026-09-13)
   const firstLine = t => String(t || '').split('\n')[0].trim();
   // Shift a 'YYYY-MM' string by n months — lets the calendar reach any future month/year.
   function shiftMonth(ym, n) {
@@ -2323,9 +2324,15 @@
     // every month that has activity, with its totals. Click a month to open it.
     if (el('s-month').value === 'all') {
       const bkr = el('s-booker').value;
-      const months = distinct(schedule.map(s => s.month)).filter(Boolean).sort().reverse();
+      // One year at a time (Lisa 2026-09-13): default to the current year, with a
+      // picker for past/future years — no more mixed 2025/2026/2027 rows.
+      if (!yoYear) yoYear = todayLocal().slice(0, 4);
+      const allYears = distinct(schedule.map(s => (s.month || '').slice(0, 4))).filter(Boolean).sort().reverse();
+      if (!allYears.includes(yoYear)) yoYear = allYears[0] || todayLocal().slice(0, 4);
+      const months = distinct(schedule.map(s => s.month)).filter(m => m && m.startsWith(yoYear)).sort().reverse();
       const inScope = e => (!bkr || (bkr === '__untagged__' ? !e.booker : e.booker === bkr))
-        && (e.status !== 'declined' || e.autoDeclined);
+        && (e.status !== 'declined' || e.autoDeclined)
+        && (e.month || '').startsWith(yoYear);
       const rowFor = mo => {
         const me = schedule.filter(e => e.month === mo && inScope(e));
         const c = pick => new Set(me.filter(pick).map(e => e.holdGroup || e.id)).size;
@@ -2338,13 +2345,17 @@
       const yTot = pick => new Set(yearScope.filter(pick).map(e => e.holdGroup || e.id)).size;
       const statCards = STAT_DEFS.map(([label, pick, cls]) =>
         `<div class="stat"><div class="n">${yTot(pick)}</div><div class="l"><span class="cal-stat-dot ${cls}"></span> ${label}</div></div>`).join('');
+      const yearSel = `<select id="yo-year" style="padding:7px 10px;border:1px solid var(--line,#ddd);border-radius:8px;font-size:13.5px;font-weight:700">${
+        allYears.map(y => `<option value="${y}"${y === yoYear ? ' selected' : ''}>${y}</option>`).join('')}</select>`;
       el('s-calendar').innerHTML = `
-        <div class="cal-nav"><p class="cal-title">All months · year overview</p>
-          <span style="color:var(--grey);font-size:12.5px">totals across every month · click a month to open its calendar</span></div>
+        <div class="cal-nav"><p class="cal-title">${yoYear} · year overview</p>
+          <div style="display:flex;align-items:center;gap:10px">${yearSel}
+          <span style="color:var(--grey);font-size:12.5px">totals for ${yoYear} · click a month to open its calendar</span></div></div>
         <div class="stats" style="margin-bottom:14px">${statCards}</div>
-        <div class="yo-list">${months.map(rowFor).join('') || '<div class="empty" style="padding:24px">No entries yet.</div>'}</div>`;
+        <div class="yo-list">${months.map(rowFor).join('') || '<div class="empty" style="padding:24px">No entries for ' + yoYear + ' yet.</div>'}</div>`;
       el('s-calendar').querySelectorAll('.yo-row').forEach(r =>
         r.addEventListener('click', () => { el('s-month').value = r.dataset.month; calMonth = r.dataset.month; renderCalendar(); }));
+      el('yo-year').addEventListener('change', () => { yoYear = el('yo-year').value; renderCalendar(); });
       return;
     }
     // Keep the month dropdown locked in step with the grid (so they never disagree).
