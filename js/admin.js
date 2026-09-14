@@ -1620,8 +1620,9 @@
       try {
         await api('/api/jobs/' + j.id, { method: 'DELETE' });
         jobs = jobs.filter(x => x.id !== j.id);
-        // The server cascades away this job's shoot entries — mirror that locally.
-        schedule = schedule.filter(e => e.jobRef !== j.id);
+        // The server removes only the job's auto-created shoot entries and unlinks the rest — mirror that.
+        schedule = schedule.filter(e => !(e.jobRef === j.id && e.autoShoot === true));
+        schedule.forEach(e => { if (e.jobRef === j.id) e.jobRef = ''; });
         buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
       } catch (err) { if (err.message !== 'unauthorized') alert('Could not delete: ' + err.message); }
     });
@@ -1647,7 +1648,8 @@
         await api('/api/income', { method: 'POST', body: JSON.stringify(payload) });
         await api('/api/jobs/' + j.id, { method: 'DELETE' });
         jobs = jobs.filter(x => x.id !== j.id);
-        schedule = schedule.filter(e => e.jobRef !== j.id);   // server cascades shoot entries
+        schedule = schedule.filter(e => !(e.jobRef === j.id && e.autoShoot === true));   // server removes auto shoot entries only
+        schedule.forEach(e => { if (e.jobRef === j.id) e.jobRef = ''; });
         buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
         toast('Moved to Other Income →');
       } catch (e) { alert('Could not move: ' + (e.message || e)); }
@@ -1703,6 +1705,7 @@
         date: dt, models: modelStr, subject: job.jobTitle || '',
         job: job.jobTitle || '(job)', booker: job.booker || '', status: 'confirmed',
         stage: 'shooting', jobCreated: true, jobRef: job.id,
+        autoShoot: true,   // created by the program → the only kind the program may delete
       };
       try {
         const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(body) });
@@ -1712,11 +1715,12 @@
     // Now remove linked entries whose date is no longer a shoot date.
     for (const e of existing) {
       if (!dates.includes(e.date)) {
-        // NEVER delete a booker's LEAD entry that merely got linked to this job —
-        // unlink it instead. Leads live in the TEXT fields *or* only in the STAGE
-        // (Board-created entries have a stage but empty text — Tawa's case).
-        const leadStage = ['casting', 'goandsee', 'shortlist', 'option', 'fitting', 'priority'].includes(e.stage);
-        if (leadStage || e.casting || e.fitting || e.option || e.shortlist || e.priority) {
+        // THE RULE (Lisa 2026-09-14, root fix): the program deletes ONLY entries it
+        // created itself (autoShoot). Anything a person made — lead, hand-made job,
+        // the entry this job was created from — is UNLINKED and stays visible.
+        // (Before: a hand-made confirmed Job entry counted as "the sync's" and was
+        // deleted when the shoot date differed — Tawa's CCOO 22 Sep vanished.)
+        if (e.autoShoot !== true) {
           try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); e.jobRef = ''; }
           catch (err) { if (err.message === 'unauthorized') return; failed++; }
           continue;
@@ -3053,6 +3057,11 @@
       model: e.models,
       booker: e.booker,
       jobDate: isISODate(e.date) ? e.date : '',
+      // The entry's own day (plus other CONFIRMED days of the same hold) starts as
+      // the shoot date(s) — so the job and the schedule agree from the first save.
+      // (Tawa 2026-09-14: picker started empty, today got ticked, the sync then
+      // moved the job to today and deleted her 22 Sep entry.)
+      shootDates: [e.date, ...(e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id && x.status === 'confirmed').map(x => x.date) : [])].filter(isISODate).sort(),
       jobTitle: e.subject || firstLine(e.job || e.fitting || e.casting || e.option || e.note || ''),
       notes: details,
       shootDays: e.shootDays || '',

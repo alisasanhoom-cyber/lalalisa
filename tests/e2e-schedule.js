@@ -117,6 +117,43 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     const G = findAll(await entries(), '2026-09-18');
     check('18 still a Job after edit (not a note)', G.length === 1 && G[0].job === 'Plain job (edited)' && !G[0].note, JSON.stringify(G).slice(0, 160));
 
+    console.log('— I: Create job from a schedule entry: shoot date = the entry\'s day; entry stays, nothing added on today —');
+    await openAdd(); await clickBrush('shooting'); await clickDay('2026-09-26'); await fill('CCOO shoot', 'Boho, Uliana'); await save();
+    const I0 = findAll(await entries(), '2026-09-26'); check('job entry on 26 created', I0.length === 1);
+    await ev(`document.getElementById('s-cal-btn').click(); 'ok'`); await sleep(400);
+    await ev(`document.querySelector('.cal-cell[data-date="2026-09-26"]').click(); 'ok'`); await sleep(500);
+    await ev(`[...document.querySelectorAll('#s-board [data-key]')].find(x=>x.dataset.key==='${I0[0].id}').click(); 'ok'`); await sleep(500);
+    const mk = await ev(`(()=>{const b=document.querySelector('.make-job'); if(!b) return false; b.click(); return true;})()`); await sleep(600);
+    check('Create job opened the job form', mk === true && (await ev(`!!document.getElementById('d-jobTitle')`)));
+    const picked = await ev(`document.getElementById('d-picked')?.innerText || ''`);
+    check('shoot-date picker starts on 26 Sep (the entry\'s day)', /26 Sep/.test(picked), picked);
+    await ev(`document.getElementById('d-leadSource').value='LINE'; document.getElementById('d-clientCategory').value='Commercial'; document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
+    const jobsRaw = await (await fetch(BASE + '/api/jobs', { headers: { 'x-admin-token': auth.token } })).json();
+    const jobs = Array.isArray(jobsRaw) ? jobsRaw : (jobsRaw.jobs || []);
+    const job = jobs.find(j => j.jobTitle === 'CCOO shoot');
+    check('job saved with shootDates = [26 Sep]', !!job && JSON.stringify(job.shootDates) === JSON.stringify(['2026-09-26']), job && JSON.stringify(job.shootDates));
+    const allI = await entries(); const I1 = findAll(allI, '2026-09-26'), Itoday = findAll(allI, '2026-09-14');
+    check('26 Sep entry still there, same entry, linked to the job', I1.length === 1 && I1[0].id === I0[0].id && job && I1[0].jobRef === job.id, JSON.stringify(I1.map(e=>({id:e.id,jobRef:e.jobRef}))));
+    check('nothing created on today (14 Sep)', Itoday.length === 0, JSON.stringify(Itoday).slice(0,120));
+
+    console.log('— J: change the job\'s shoot date 26 → 27: 26 stays (unlinked), 27 auto-created —');
+    await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(500);
+    const rowHit = await ev(`(()=>{const r=document.querySelector('tr[data-id="${job && job.id}"]'); if(!r) return false; r.click(); return true;})()`); await sleep(600);
+    check('job row opened', rowHit === true);
+    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-26"]').click(); 'ok'`); await sleep(150);
+    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-27"]').click(); 'ok'`); await sleep(150);
+    await ev(`document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
+    const allJ = await entries(); const J26 = findAll(allJ, '2026-09-26'), J27 = findAll(allJ, '2026-09-27');
+    check('26 Sep hand-made entry NOT deleted, just unlinked', J26.length === 1 && J26[0].id === I0[0].id && !J26[0].jobRef, JSON.stringify(J26.map(e=>({id:e.id,jobRef:e.jobRef}))));
+    check('27 Sep auto entry created and marked autoShoot', J27.length === 1 && J27[0].autoShoot === true && J27[0].jobRef === job.id, JSON.stringify(J27).slice(0,160));
+
+    console.log('— K: delete the job: its auto entry (27) goes, the hand-made entry (26) stays —');
+    const del = await fetch(BASE + '/api/jobs/' + job.id, { method: 'DELETE', headers: { 'x-admin-token': auth.token } });
+    check('job deleted', del.ok, String(del.status));
+    const allK = await entries();
+    check('27 auto entry removed', findAll(allK, '2026-09-27').length === 0);
+    check('26 hand-made entry still there', findAll(allK, '2026-09-26').length === 1);
+
     console.log('— H: Admin account: form opens on Priority; day → save = Priority —');
     await loginAs('admin@test', 'admin', 'Admin');
     await openAdd();

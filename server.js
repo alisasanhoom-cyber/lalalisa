@@ -489,6 +489,7 @@ function buildScheduleEntry(input) {
     postponeDate: text(input.postponeDate, 40),      // new date when postponed (optional / free text)
     internalNote: text(input.internalNote, 2000),   // team-only; never in the model notify message
     jobRef:  text(input.jobRef, 40),                 // links a shoot-date entry back to its job
+    autoShoot: input.autoShoot === true,             // TRUE only for entries the shoot-date sync created itself — the only ones it may ever delete
     planGroup: text(input.planGroup, 40),            // links casting/fitting/shooting of ONE booking
     notified: input.notified ? String(input.notified).slice(0, 30) : '',  // 'YYYY-MM-DD' when the model was told, else ''
     // Scouting placements (Wolf): a plan can span months — where a model is,
@@ -542,6 +543,7 @@ function updateScheduleEntry(id, changes) {
   // Link fields — the client re-links entries to jobs/plans/holds via PATCH
   // (e.g. syncShootDates converting a casting into the job's shoot entry).
   if (changes.jobRef !== undefined) entry.jobRef = text(changes.jobRef, 40);
+  if (changes.autoShoot !== undefined) entry.autoShoot = changes.autoShoot === true;
   if (changes.planGroup !== undefined) entry.planGroup = text(changes.planGroup, 40);
   if (changes.holdGroup !== undefined) entry.holdGroup = text(changes.holdGroup, 40);
   if (changes.holdStart !== undefined) entry.holdStart = date(changes.holdStart);
@@ -1322,11 +1324,17 @@ async function handleApi(req, res) {
       if (target) trashPut('job', target, user);
       const ok = deleteJob(id);
       if (ok) {
-        // Cascade: remove the schedule entries this job auto-created for its shoot
-        // dates (jobRef-linked) so no orphan green "shooting" cards linger.
+        // Cascade: remove ONLY the schedule entries this job auto-created for its
+        // shoot dates (autoShoot). An entry a booker made by hand is never deleted
+        // by the program — it is unlinked and stays (Lisa 2026-09-14: Tawa's CCOO).
         const sched = load(SCHEDULE_FILE);
-        const remaining = sched.filter(e => e.jobRef !== id);
-        if (remaining.length !== sched.length) save(SCHEDULE_FILE, remaining);
+        let changed = false;
+        const remaining = sched.filter(e => {
+          if (e.jobRef !== id) return true;
+          if (e.autoShoot === true) { trashPut('schedule', e, user); changed = true; return false; }
+          e.jobRef = ''; changed = true; return true;
+        });
+        if (changed) save(SCHEDULE_FILE, remaining);
         logActivity(user, 'deleted job', target ? target.jobTitle : id);
       }
       return ok ? reply(res, 200, { ok: true })
