@@ -2858,6 +2858,11 @@
   // presses a DIFFERENT type button, these move automatically — the hint-only
   // flow filed Aim's Priority as a Job three times (Lisa 2026-09-11).
   let presetPaint = null;   // { stage, dates:Set } or null once the booker paints manually
+  // Has a type button been clicked in THIS form? Until then the form sits on the
+  // default Shooting brush, so days painted by hand carry no type intent yet —
+  // the first type click adopts them (Aim: clicked the day, then Priority, and
+  // the entry still saved as a Job — 15 times up to 2026-09-14).
+  let brushChosen = false;
   let stagePickerMonth = null;
   const allStageDates = () => {
     const s = new Set();
@@ -2889,6 +2894,7 @@
           stageDays[presetPaint.stage].clear();
           presetPaint = { stage: activeBrush, dates: new Set(stageDays[activeBrush]) };
         }
+        brushChosen = true;
         renderStagePicker();
       }));
     // If days sit on ONE other brush and the active brush has none, offer a
@@ -2938,9 +2944,11 @@
       c.addEventListener('click', () => {
         const ds = c.dataset.d;
         const inActive = stageDays[activeBrush].has(ds);
-        presetPaint = null;   // hand-painting takes over — no more auto-moving
         STAGE_BRUSHES.forEach(([brush]) => stageDays[brush].delete(ds));   // a day belongs to one stage
         if (!inActive) stageDays[activeBrush].add(ds);
+        // Hand-painting AFTER a type was chosen takes over — no more auto-moving.
+        // Before any type click, the painted days keep following the type picked next.
+        presetPaint = brushChosen ? null : { stage: activeBrush, dates: new Set(stageDays[activeBrush]) };
         renderStagePicker();
         if (onPickerChange) onPickerChange();
       }));
@@ -3472,7 +3480,7 @@
     stagePickerMonth = (calMonth || todayLocal().slice(0, 7));
     // Board column "+" pre-fill: right brush selected + that board day picked.
     // (Guard: the plain "+ Add entry" button passes a click EVENT here.)
-    presetPaint = null;
+    presetPaint = null; brushChosen = false;
     if (typeof prefStage === 'string' && STAGE_BRUSHES.some(([b]) => b === prefStage)) {
       activeBrush = prefStage;
       if (isISODate(prefDate)) {
