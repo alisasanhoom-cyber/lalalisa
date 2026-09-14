@@ -1592,19 +1592,14 @@
         } else {
           const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(data) });
           jobs.unshift(r.job); saved = r.job;
-          // If this job came from a casting, mark it created + link it, and decline the
-          // other held days of that option so the model is freed up (same as confirming).
+          // If this job came from a schedule entry, mark it created + link it. Nothing
+          // else is touched: the other held days of that option stay as the booker
+          // left them — declining them is the booker's own click (Lisa 2026-09-14:
+          // the ONLY automatic move is a past Option with no confirmation → Declined).
           if (prefill && prefill._fromScheduleId) {
             const e = schedule.find(x => x.id === prefill._fromScheduleId);
             await api('/api/schedule/' + prefill._fromScheduleId, { method: 'PATCH', body: JSON.stringify({ jobCreated: true, jobRef: saved.id }) }).catch(() => {});
             if (e) { e.jobCreated = true; e.jobRef = saved.id; }
-            if (e && e.holdGroup) {
-              const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id && x.status !== 'declined');
-              for (const s of siblings) {
-                await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'declined' }) }).catch(() => {});
-                s.status = 'declined';
-              }
-            }
           }
         }
         await syncShootDates(saved);   // put the shoot date(s) on the Schedule automatically
