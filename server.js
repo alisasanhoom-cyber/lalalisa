@@ -1324,17 +1324,14 @@ async function handleApi(req, res) {
       if (target) trashPut('job', target, user);
       const ok = deleteJob(id);
       if (ok) {
-        // Cascade: remove ONLY the schedule entries this job auto-created for its
-        // shoot dates (autoShoot). An entry a booker made by hand is never deleted
-        // by the program — it is unlinked and stays (Lisa 2026-09-14: Tawa's CCOO).
+        // THE PROGRAM NEVER DELETES A SCHEDULE ENTRY (Lisa 2026-09-14). A deleted
+        // job only UNLINKS its cards; they stay on the Schedule for a person to
+        // keep, decline or delete. (Before: the cascade deleted every linked entry,
+        // including ones a booker made by hand.)
         const sched = load(SCHEDULE_FILE);
         let changed = false;
-        const remaining = sched.filter(e => {
-          if (e.jobRef !== id) return true;
-          if (e.autoShoot === true) { trashPut('schedule', e, user); changed = true; return false; }
-          e.jobRef = ''; changed = true; return true;
-        });
-        if (changed) save(SCHEDULE_FILE, remaining);
+        sched.forEach(e => { if (e.jobRef === id) { e.jobRef = ''; changed = true; } });
+        if (changed) save(SCHEDULE_FILE, sched);
         logActivity(user, 'deleted job', target ? target.jobTitle : id);
       }
       return ok ? reply(res, 200, { ok: true })

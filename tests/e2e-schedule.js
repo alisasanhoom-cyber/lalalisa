@@ -136,7 +136,7 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('26 Sep entry still there, same entry, linked to the job', I1.length === 1 && I1[0].id === I0[0].id && job && I1[0].jobRef === job.id, JSON.stringify(I1.map(e=>({id:e.id,jobRef:e.jobRef}))));
     check('nothing created on today (14 Sep)', Itoday.length === 0, JSON.stringify(Itoday).slice(0,120));
 
-    console.log('— J: change the job\'s shoot date 26 → 27: 26 stays (unlinked), 27 auto-created —');
+    console.log('— J: change the job\'s shoot date 26 → 27: 26 (hand-made) stays, unlinked; 27 auto-created —');
     await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(500);
     const rowHit = await ev(`(()=>{const r=document.querySelector('tr[data-id="${job && job.id}"]'); if(!r) return false; r.click(); return true;})()`); await sleep(600);
     check('job row opened', rowHit === true);
@@ -147,11 +147,18 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('26 Sep hand-made entry NOT deleted, just unlinked', J26.length === 1 && J26[0].id === I0[0].id && !J26[0].jobRef, JSON.stringify(J26.map(e=>({id:e.id,jobRef:e.jobRef}))));
     check('27 Sep auto entry created and marked autoShoot', J27.length === 1 && J27[0].autoShoot === true && J27[0].jobRef === job.id, JSON.stringify(J27).slice(0,160));
 
-    console.log('— K: delete the job: its auto entry (27) goes, the hand-made entry (26) stays —');
+    console.log('— J2: postpone the shoot 27 → 28: the program\'s own card MOVES (same card), nothing deleted —');
+    await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(400);
+    await ev(`document.querySelector('tr[data-id="${job && job.id}"]').click(); 'ok'`); await sleep(600);
+    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-27"]').click(); document.querySelector('#d-picker .mc-cell[data-d="2026-09-28"]').click(); document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
+    const allJ2 = await entries(); const J2_27 = findAll(allJ2, '2026-09-27'), J2_28 = findAll(allJ2, '2026-09-28');
+    check('27 card moved to 28 (same id), 27 empty', J2_27.length === 0 && J2_28.length === 1 && J2_28[0].id === J27[0].id && J2_28[0].jobRef === job.id, JSON.stringify({ n27: J2_27.length, n28: J2_28.map(e => e.id) }));
+
+    console.log('— K: delete the job: NOTHING on the schedule is deleted — cards stay, unlinked —');
     const del = await fetch(BASE + '/api/jobs/' + job.id, { method: 'DELETE', headers: { 'x-admin-token': auth.token } });
     check('job deleted', del.ok, String(del.status));
     const allK = await entries();
-    check('27 auto entry removed', findAll(allK, '2026-09-27').length === 0);
+    check('28 card still there, unlinked', findAll(allK, '2026-09-28').length === 1 && !findAll(allK, '2026-09-28')[0].jobRef);
     check('26 hand-made entry still there', findAll(allK, '2026-09-26').length === 1);
 
     console.log('— H: Admin account: form opens on Priority; day → save = Priority —');

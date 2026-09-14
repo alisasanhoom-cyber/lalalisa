@@ -1616,12 +1616,11 @@
       }
     });
     if (j) el('d-delete').addEventListener('click', async () => {
-      if (!confirm('Delete this job permanently?')) return;
+      if (!confirm('Delete this job permanently?\n\nIts shoot card(s) on the Schedule are NOT deleted — they stay there for you to keep, decline or delete.')) return;
       try {
         await api('/api/jobs/' + j.id, { method: 'DELETE' });
         jobs = jobs.filter(x => x.id !== j.id);
-        // The server removes only the job's auto-created shoot entries and unlinks the rest — mirror that.
-        schedule = schedule.filter(e => !(e.jobRef === j.id && e.autoShoot === true));
+        // The server deletes NO schedule entries — it only unlinks this job's cards. Mirror that.
         schedule.forEach(e => { if (e.jobRef === j.id) e.jobRef = ''; });
         buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
       } catch (err) { if (err.message !== 'unauthorized') alert('Could not delete: ' + err.message); }
@@ -1648,8 +1647,7 @@
         await api('/api/income', { method: 'POST', body: JSON.stringify(payload) });
         await api('/api/jobs/' + j.id, { method: 'DELETE' });
         jobs = jobs.filter(x => x.id !== j.id);
-        schedule = schedule.filter(e => !(e.jobRef === j.id && e.autoShoot === true));   // server removes auto shoot entries only
-        schedule.forEach(e => { if (e.jobRef === j.id) e.jobRef = ''; });
+        schedule.forEach(e => { if (e.jobRef === j.id) e.jobRef = ''; });   // server unlinks, deletes nothing
         buildFilters(); renderJobs(); renderSchedule(); closeDrawer();
         toast('Moved to Other Income →');
       } catch (e) { alert('Could not move: ' + (e.message || e)); }
@@ -1687,8 +1685,19 @@
     // vanish a booking with nothing to replace it when a later call failed.
     const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     const modelStr = job.model || job.freelance || '';
+    // Cards of this job whose day is no longer a shoot day. A postponed shoot MOVES
+    // its own card to the new day (keeps anything typed on it) instead of delete+create.
+    const stale = existing.filter(e => !dates.includes(e.date));
     for (const dt of dates) {
       if (existing.some(e => e.date === dt)) continue;      // already linked to this job
+      const mv = stale.find(e => e.autoShoot === true && !e._moved);
+      if (mv) {
+        try {
+          const r = await api('/api/schedule/' + mv.id, { method: 'PATCH', body: JSON.stringify({ date: dt }) });
+          Object.assign(mv, r.entry || { date: dt, month: dt.slice(0, 7) }); mv._moved = true;
+        } catch (err) { if (err.message === 'unauthorized') return; failed++; }
+        continue;
+      }
       // Don't double-fill: if this model already has a job/shooting entry that day, LINK
       // that one to the job instead of creating a duplicate card.
       const clash = schedule.find(e => e.date === dt && e.jobRef !== job.id
@@ -1696,8 +1705,9 @@
         && (e.job || e.stage === 'shooting' || e.status === 'confirmed'));
       if (clash) {
         try {
-          await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, stage: 'shooting', jobCreated: true }) });
-          clash.jobRef = job.id; clash.stage = 'shooting'; clash.jobCreated = true;
+          // Link only. Its column is NOT touched — an entry moves only by human action (Lisa 2026-09-10).
+          await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, jobCreated: true }) });
+          clash.jobRef = job.id; clash.jobCreated = true;
         } catch (err) { if (err.message === 'unauthorized') return; failed++; }
         continue;
       }
@@ -1705,32 +1715,25 @@
         date: dt, models: modelStr, subject: job.jobTitle || '',
         job: job.jobTitle || '(job)', booker: job.booker || '', status: 'confirmed',
         stage: 'shooting', jobCreated: true, jobRef: job.id,
-        autoShoot: true,   // created by the program → the only kind the program may delete
+        autoShoot: true,   // created by the program (a postponed shoot may MOVE this card; nothing is ever deleted)
       };
       try {
         const r = await api('/api/schedule', { method: 'POST', body: JSON.stringify(body) });
         if (r.entry) schedule.push(r.entry);
       } catch (err) { if (err.message === 'unauthorized') return; failed++; }
     }
-    // Now remove linked entries whose date is no longer a shoot date.
-    for (const e of existing) {
-      if (!dates.includes(e.date)) {
-        // THE RULE (Lisa 2026-09-14, root fix): the program deletes ONLY entries it
-        // created itself (autoShoot). Anything a person made — lead, hand-made job,
-        // the entry this job was created from — is UNLINKED and stays visible.
-        // (Before: a hand-made confirmed Job entry counted as "the sync's" and was
-        // deleted when the shoot date differed — Tawa's CCOO 22 Sep vanished.)
-        if (e.autoShoot !== true) {
-          try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); e.jobRef = ''; }
-          catch (err) { if (err.message === 'unauthorized') return; failed++; }
-          continue;
-        }
-        try {
-          await api('/api/schedule/' + e.id, { method: 'DELETE' });
-          schedule = schedule.filter(x => x.id !== e.id);
-        } catch (err) { if (err.message === 'unauthorized') return; failed++; }
-      }
+    // THE RULE (Lisa 2026-09-14): THE PROGRAM NEVER DELETES A SCHEDULE ENTRY.
+    // Cards still on a day that is no longer a shoot day are UNLINKED and left
+    // where they are, and the booker is told — setting an entry aside (Declined)
+    // or deleting it is always a person's click. (Before: the sync deleted them,
+    // and once deleted Tawa's hand-made CCOO 22 Sep entry along with its own cards.)
+    const left = [];
+    for (const e of stale) {
+      if (e._moved) { delete e._moved; continue; }
+      try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); e.jobRef = ''; left.push(e.date); }
+      catch (err) { if (err.message === 'unauthorized') return; failed++; }
     }
+    if (left.length) toast(`Shoot day changed — the card on ${left.sort().map(fmtNice).join(', ')} was NOT deleted. Move it to Declined or delete it yourself if not needed.`);
     // Never fail silently — a half-synced schedule must be visible, and saving
     // the job again re-runs the whole sync (self-healing).
     if (failed) alert('⚠ The job was saved, but its schedule entries could not all be updated.\nOpen the job and press Save again to retry.');
