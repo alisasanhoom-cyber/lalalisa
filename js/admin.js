@@ -2540,9 +2540,10 @@
     // (so changing e.g. Priority → Job clears Priority — no conflicting tags across views).
     document.querySelectorAll('.cat-btn').forEach(b =>
       b.addEventListener('click', () => {
-        const wasActive = b.classList.contains('active');
+        // A second click on the active type KEEPS it. (It used to clear the type and
+        // silently turn the entry into a plain Note — 3 entries lost their type that way.)
         document.querySelectorAll('.cat-btn').forEach(x => x.classList.remove('active'));
-        if (!wasActive) b.classList.add('active');   // click the active one again → clear (plain note)
+        b.classList.add('active');
         // Priority = admin task → assign it to Admin automatically.
         if (b.dataset.cat === 'priority' && b.classList.contains('active')) {
           const sel = el('d-sbooker'); if (sel) sel.value = 'Admin';
@@ -2871,7 +2872,7 @@
   };
   function stagePickerField() {
     return `<div class="field">
-      <label>Plan the days — pick a stage, then click its day(s). Casting, fitting &amp; shooting can be different days.</label>
+      <label>Type — click one, then click its day(s). For one booking with casting, fitting &amp; shooting on different days: click the next type, then its days.</label>
       <div class="cat-btns" id="brush-btns"></div>
       <div class="mini-cal" id="stage-cal"></div>
       <div id="stage-summary" class="picked-summary"></div>
@@ -3476,7 +3477,7 @@
       <div class="drawer-actions"><button class="btn" id="d-save">Add entry</button></div>`;
     wireClientBlock();
     stageDays = {}; STAGE_BRUSHES.forEach(([b]) => stageDays[b] = new Set());
-    activeBrush = 'shooting';
+    activeBrush = role === 'admin' ? 'priority' : 'shooting';   // Admin adds admin tasks; bookers start on Job as before
     stagePickerMonth = (calMonth || todayLocal().slice(0, 7));
     // Board column "+" pre-fill: right brush selected + that board day picked.
     // (Guard: the plain "+ Add entry" button passes a click EVENT here.)
@@ -3496,6 +3497,20 @@
       if (btn.disabled) return;                 // guard: ignore rapid repeat taps
       const dates = getDates();
       if (!dates.length) { alert('⚠ Almost there — pick a stage button (e.g. Go & See), then CLICK the day(s) on the calendar below. The day turns colored when selected.'); return; }
+      // TYPE CHECK AT SAVE (Lisa 2026-09-14 — fix the class, not the symptom): the
+      // type clicked last is the type that gets saved. If it has no days while ONE
+      // other type holds them, ask — an entry is never filed under a type nobody chose.
+      // (43 entries were re-typed within minutes of creation in 5 weeks, by everyone.)
+      const chosenLabel = (STAGE_BRUSHES.find(([k]) => k === activeBrush) || [])[2] || activeBrush;
+      const othersWithDays = STAGE_BRUSHES.filter(([k]) => k !== activeBrush && stageDays[k].size);
+      if (stageDays[activeBrush].size === 0 && othersWithDays.length === 1) {
+        const [fromKey, , fromLabel] = othersWithDays[0];
+        const dayList = [...stageDays[fromKey]].sort().map(fmtNice).join(', ');
+        const ok = confirm(`You clicked "${chosenLabel}", but ${dayList} is set as "${fromLabel}".\n\nOK = save as ${chosenLabel}\nCancel = go back and check`);
+        if (!ok) return;
+        stageDays[fromKey].forEach(d => stageDays[activeBrush].add(d)); stageDays[fromKey].clear();
+        renderStagePicker();
+      }
       const details = el('d-details') ? el('d-details').value.trim() : '';
       const base = {
         models: el('d-models').value, subject: schedSubject(), booker: schedBooker(),
