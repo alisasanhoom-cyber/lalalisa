@@ -112,7 +112,11 @@ async function login(email, password) {
     check('unmapped category LEARNS its number from the newest code (→ -05-002)', learn.body && learn.body.model && /-05-002$/.test(learn.body.model.modelCode), learn.body && learn.body.model && learn.body.model.modelCode);
 
     console.log('— edit-collision guard —');
-    const col1 = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'first editor', _seen: '' } }, booker);
+    const fresh0 = ((await api('/api/jobs', {}, master)).body.jobs || []).find(j => j.id === jid);
+    check('a new job is stamped from birth (guard covers fresh records)', !!(fresh0 && fresh0.updated), fresh0 && fresh0.updated);
+    const blank = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'copy opened before the stamp', _seen: '' } }, booker);
+    check('a copy with no stamp cannot overwrite a stamped record (409)', blank.status === 409, blank.status);
+    const col1 = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'first editor', _seen: fresh0.updated } }, booker);
     const seen1 = col1.body && col1.body.job && col1.body.job.updated;
     await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'second editor won', _seen: seen1 } }, master);
     const stale = await api('/api/jobs/' + jid, { method: 'PATCH', body: { notes: 'stale overwrite attempt', _seen: seen1 } }, booker);
@@ -219,6 +223,32 @@ async function login(email, password) {
     check('render/renderDrive/sheetGrid never throw on empty job', ok1);
     const grid = MP.sheetGrid({ budget: 28000, overtimeFee: '14000', overtimeRate: 3500, currency: 'THB', jobId: 'C9999' }, 'tax');
     check('sheet grid carries the same OT line', grid.cells.some(c => /4h × ฿3,500\/Hour/.test(String(c.v))));
+    console.log('— nothing typed is cut or dropped (audit 2026-09-15) —');
+    const longBrief = 'B'.repeat(3000) + ' Tel. 095-626-0000';
+    const capE = await api('/api/schedule', { method: 'POST', body: { date: '2026-12-01', models: 'Cap Test', option: longBrief, timeStart: '2:00 PM', timeEnd: '12:30 PM', booker: 'BookerT' } }, booker);
+    check('a 3000-char brief is stored whole', capE.body && capE.body.entry && capE.body.entry.option === longBrief, capE.body && capE.body.entry && capE.body.entry.option.length);
+    check('"2:00 PM" / "12:30 PM" are stored whole (AM/PM not cut)', capE.body && capE.body.entry && capE.body.entry.timeStart === '2:00 PM' && capE.body.entry.timeEnd === '12:30 PM', capE.body && capE.body.entry && JSON.stringify([capE.body.entry.timeStart, capE.body.entry.timeEnd]));
+    check('a new schedule entry is stamped from birth', !!(capE.body && capE.body.entry && capE.body.entry.updated));
+    const emptyRestore = await api('/api/restore', { method: 'POST', body: { jobs: [], schedule: [] } }, master);
+    const stillThere = ((await api('/api/jobs', {}, master)).body.jobs || []).length;
+    check('restore with an EMPTY list wipes nothing', emptyRestore.status === 200 && stillThere > 0, stillThere);
+    console.log('— the ONE allowed auto move: past Option, nothing else —');
+    const pastOpt = await api('/api/schedule', { method: 'POST', body: { date: '2020-01-05', models: 'Past Option', option: 'hold', booker: 'BookerT' } }, booker);
+    const pastShort = await api('/api/schedule', { method: 'POST', body: { date: '2020-01-06', models: 'Past Shortlisted', option: 'hold', stage: 'shortlist', booker: 'BookerT' } }, booker);
+    const pastFit = await api('/api/schedule', { method: 'POST', body: { date: '2020-01-07', models: 'Past Fitting text', option: 'hold', fitting: 'fit 10:00', booker: 'BookerT' } }, booker);
+    const listAfter = (await api('/api/schedule', {}, master)).body;
+    const arrAfter = Array.isArray(listAfter) ? listAfter : (listAfter.entries || listAfter.schedule || []);
+    const stOf = id => (arrAfter.find(e => e.id === id) || {}).status;
+    check('plain past open Option → declined (allowed)', stOf(pastOpt.body.entry.id) === 'declined', stOf(pastOpt.body.entry.id));
+    check('past option MOVED TO SHORTLIST on the Board stays open', stOf(pastShort.body.entry.id) === 'open', stOf(pastShort.body.entry.id));
+    check('past option WITH FITTING TEXT stays open', stOf(pastFit.body.entry.id) === 'open', stOf(pastFit.body.entry.id));
+    console.log('— a corrupt data file is never treated as empty —');
+    fs.writeFileSync(path.join(tmp, 'income.json'), '{ this is not json');
+    const incR = await api('/api/income', { method: 'POST', body: { date: '2026-09-15', kind: 'other', amount: 1, source: 'x' } }, master);
+    const incRaw = fs.readFileSync(path.join(tmp, 'income.json'), 'utf8');
+    check('write onto a corrupt file is refused (5xx) and the file is left untouched', incR.status >= 500 && incRaw === '{ this is not json', incR.status + ' ' + incRaw.slice(0, 20));
+    fs.writeFileSync(path.join(tmp, 'income.json'), '[]');
+
 
     console.log(`\n${tests - failures}/${tests} passed${failures ? ' — ' + failures + ' FAILURES, DO NOT DEPLOY' : ' — safe to deploy'}`);
     process.exitCode = failures ? 1 : 0;

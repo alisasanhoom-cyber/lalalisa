@@ -185,6 +185,51 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('26 Sep entry is back, same id, same content', L1.length === 1 && L1[0].id === L0[0].id && L1[0].job === L0[0].job, JSON.stringify(L1).slice(0, 160));
     check('row left the Trash list', !(await ev(`[...document.querySelectorAll('#trash-rows tr')].some(r => /Schedule entry/.test(r.innerText) && /2026-09-26/.test(r.innerText))`)));
 
+    console.log('— M: text in a SECOND type field survives a save from the edit drawer (156 legacy entries) —');
+    await loginAs('booker@test', 'booker', 'Tawa');
+    const post = async body => (await (await fetch(BASE + '/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': auth.token }, body: JSON.stringify(body) })).json()).entry;
+    const legacy = await post({ date: '2026-09-29', models: 'Legacy Two', job: 'Thai Post brief', shortlist: 'Hyesun', booker: 'Tawa', status: 'open' });
+    const openEditOf = async (date, key) => {
+      // Entries created through the API are not in the page's memory yet — nudge the
+      // 20-second silent refresh (it also runs on window focus) and wait for it.
+      await ev(`window.dispatchEvent(new Event('focus')); 'ok'`); await sleep(1500);
+      await ev(`document.querySelector('.tab[data-view="schedule"]').click(); 'ok'`); await sleep(300);
+      await ev(`(()=>{const m=document.getElementById('s-month'); if(![...m.options].some(o=>o.value==='2026-09')) m.add(new Option('2026-09','2026-09')); m.value='2026-09'; m.dispatchEvent(new Event('change')); return m.value;})()`);
+      await ev(`document.getElementById('s-cal-btn').click(); 'ok'`); await sleep(400);
+      await ev(`document.getElementById('s-cal-btn').click(); 'ok'`); await sleep(400);
+      await ev(`(()=>{const c=document.querySelector('.cal-cell[data-date="${date}"]'); if(c) c.click(); return !!c;})()`); await sleep(600);
+      let hit = false;
+      for (let i = 0; i < 15 && !hit; i++) {   // the board renders from a feed that loads async after a login — poll for the card
+        hit = await ev(`(()=>{const c=[...document.querySelectorAll('#s-board [data-key]')].find(x=>x.dataset.key==='${key}'); if(!c) return false; c.click(); return true;})()`);
+        if (!hit) await sleep(400);
+      }
+      await sleep(800);
+      const ed = await ev(`(()=>{const b=document.querySelector('.day-edit'); if(!b) return false; b.click(); return true;})()`); await sleep(600);
+      if (!(hit && ed)) console.log('  diag openEditOf:', JSON.stringify({ key, hit, ed, cells: await ev(`document.querySelectorAll('.cal-cell[data-date]').length`), cards: await ev(`[...document.querySelectorAll('#s-board [data-key]')].map(x=>x.dataset.key+'|'+x.innerText.slice(0,30))`), tab: await ev(`document.querySelector('.tab.active')?.dataset.view`), boardDay: await ev(`document.getElementById('b-date')?.value || document.querySelector('#s-board .board-day, #b-day')?.innerText`) }).slice(0, 600));
+      return hit && ed;
+    };
+    check('edit drawer opened for the legacy entry', await openEditOf('2026-09-29', legacy.id));
+    await ev(`document.getElementById('d-details').value = 'Thai Post brief v2'; document.getElementById('d-save').click(); 'ok'`); await sleep(1200);
+    const M1 = findAll(await entries(), '2026-09-29').find(e => e.id === legacy.id);
+    check('job text updated AND hidden shortlist text kept', M1 && M1.job === 'Thai Post brief v2' && M1.shortlist === 'Hyesun', M1 && JSON.stringify({ job: M1.job, shortlist: M1.shortlist }));
+
+    console.log('— O: clicking Priority in the drawer does not change the booker —');
+    check('edit drawer reopened', await openEditOf('2026-09-29', legacy.id));
+    await ev(`document.querySelector('.cat-btn[data-cat="priority"]').click(); 'ok'`); await sleep(150);
+    const bookerAfter = await ev(`document.getElementById('d-sbooker') ? document.getElementById('d-sbooker').value : '(none)'`);
+    check('booker still Tawa after the Priority click', bookerAfter === 'Tawa', bookerAfter);
+    await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
+
+    console.log('— N: editing one day of a hold changes shared info on the other day but never its own time —');
+    const hg = 'hg-e2e-' + Date.now();
+    const h1 = await post({ date: '2026-09-30', models: 'Hold Pair', option: 'hold brief', booker: 'Tawa', holdGroup: hg, holdStart: '2026-09-30', holdEnd: '2026-10-01', timeStart: '10:00' });
+    const h2 = await post({ date: '2026-10-01', models: 'Hold Pair', option: 'hold brief', booker: 'Tawa', holdGroup: hg, holdStart: '2026-09-30', holdEnd: '2026-10-01', timeStart: '14:00' });
+    check('edit drawer opened for day 1 of the hold', await openEditOf('2026-09-30', hg));
+    await ev(`document.getElementById('d-models').value = 'Hold Pair Updated'; document.getElementById('d-save').click(); 'ok'`); await sleep(1500);
+    const allN = await entries(); const N1 = findAll(allN, '2026-09-30').find(e => e.id === h1.id), N2 = findAll(allN, '2026-10-01').find(e => e.id === h2.id);
+    check('day 2 got the new models (shared info follows the hold)', N2 && N2.models === 'Hold Pair Updated', N2 && N2.models);
+    check('day 2 kept its OWN time 14:00; day 1 kept 10:00', N2 && N2.timeStart === '14:00' && N1 && N1.timeStart === '10:00', JSON.stringify({ d1: N1 && N1.timeStart, d2: N2 && N2.timeStart }));
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }

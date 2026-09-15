@@ -21,16 +21,23 @@ const load = f => { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return j.f
 const oldB = load(a), newB = load(b);
 const list = (bk, name) => { const v = bk[name]; return Array.isArray(v) ? v : []; };
 const trash = list(newB, 'trash.json'), activity = list(newB, 'activity.json');
-const tag = x => (x.date || x.jobDate || '') + ' ' + (x.models || x.model || x.jobTitle || '').slice(0, 40);
+const tag = x => (x.date || x.jobDate || x.created || '').slice(0, 10) + ' ' + (x.models || x.model || x.jobTitle || x.name || x.clientName || x.source || '').slice(0, 40);
 let flagged = 0, gone = 0;
 const lines = [];
-for (const [file, kind, label] of [['schedule.json', 'schedule', 'schedule entry'], ['jobs.json', 'job', 'job']]) {
+const KINDS = [['schedule.json', 'schedule', 'schedule entry'], ['jobs.json', 'job', 'job'], ['models.json', 'model', 'model'], ['requests.json', 'request', 'request'], ['clients.json', 'client', 'client'], ['income.json', 'income', 'income record'], ['mac.json', 'mac', 'MAC record']];
+// A whole file shrinking is the loudest sign of loss — say it per file, before the per-record lines.
+for (const [file, , label] of KINDS) {
+  const o = list(oldB, file).length, n = list(newB, file).length;
+  if (n < o) lines.push(`  !! ${file}: ${o} → ${n} ${label}s (file SHRANK by ${o - n})`);
+}
+for (const [file, kind, label] of KINDS) {
   const now = new Set(list(newB, file).map(x => x.id));
   for (const x of list(oldB, file)) {
     if (now.has(x.id)) continue;
     gone++;
     const inTrash = trash.some(t => t.kind === kind && t.rec && t.rec.id === x.id);
-    const del = activity.filter(l => l.action === 'deleted ' + kind && (l.detail || '').startsWith((x.date || x.jobTitle || '').slice(0, 10))).slice(-1)[0];
+    const key = String(x.date || x.jobTitle || x.name || x.clientName || '').slice(0, 10);
+    const del = activity.filter(l => l.action === 'deleted ' + kind && (!key || (l.detail || '').startsWith(key))).slice(-1)[0];
     const who = del ? `${del.name} at ${del.time.replace('T', ' ').slice(0, 16)} UTC` : 'NO human delete line';
     const ok = inTrash && del;
     if (!ok) flagged++;

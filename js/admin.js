@@ -243,7 +243,9 @@
       updatePending = true;                                        // a newer version is live
       // Reload as soon as it's safe (background tab, or foreground with nothing being
       // edited) so stale tabs can't keep sending old messages. Otherwise show the bar.
-      if (document.hidden || safeReloadNow()) reloadOnce();
+      // Only when nothing is being edited — a hidden tab with an open drawer keeps
+      // the booker's unsaved typing (audit 2026-09-15); it reloads when they finish.
+      if (safeReloadNow()) reloadOnce();
       else showUpdateBar();
     } catch (_) { /* offline — try again next tick */ }
   }
@@ -357,7 +359,7 @@
   async function setEntryBooker(id, booker) {
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify({ booker }) });
     const e = schedule.find(x => x.id === id);
-    if (e) e.booker = r.entry.booker;
+    if (e && r.entry) Object.assign(e, r.entry);   // keep the local copy (and its collision stamp) current
   }
 
   // Lead status (Open → Confirmed / Postponed / Declined) for a schedule entry.
@@ -392,8 +394,10 @@
         return true;
       }
       if (!confirm(`Delete the WHOLE ${group.length}-day set (${days.join(', ')})?`)) return false;
-      for (const g of group) { try { await api('/api/schedule/' + g.id, { method: 'DELETE' }); } catch (_) {} }
-      schedule = schedule.filter(x => x.holdGroup !== e.holdGroup);
+      const notDeleted = [];
+      for (const g of group) { try { await api('/api/schedule/' + g.id, { method: 'DELETE' }); } catch (_) { notDeleted.push(g.id); } }
+      schedule = schedule.filter(x => x.holdGroup !== e.holdGroup || notDeleted.includes(x.id));
+      if (notDeleted.length) alert(`${notDeleted.length} day(s) could not be deleted and are still on the schedule — please try again.`);
       return true;
     }
     if (!confirm('Delete this entry?')) return false;
@@ -407,7 +411,7 @@
     // entry keeps its column until a human drags it or picks a type.
     const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(patch) });
     const e = schedule.find(x => x.id === id);
-    if (e) { e.status = r.entry.status; e.stage = r.entry.stage; }
+    if (e && r.entry) Object.assign(e, r.entry);
     // Status is PER-DAY (Lisa 2026-09-07, urgent): confirm the 8th, decline just
     // the 9th. Dragging the card on the Board still moves the whole hold as one.
   }
@@ -430,8 +434,9 @@
     prefill.shootDays = e.shootDays || '';
     const r = await api('/api/jobs', { method: 'POST', body: JSON.stringify(prefill) });
     if (r.job) jobs.unshift(r.job);
-    await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ status: 'confirmed', jobCreated: true, stage: 'shooting' }) });
-    e.status = 'confirmed'; e.jobCreated = true; e.stage = 'shooting';
+    // Status only — the column is never moved by the program (Lisa 2026-09-10).
+    const rc = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ status: 'confirmed', jobCreated: true }) });
+    Object.assign(e, rc.entry || { status: 'confirmed', jobCreated: true });
     return true;
   }
 
@@ -1598,8 +1603,10 @@
           // the ONLY automatic move is a past Option with no confirmation → Declined).
           if (prefill && prefill._fromScheduleId) {
             const e = schedule.find(x => x.id === prefill._fromScheduleId);
-            await api('/api/schedule/' + prefill._fromScheduleId, { method: 'PATCH', body: JSON.stringify({ jobCreated: true, jobRef: saved.id }) }).catch(() => {});
-            if (e) { e.jobCreated = true; e.jobRef = saved.id; }
+            try {
+              const rl = await api('/api/schedule/' + prefill._fromScheduleId, { method: 'PATCH', body: JSON.stringify({ jobCreated: true, jobRef: saved.id }) });
+              if (e) Object.assign(e, rl.entry || { jobCreated: true, jobRef: saved.id });
+            } catch (_) { alert('The job was created, but the schedule entry could not be marked "Job created". Refresh and check it before pressing Create job again.'); }
           }
         }
         await syncShootDates(saved);   // put the shoot date(s) on the Schedule automatically
@@ -1701,8 +1708,8 @@
       if (clash) {
         try {
           // Link only. Its column is NOT touched — an entry moves only by human action (Lisa 2026-09-10).
-          await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, jobCreated: true }) });
-          clash.jobRef = job.id; clash.jobCreated = true;
+          const rc = await api('/api/schedule/' + clash.id, { method: 'PATCH', body: JSON.stringify({ jobRef: job.id, jobCreated: true }) });
+          Object.assign(clash, rc.entry || { jobRef: job.id, jobCreated: true });
         } catch (err) { if (err.message === 'unauthorized') return; failed++; }
         continue;
       }
@@ -1725,7 +1732,7 @@
     const left = [];
     for (const e of stale) {
       if (e._moved) { delete e._moved; continue; }
-      try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); e.jobRef = ''; left.push(e.date); }
+      try { const ru = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ jobRef: '' }) }); Object.assign(e, ru.entry || { jobRef: '' }); left.push(e.date); }
       catch (err) { if (err.message === 'unauthorized') return; failed++; }
     }
     if (left.length) toast(`Shoot day changed — the card on ${left.sort().map(fmtNice).join(', ')} was NOT deleted. Move it to Declined or delete it yourself if not needed.`);
@@ -1823,8 +1830,8 @@
     box.querySelectorAll('.rem-sent').forEach(c =>
       c.addEventListener('change', async () => {
         const id = c.dataset.id, val = c.checked ? tomorrow : '';
-        await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify({ notified: val }) });
-        const e = schedule.find(x => x.id === id); if (e) e.notified = val;
+        const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify({ notified: val }) });
+        const e = schedule.find(x => x.id === id); if (e && r.entry) Object.assign(e, r.entry);
         renderReminders();
       }));
   }
@@ -1898,12 +1905,15 @@
     el('s-history').querySelectorAll('.hist-back').forEach(b =>
       b.addEventListener('click', async () => {
         const e = schedule.find(x => x.id === b.dataset.id); if (!e) return;
-        // Bring back the WHOLE hold, not just this one day.
-        const members = e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup) : [e];
-        for (const s of members) {
-          try { await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', stage: '', keptOpen: true }) }); s.status = 'open'; s.stage = ''; s.keptOpen = true; }
-          catch (_) {}   // keptOpen: auto-decline must not instantly re-expire it
-        }
+        // Only THIS day, and back to the column it was in (its stage is kept). The
+        // other days of a hold stay as they are — each is a person's own click.
+        // keptOpen: the past-option auto-decline must not instantly re-expire it.
+        try {
+          const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ status: 'open', keptOpen: true }) });
+          Object.assign(e, r.entry || { status: 'open', keptOpen: true });
+          const others = e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id && x.status !== 'open').length : 0;
+          if (others) toast(`Brought back ${fmtNice(e.date)} only — the other ${others} day(s) of this hold stay as they are.`);
+        } catch (err) { alert('Could not bring it back: ' + ((err.body && err.body.error) || 'please try again.')); }
         buildFilters(); renderSchedule();
       }));
     el('s-history').querySelectorAll('.hist-edit').forEach(b =>
@@ -1911,8 +1921,8 @@
     el('s-history').querySelectorAll('.hist-ppdate').forEach(inp =>
       inp.addEventListener('change', async () => {
         const e = schedule.find(x => x.id === inp.dataset.id); if (!e) return;
-        await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ postponeDate: inp.value }) });
-        e.postponeDate = inp.value;
+        const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ postponeDate: inp.value }) });
+        if (r.entry) Object.assign(e, r.entry);
       }));
   }
 
@@ -2119,7 +2129,11 @@
   //   → any normal column, from Declined/Postponed = bring it back (status open) + that stage
   //   → any normal column, already active = just move its stage
   async function moveCardToStage(key, target) {
-    const entries = schedule.filter(e => (e.holdGroup || e.id) === key);
+    const setAll = schedule.filter(e => (e.holdGroup || e.id) === key);
+    // Single-day view: the card IS that day — only that day moves. "All days" view
+    // shows the set as one card, so the whole set moves (as the board hint says).
+    const shown = boardAll ? [] : setAll.filter(e => e.date === dayDate);
+    const entries = shown.length ? shown : setAll;
     if (!entries.length) return;
     // A Priority admin task (visa/flight/vacation) is a "don't book" block — it can't be
     // dragged into a booking column (that's what wrongly gave ALIYA a shooting stage).
@@ -2138,8 +2152,15 @@
       if (patch.stage !== undefined) e.stage = patch.stage;
     });
     renderBoard();
+    let failedMoves = 0;
     for (const e of entries) {
-      try { await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(patch) }); } catch (_) {}
+      try { const r = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify(patch) }); if (r.entry) Object.assign(e, r.entry); }
+      catch (_) { failedMoves++; }
+    }
+    if (failedMoves) {
+      alert(`${failedMoves} day(s) could not be moved — the board will refresh to show what was really saved.`);
+      try { const sb = await api('/api/schedule'); schedule = sb.schedule || schedule; } catch (_) {}
+      buildFilters(); renderSchedule();
     }
   }
 
@@ -2503,10 +2524,9 @@
       btn.addEventListener('click', () => editScheduleEntry(btn.dataset.id)));
     el('s-list').querySelectorAll('.sched-del').forEach(btn =>
       btn.addEventListener('click', async () => {
-        if (!confirm('Delete this schedule entry?')) return;
-        await api('/api/schedule/' + btn.dataset.id, { method: 'DELETE' });
-        schedule = schedule.filter(x => x.id !== btn.dataset.id);
-        renderSchedule();
+        const e = schedule.find(x => x.id === btn.dataset.id); if (!e) return;
+        try { if (await deleteHoldAware(e)) { buildFilters(); renderSchedule(); } }
+        catch (err) { alert('Could not delete: ' + ((err.body && err.body.error) || 'please try again.')); }
       }));
   }
 
@@ -2546,24 +2566,27 @@
         // silently turn the entry into a plain Note — 3 entries lost their type that way.)
         document.querySelectorAll('.cat-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        // Priority = admin task → assign it to Admin automatically.
-        if (b.dataset.cat === 'priority' && b.classList.contains('active')) {
-          const sel = el('d-sbooker'); if (sel) sel.value = 'Admin';
-        }
+        // (No hidden side effect: the booker field stays whatever the person set.)
       }));
   }
   // Returns the category fields (+ note) to save, based on the tags + Details box.
-  function collectTypeDetails() {
+  function collectTypeDetails(entry) {
     const details = el('d-details') ? el('d-details').value : '';
     const active = [...document.querySelectorAll('.cat-btn.active')].map(b => b.dataset.cat);
-    const out = {}; SCHED_CATS.forEach(([k]) => { if (k !== 'gosee') out[k] = ''; });
+    // NOTHING TYPED IS BLANKED UNSEEN (audit 2026-09-15): on an existing entry, text
+    // sitting in another type field (156 legacy entries had job + shortlist) or in
+    // the note is left alone — the drawer never showed it, so a save must not erase
+    // it. Only the type the person moved AWAY from is cleared, by the caller.
+    const typed = k => !!(entry && String(entry[k] || '').trim());
+    const out = {}; SCHED_CATS.forEach(([k]) => { if (k !== 'gosee' && !typed(k)) out[k] = ''; });
     if (active.length) {
       // The tag lives in the type field's TEXT — an empty Details box must not
       // erase the tag (Lisa's Karine entry lost its type and jumped category).
       const fill = details || (typeof schedSubject === 'function' ? schedSubject() : '') || ' ';
       // Go & See has no field of its own: its text lives in `casting`, its
       // identity in stage 'goandsee' (Aim 2026-09-08: needs a REAL button).
-      active.forEach(k => out[k === 'gosee' ? 'casting' : k] = fill); out.note = '';
+      active.forEach(k => out[k === 'gosee' ? 'casting' : k] = fill);
+      if (!typed('note')) out.note = '';
     }
     else { out.note = details; }
     out._activeType = active[0] || '';   // which button is on, even with empty text
@@ -3221,7 +3244,7 @@
           const created = await createScheduleForDates(base, dates);
           created.forEach(e => schedule.push(e));
           buildFilters(); renderSchedule(); openDay(dateStr);
-        } catch (_) { btn.disabled = false; btn.textContent = 'Add entry'; }
+        } catch (err) { btn.disabled = false; btn.textContent = 'Add entry'; await saidAndResynced(err); }
       });
     }
     const reopen = () => openDay(dateStr, focusId);   // refresh keeps the same (focused or full) view
@@ -3297,7 +3320,7 @@
         dayDate = firstDay; boardAll = false; calMonth = firstDay.slice(0, 7);
         buildFilters(); renderSchedule(); closeDrawer();
         toast(`Copied ✓  to ${created.length} day${created.length === 1 ? '' : 's'}`);
-      } catch (_) { btn.disabled = false; btn.textContent = 'Copy to selected day(s)'; }
+      } catch (err) { btn.disabled = false; btn.textContent = 'Copy to selected day(s)'; await saidAndResynced(err); }
     });
     openDrawer();
   }
@@ -3345,8 +3368,8 @@
     setupConflictCheck(getEditDates, id);
     el('d-save').addEventListener('click', async () => {
       if (!passesConflictGuard(getEditDates, id)) return;
-      const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails() };
-      data.postponeDate = (data.status === 'postponed' && el('d-postponeDate')) ? el('d-postponeDate').value : '';
+      const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails(e) };
+      data.postponeDate = (data.status === 'postponed' && el('d-postponeDate')) ? el('d-postponeDate').value : (e.postponeDate || '');
       // CATEGORY LOCK (Lisa's rule): saving other info must NEVER move an entry
       // to another category. The stage is rewritten ONLY when the booker
       // explicitly clicked a DIFFERENT type button (that keeps Aim's fix — a
@@ -3372,20 +3395,30 @@
       // (Kin kept job-text after moving to Go&See → snapped back to Job).
       const prevField = prevPrimary === 'gosee' ? 'casting' : prevPrimary;
       if (activeType && typeChanged && prevField && prevField !== activeField) data[prevField] = '';
-      const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify(data) });
+      const before = { ...e };
+      // _seen = the copy this person opened: a colleague's newer save makes this a 409, never an overwrite.
+      const r = await api('/api/schedule/' + id, { method: 'PATCH', body: JSON.stringify({ ...data, _seen: e.updated || '' }) });
       Object.assign(e, r.entry);
-      // A multi-day hold is ONE booking — apply the same edit to its other days
-      // (everything except the date), so the hold never ends up half-edited with
-      // the Board showing one thing and the calendar another.
+      // A multi-day hold is ONE booking — the shared info a person CHANGED here is
+      // applied to its other days. Only what changed, and never the per-day fields
+      // (time, internal note, note, status, postpone date): a sibling's own values
+      // are never overwritten by an edit of another day (audit 2026-09-15).
       if (e.holdGroup) {
-        const sibPatch = { ...data }; delete sibPatch.date;
-        // Status (and its stage) is PER-DAY — only text/type edits cover the set.
-        delete sibPatch.status;
-        if (!typeChanged) delete sibPatch.stage;
-        const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
-        for (const s of siblings) {
-          try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify(sibPatch) }); Object.assign(s, rs.entry); }
-          catch (_) {}
+        const PER_DAY = new Set(['date', 'status', 'timeStart', 'timeEnd', 'internalNote', 'note', 'postponeDate']);
+        const sibPatch = {};
+        Object.keys(data).forEach(k => {
+          if (k.startsWith('_') || PER_DAY.has(k)) return;
+          if (k === 'stage' && !typeChanged) return;
+          if (String(data[k] == null ? '' : data[k]) !== String(before[k] == null ? '' : before[k])) sibPatch[k] = data[k];
+        });
+        if (Object.keys(sibPatch).length) {
+          const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
+          let sibFailed = 0;
+          for (const s of siblings) {
+            try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ ...sibPatch, _seen: s.updated || '' }) }); Object.assign(s, rs.entry); }
+            catch (_) { sibFailed++; }
+          }
+          if (sibFailed) alert(`Saved this day, but ${sibFailed} other day(s) of the hold could not be updated (someone else may have just edited them). Open those days to check.`);
         }
       }
       done();
@@ -3549,9 +3582,16 @@
         if (scheduleView !== 'board' && scheduleView !== 'calendar') scheduleView = 'board';
         renderSchedule(); closeDrawer();
         toast(`Added ✓  ${created.length} entr${created.length === 1 ? 'y' : 'ies'} on ${fmtNice(firstDay)}`);
-      } catch (_) { btn.disabled = false; btn.textContent = 'Add entry'; }
+      } catch (err) { btn.disabled = false; btn.textContent = 'Add entry'; await saidAndResynced(err); }
     });
     openDrawer();
+  }
+  // A multi-day save that failed part-way is never left unsaid: tell the person,
+  // then reload the schedule from the server so the screen shows exactly what was
+  // saved (a retry must not create duplicates of the days that did get through).
+  async function saidAndResynced(err) {
+    alert('Not everything could be saved: ' + ((err && err.body && err.body.error) || (err && err.message) || 'please try again') + '\nThe screen will refresh to show exactly what was saved.');
+    try { const sb = await api('/api/schedule'); schedule = sb.schedule || schedule; buildFilters(); renderSchedule(); } catch (_) {}
   }
   // Small confirmation toast, bottom-center, auto-dismiss.
   function toast(msg) {
@@ -3705,7 +3745,7 @@
         ${r.notes ? `<div style="margin-top:8px"><b>Notes</b><br>${esc(r.notes)}</div>` : ''}
         <div style="margin-top:8px;color:var(--grey);font-size:12px">Received ${esc(String(r.created || '').replace('T', ' ').slice(0, 16))}</div>
       </div>
-      ${linked ? `<p style="font-size:13px;margin:0 0 12px">📅 In the schedule as <b>${esc((linked.option || linked.casting || linked.subject || 'entry'))}</b> — status <b>${esc(linked.status || 'open')}</b>. Won/Lost follows it automatically.</p>` : ''}
+      ${linked ? `<p style="font-size:13px;margin:0 0 12px">📅 In the schedule as <b>${esc((linked.option || linked.casting || linked.subject || 'entry'))}</b> — status <b>${esc(linked.status || 'open')}</b>. Set Won / Lost by hand below.</p>` : ''}
       <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <label style="font-size:12.5px">Status
           <select id="rq-status" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin-top:4px">
@@ -4774,7 +4814,7 @@
         if (!data.name.trim()) { alert('Please enter a name.'); return; }
         const btn = el('md-save'); btn.disabled = true; btn.textContent = 'Saving…';
         try {
-          if (m) { const r = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify(data) }); Object.assign(m, r.model); }
+          if (m) { const r = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ ...data, _seen: m.updated || '' }) }); Object.assign(m, r.model); }
           else {
             const r = await api('/api/models', { method: 'POST', body: JSON.stringify(data) });
             models.push(r.model);

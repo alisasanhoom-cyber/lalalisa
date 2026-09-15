@@ -80,11 +80,11 @@ const ACTIVITY_FILE = path.join(DATA_DIR, 'activity.json');
 // here (latest 800) with who deleted it and when, so ANY deletion can be undone.
 const TRASH_FILE = path.join(DATA_DIR, 'trash.json');
 function trashPut(kind, rec, user) {
-  try {
-    let t; try { t = JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8')); } catch (_) { t = []; }
-    t.unshift({ kind, rec, by: (user && user.email) || '', at: new Date().toISOString() });
-    fs.writeFileSync(TRASH_FILE, JSON.stringify(t.slice(0, 800)));
-  } catch (_) {}
+  // Atomic write (temp + rename) and NOT swallowed: if the trash copy cannot be
+  // written, the delete route fails — a record is never deleted without its copy.
+  const t = load(TRASH_FILE);
+  t.unshift({ kind, rec, by: (user && user.email) || '', at: new Date().toISOString() });
+  save(TRASH_FILE, t.slice(0, 2000));
 }
 // SAFETY NET 2 — hourly snapshots: a rolling 24-hour ring of full data copies on
 // the volume (hour N overwrites yesterday's hour N — bounded size, 24h granular).
@@ -97,9 +97,10 @@ function hourlySnapshot() {
       if (!f.endsWith('.json') || f === 'sessions.json') return;
       try { out[f] = fs.readFileSync(path.join(DATA_DIR, f), 'utf8'); } catch (_) {}
     });
-    fs.writeFileSync(path.join(SNAP_DIR, 'hour-' + String(new Date().getHours()).padStart(2, '0') + '.json'),
-      JSON.stringify({ when: new Date().toISOString(), files: out }));
-  } catch (_) {}
+    const name = 'hour-' + String(new Date().getHours()).padStart(2, '0') + '.json';
+    fs.writeFileSync(path.join(SNAP_DIR, name), JSON.stringify({ when: new Date().toISOString(), files: out }));
+    console.log('[snap] ' + name + ' written');
+  } catch (err) { console.error('[snap] FAILED: ' + (err && err.message)); }
 }
 setInterval(hourlySnapshot, 3600 * 1000);
 setTimeout(hourlySnapshot, 30 * 1000);   // one snapshot shortly after every boot too
@@ -125,7 +126,7 @@ function logActivity(user, action, detail) {
     email: user.email, name: user.name, role: user.role,
     action, detail: text(detail, 200),
   });
-  save(ACTIVITY_FILE, list.length > 5000 ? list.slice(-5000) : list);  // keep it bounded
+  save(ACTIVITY_FILE, list.length > 50000 ? list.slice(-50000) : list);  // ~1.5 years at 80 lines/day — the "who deleted it" proof must outlive the trash
 }
 
 // Create data/users.json with default logins the first time the server runs.
@@ -147,7 +148,7 @@ function seedUsers() {
 function ensureExtraUsers() {
   if (!fs.existsSync(USERS_FILE)) return;
   const users = load(USERS_FILE);
-  if (!Array.isArray(users)) return;
+  if (!Array.isArray(users) || !users.length) return;   // an unreadable/empty user table must never be replaced by a scouter-only one
   if (!users.some(u => String(u.email || '').toLowerCase() === 'scouter@mpmodelsbkk.com')) {
     users.push({ email: 'scouter@mpmodelsbkk.com', name: 'Wolf (Scouter)', role: 'scouter', password: hashPassword('WolfMP2026scout') });
     save(USERS_FILE, users);
@@ -226,8 +227,15 @@ const SCHED_DIFF_FIELDS = [['status', 'status'], ['booker', 'booker'], ['date', 
    =================================================================== */
 
 function load(file) {
+  // A MISSING file is an empty list. Anything else (unreadable, corrupt JSON, volume
+  // not mounted) must NOT read as "empty": an append route would then save one record
+  // over the whole file. Refuse loudly instead — the request fails, the data stays.
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch { return []; }
+  catch (err) {
+    if (err && err.code === 'ENOENT') return [];
+    console.error('[data] CANNOT READ ' + file + ': ' + (err && err.message) + ' — refusing to treat it as empty');
+    throw err;
+  }
 }
 function save(file, list) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -283,8 +291,9 @@ function buildJob(input, fromWebsite) {
     source:      fromWebsite ? 'website' : 'manual',
     status,
     confirmed:   status === 'confirmed' || status === 'completed',
-    month:       monthOf(jobDate) || monthOf(today()),
-    bookingDate: today(),
+    month:       monthOf(jobDate) || monthOf(bangkokToday()),
+    bookingDate: date(input.bookingDate) || bangkokToday(),   // what the booker typed; today (Bangkok) only as a default
+    updated:     new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex'),
     jobDate,
     budget:      number(input.budget),
     shootDays:   Math.max(1, Math.round(number(input.shootDays)) || 1),   // fees are often per shoot day
@@ -304,7 +313,7 @@ function buildJob(input, fromWebsite) {
     // Shooting date(s) — the days the shoot happens; auto-placed on the Schedule.
     shootDates:    Array.isArray(input.shootDates) ? input.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [],
     // Team-only scratch note — never printed on the client confirmation:
-    internalNote:  text(input.internalNote, 2000),
+    internalNote:  text(input.internalNote, 5000),
     client:      text(input.client) || text(input.company) || text(input.clientName),
     booker:      text(input.booker, 40),
     // Extra contact details kept for website bookings:
@@ -333,8 +342,8 @@ function updateJob(id, changes) {
   if (!job) return null;
   // Two people had the same job open → the second save must WARN, not silently
   // overwrite the first person's work (the last silent-loss path, 2026-09-04).
-  if (changes._seen !== undefined && job.updated && changes._seen && changes._seen !== job.updated) {
-    return { __conflict: true };
+  if (changes._seen !== undefined && job.updated && changes._seen !== job.updated) {
+    return { __conflict: true };   // includes _seen === '': the client's copy predates the stamp
   }
 
   const editable = ['status', 'confirmed', 'bookingDate', 'jobDate', 'budget', 'currency',
@@ -351,7 +360,7 @@ function updateJob(id, changes) {
     else if (key === 'shootDates') job.shootDates = Array.isArray(changes.shootDates) ? changes.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [];
     else if (key === 'shootDays') job.shootDays = Math.max(1, Math.round(number(changes.shootDays)) || 1);
     else if (key === 'whtMode') job.whtMode = ['on', 'off'].includes(changes.whtMode) ? changes.whtMode : '';
-    else if (key === 'internalNote') job.internalNote = text(changes.internalNote, 2000);
+    else if (key === 'internalNote') job.internalNote = text(changes.internalNote, 5000);
     else if (key === 'currency')  job.currency = ['THB', 'USD', 'CNY', 'EUR'].includes(changes.currency) ? changes.currency : 'THB';
     else if (key === 'confirmed') job.confirmed = !!changes.confirmed;
     else if (key === 'status') {
@@ -475,20 +484,21 @@ function buildScheduleEntry(input) {
     holdGroup: text(input.holdGroup, 40),   // links the days of a multi-day hold
     holdStart: text(input.holdStart, 20),
     holdEnd:   text(input.holdEnd, 20),
-    timeStart: text(input.timeStart, 5),
-    timeEnd:   text(input.timeEnd, 5),
+    timeStart: text(input.timeStart, 20),
+    timeEnd:   text(input.timeEnd, 20),
     models:  text(input.models, 500),
-    casting: text(input.casting, 1000),
-    fitting: text(input.fitting, 1000),
-    option:  text(input.option, 1000),
-    job:     text(input.job, 1000),
-    shortlist: text(input.shortlist, 1000),
-    priority: text(input.priority, 1000),
-    note:    text(input.note, 2000),
+    casting: text(input.casting, 5000),
+    fitting: text(input.fitting, 5000),
+    option:  text(input.option, 5000),
+    job:     text(input.job, 5000),
+    shortlist: text(input.shortlist, 5000),
+    priority: text(input.priority, 5000),
+    note:    text(input.note, 5000),
     stage:   SCHED_STAGES.includes(input.stage) ? input.stage : '',   // Board pipeline stage
     postponeDate: text(input.postponeDate, 40),      // new date when postponed (optional / free text)
-    internalNote: text(input.internalNote, 2000),   // team-only; never in the model notify message
+    internalNote: text(input.internalNote, 5000),   // team-only; never in the model notify message
     jobRef:  text(input.jobRef, 40),                 // links a shoot-date entry back to its job
+    updated: new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex'),   // stamped from birth so the collision guard covers fresh entries too
     autoShoot: input.autoShoot === true,             // TRUE only for entries the shoot-date sync created itself — the only ones it may ever delete
     planGroup: text(input.planGroup, 40),            // links casting/fitting/shooting of ONE booking
     notified: input.notified ? String(input.notified).slice(0, 30) : '',  // 'YYYY-MM-DD' when the model was told, else ''
@@ -508,27 +518,27 @@ function updateScheduleEntry(id, changes) {
   const list = load(SCHEDULE_FILE);
   const entry = list.find(e => e.id === id);
   if (!entry) return null;
-  if (changes._seen !== undefined && entry.updated && changes._seen && changes._seen !== entry.updated) {
-    return { __conflict: true };
+  if (changes._seen !== undefined && entry.updated && changes._seen !== entry.updated) {
+    return { __conflict: true };   // includes _seen === '': the client's copy predates the stamp
   }
   entry.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
   if (changes.date !== undefined) { entry.date = date(changes.date); entry.month = monthOf(entry.date) || entry.month; }
   if (changes.booker !== undefined)  entry.booker = text(changes.booker, 40);
   if (changes.status !== undefined && LEAD_STATUSES.includes(changes.status)) entry.status = changes.status;
   if (changes.subject !== undefined) entry.subject = text(changes.subject, 200);
-  if (changes.timeStart !== undefined) entry.timeStart = text(changes.timeStart, 5);
-  if (changes.timeEnd !== undefined)   entry.timeEnd = text(changes.timeEnd, 5);
+  if (changes.timeStart !== undefined) entry.timeStart = text(changes.timeStart, 20);
+  if (changes.timeEnd !== undefined)   entry.timeEnd = text(changes.timeEnd, 20);
   if (changes.models !== undefined)  entry.models = text(changes.models, 500);
-  if (changes.casting !== undefined) entry.casting = text(changes.casting, 1000);
-  if (changes.fitting !== undefined) entry.fitting = text(changes.fitting, 1000);
-  if (changes.option !== undefined)  entry.option = text(changes.option, 1000);
-  if (changes.job !== undefined)     entry.job = text(changes.job, 1000);
-  if (changes.shortlist !== undefined) entry.shortlist = text(changes.shortlist, 1000);
-  if (changes.priority !== undefined) entry.priority = text(changes.priority, 1000);
-  if (changes.note !== undefined)    entry.note = text(changes.note, 2000);
+  if (changes.casting !== undefined) entry.casting = text(changes.casting, 5000);
+  if (changes.fitting !== undefined) entry.fitting = text(changes.fitting, 5000);
+  if (changes.option !== undefined)  entry.option = text(changes.option, 5000);
+  if (changes.job !== undefined)     entry.job = text(changes.job, 5000);
+  if (changes.shortlist !== undefined) entry.shortlist = text(changes.shortlist, 5000);
+  if (changes.priority !== undefined) entry.priority = text(changes.priority, 5000);
+  if (changes.note !== undefined)    entry.note = text(changes.note, 5000);
   if (changes.stage !== undefined) entry.stage = SCHED_STAGES.includes(changes.stage) ? changes.stage : '';
   if (changes.postponeDate !== undefined) entry.postponeDate = text(changes.postponeDate, 40);
-  if (changes.internalNote !== undefined) entry.internalNote = text(changes.internalNote, 2000);
+  if (changes.internalNote !== undefined) entry.internalNote = text(changes.internalNote, 5000);
   if (changes.jobCreated !== undefined) entry.jobCreated = !!changes.jobCreated;
   if (changes.notified !== undefined) entry.notified = changes.notified ? String(changes.notified).slice(0, 30) : '';
   if (changes.keptOpen !== undefined)  entry.keptOpen = !!changes.keptOpen;
@@ -638,7 +648,7 @@ const MAC_SEED = path.join(__dirname, 'mac_seed.json');
 function seedMacRecords() {
   if (!fs.existsSync(MAC_SEED)) return;
   const cur = load(MAC_FILE);
-  if (Array.isArray(cur) && cur.some(r => r.fromSeed)) return;   // already imported
+  if (Array.isArray(cur) && cur.length) return;   // ledger has records (seeded or hand-typed) — never replace them
   let seed = [];
   try { seed = JSON.parse(fs.readFileSync(MAC_SEED, 'utf8')); } catch (_) { return; }
   if (!Array.isArray(seed) || !seed.length) return;
@@ -685,7 +695,9 @@ function updateModel(id, changes) {
     changes = { ...changes, modelCode: nextModelCode(changes.category !== undefined ? text(changes.category, 40) : m.category, list) };
     if (!changes.modelCode) delete changes.modelCode;   // unknown category — leave as is
   }
-  MODEL_FIELDS.forEach(k => { if (changes[k] !== undefined) m[k] = text(changes[k], MODEL_LONG[k] || 200); });
+  if (changes._seen !== undefined && m.updated && changes._seen !== m.updated) return { __conflict: true };
+  m.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
+  MODEL_FIELDS.forEach(k => { if (changes[k] !== undefined) m[k] = text(changes[k], MODEL_LONG[k] || 500); });
   save(MODELS_FILE, list);
   return m;
 }
@@ -839,10 +851,11 @@ async function handleApi(req, res) {
       return reply(res, 400, { error: 'Please fill in your name and at least one way to contact you.' });
     }
     // simple flood guard: max 10 public requests per IP per hour
-    const ip = String(req.socket.remoteAddress || '');
+    const ip = String((req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '');
     const now = Date.now();
     reqFlood[ip] = (reqFlood[ip] || []).filter(t => now - t < 3600000);
-    if (reqFlood[ip].length >= 10) return reply(res, 429, { error: 'Too many requests — please try again later.' });
+    // A burst is SAVED and flagged (like the honeypot) — never dropped: the team decides.
+    const floodSuspect = reqFlood[ip].length >= 10;
     reqFlood[ip].push(now);
     const rec = {
       id: crypto.randomUUID(),
@@ -854,7 +867,7 @@ async function handleApi(req, res) {
       phone: text(body.phone, 40),
       lineId: text(body.lineId, 60),
       projectType: text(body.projectType, 60),
-      description: text(body.description, 1000),
+      description: text(body.description, 5000),
       startDate: text(body.startDate, 20),
       endDate: text(body.endDate, 20),
       dateFlexible: !!body.dateFlexible,
@@ -871,13 +884,14 @@ async function handleApi(req, res) {
       outfits: text(body.outfits, 30),
       foundVia: text(body.foundVia, 40),
       notes: text(body.notes, 800),
-      booker: '', statusNote: suspectSpam ? '⚠ auto: hidden anti-spam field was filled — could be a bot OR browser autofill. Check before contacting.' : '',
+      booker: '', statusNote: suspectSpam ? '⚠ auto: hidden anti-spam field was filled — could be a bot OR browser autofill. Check before contacting.'
+                              : floodSuspect ? '⚠ auto: more than 10 requests from the same address within an hour — could be a bot. Check before contacting.' : '',
       entryRef: '', jobRef: '',
     };
     const list = load(REQUESTS_FILE);
     list.unshift(rec);
     save(REQUESTS_FILE, list);
-    if (!suspectSpam) { try { pushAll(); } catch (_) {} }   // ring the team's phones (not for suspected spam)
+    if (!suspectSpam && !floodSuspect) { try { pushAll(); } catch (_) {} }   // ring the team's phones (not for suspected spam)
     return reply(res, 201, { ok: true });
   }
 
@@ -991,6 +1005,8 @@ async function handleApi(req, res) {
       const m = updateModel(id, body);
       if (!m) return reply(res, 404, { error: 'Model not found.' });
       if (m.__duplicate) return reply(res, 409, { error: `A model named “${m.__duplicate}” is already on the list.`, duplicate: true });
+      if (m.__conflict) return reply(res, 409, { error: 'Someone else saved this model after you opened it. Close the form, reopen it to see their change, then make yours again.', conflict: true });
+      logActivity(user, 'edited model', m.name || id);
       return reply(res, 200, { ok: true, model: m });
     }
     if (method === 'DELETE' && id) {
@@ -1048,8 +1064,8 @@ async function handleApi(req, res) {
     if (user.role !== 'master') return reply(res, 403, { error: 'Director only.' });
     // Keep a backup of whatever is being replaced, so a bad restore is recoverable.
     const backup = f => { try { fs.copyFileSync(f, f + '.pre-restore'); } catch (_) {} };
-    if (Array.isArray(body.jobs)) { backup(JOBS_FILE); save(JOBS_FILE, body.jobs); }
-    if (Array.isArray(body.schedule)) { backup(SCHEDULE_FILE); save(SCHEDULE_FILE, body.schedule); }
+    if (Array.isArray(body.jobs) && body.jobs.length) { backup(JOBS_FILE); save(JOBS_FILE, body.jobs); }
+    if (Array.isArray(body.schedule) && body.schedule.length) { backup(SCHEDULE_FILE); save(SCHEDULE_FILE, body.schedule); }
     if (Array.isArray(body.models) && body.models.length) { backup(MODELS_FILE); save(MODELS_FILE, body.models); }
     logActivity(user, 'restored data', `${(body.jobs || []).length} jobs, ${(body.schedule || []).length} leads`);
     return reply(res, 200, { ok: true, jobs: (body.jobs || []).length, schedule: (body.schedule || []).length, models: (body.models || []).length });
@@ -1119,8 +1135,8 @@ async function handleApi(req, res) {
   // --- TRASH CAN (Director/Admin): everything deleted, restorable -----
   if (resource === 'trash') {
     if (!isManager) return reply(res, 403, { error: 'Director / Admin only.' });
-    let t; try { t = JSON.parse(fs.readFileSync(TRASH_FILE, 'utf8')); } catch (_) { t = []; }
-    if (method === 'GET') return reply(res, 200, { trash: t.slice(0, 200) });
+    const t = load(TRASH_FILE);
+    if (method === 'GET') return reply(res, 200, { trash: t });
     if (method === 'POST' && body && body.at && body.kind) {
       const i = t.findIndex(x => x.at === body.at && x.kind === body.kind);
       if (i < 0) return reply(res, 404, { error: 'Not found in trash.' });
@@ -1133,7 +1149,7 @@ async function handleApi(req, res) {
       save(file, list);
       const rec = t[i].rec;
       t.splice(i, 1);
-      try { fs.writeFileSync(TRASH_FILE, JSON.stringify(t)); } catch (_) {}
+      save(TRASH_FILE, t);
       logActivity(user, 'restored from trash', `${body.kind} ${rec.name || rec.jobTitle || rec.clientName || rec.date || rec.id}`);
       return reply(res, 200, { ok: true });
     }
@@ -1380,7 +1396,7 @@ async function handleApi(req, res) {
       const booker = text(body.booker, 40);
       const list = load(SCHEDULE_FILE);
       let n = 0;
-      list.forEach(e => { if (ids.has(e.id)) { e.booker = booker; n++; } });
+      list.forEach(e => { if (ids.has(e.id)) { e.booker = booker; e.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex'); n++; } });
       save(SCHEDULE_FILE, list);
       logActivity(user, 'bulk-tagged schedule', `${n} entries → ${booker || '(cleared)'}`);
       return reply(res, 200, { ok: true, count: n });
@@ -1390,7 +1406,7 @@ async function handleApi(req, res) {
       if (isScouter) {
         // Only his own entries (created by him, or created FOR him by a manager).
         if (before.createdBy !== user.email && before.booker !== user.name) return reply(res, 403, { error: 'Not allowed.' });
-        const allow = ['date', 'endDate', 'models', 'subject', 'place', 'planState', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status'];
+        const allow = ['date', 'endDate', 'models', 'subject', 'place', 'planState', 'timeStart', 'timeEnd', 'note', 'internalNote', 'status', '_seen'];
         Object.keys(body).forEach(k => { if (!allow.includes(k)) delete body[k]; });
       }
       const entry = updateScheduleEntry(id, body);
@@ -1517,7 +1533,12 @@ function autoDeclinePastOptions() {
     if (e.status === 'open'
         && /^\d{4}-\d{2}-\d{2}$/.test(e.date || '') && e.date < t
         && e.option && !e.casting && !e.job
+        && !e.fitting && !e.shortlist && !e.priority          // text of another type = not an option any more
+        && (!e.stage || e.stage === 'option')                   // moved on the Board (Shortlist/Fitting/Shooting) = not an option any more
+        && !e.jobRef && !e.jobCreated                           // linked to a job = a booking
+        && !(e.endDate && e.endDate >= t)                       // multi-day plan still running
         && !e.keptOpen) {   // a booker deliberately brought it back — leave it alone
+      e.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
       e.status = 'declined';
       e.autoDeclined = t;          // marks it as system-expired (vs a real client decline)
       changed++;
