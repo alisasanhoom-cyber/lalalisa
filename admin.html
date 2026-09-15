@@ -710,7 +710,16 @@
         </select>
         <select id="a-user"><option value="">All users</option></select>
         <input type="search" id="a-search" placeholder="Search action or detail…">
-        <div class="right"><button class="link" id="a-refresh">↻ Refresh</button></div>
+        <div class="right"><button class="link manager-only" id="a-trash" style="color:var(--declined);font-weight:600">🗑 Trash — deleted items</button> &nbsp; <button class="link" id="a-refresh">↻ Refresh</button></div>
+      </div>
+      <div class="card manager-only" id="trash-card" style="display:none">
+        <div style="font-weight:700;margin-bottom:6px">🗑 Trash — everything deleted, restorable</div>
+        <div style="font-size:12.5px;color:var(--grey);margin-bottom:10px">Every deleted job, schedule entry, model, request, income or client lands here with who deleted it and when. <b>Restore</b> puts it back exactly as it was. Nothing in the app is ever deleted by the program itself — only by a person's click.</div>
+        <table>
+          <thead><tr><th>Deleted</th><th>What</th><th>Details</th><th>By</th><th></th></tr></thead>
+          <tbody id="trash-rows"></tbody>
+        </table>
+        <div class="empty" id="trash-empty" style="display:none">The trash is empty.</div>
       </div>
       <div class="card">
         <table>

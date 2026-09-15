@@ -4928,6 +4928,50 @@
   ['a-type', 'a-user', 'a-search'].forEach(idc => el(idc).addEventListener('input', renderActivity));
   el('a-refresh').addEventListener('click', loadActivity);
 
+  // --- TRASH screen (Director/Admin): list every deleted record, restore in one click.
+  // The trash itself has existed on the server since 2026-09-04; this is the first
+  // SCREEN for it (Lisa 2026-09-15 — she was told to "restore from the Trash" and
+  // there was nothing to click).
+  const TRASH_KIND = { job: 'Job', schedule: 'Schedule entry', model: 'Model', request: 'Request', income: 'Other income', client: 'Client', mac: 'Mother-agency record', macmodel: 'MAC model' };
+  function trashLabel(t) {
+    const r = t.rec || {};
+    if (t.kind === 'schedule') return `${r.date || ''} · ${r.models || '—'}${r.subject ? ' · ' + r.subject : ''}${r.booker ? ' · ' + r.booker : ''}`;
+    if (t.kind === 'job') return `${r.jobId ? r.jobId + ' · ' : ''}${r.jobTitle || '—'}${r.model ? ' · ' + r.model : ''}${r.jobDate ? ' · ' + r.jobDate : ''}`;
+    return r.name || r.jobTitle || r.clientName || r.subject || r.date || r.id || '—';
+  }
+  async function renderTrash() {
+    let t = [];
+    try { const r = await api('/api/trash'); t = r.trash || []; }
+    catch (err) { if (err.message !== 'unauthorized') alert('Could not load the trash: ' + err.message); return; }
+    el('trash-empty').style.display = t.length ? 'none' : 'block';
+    el('trash-rows').innerHTML = t.map((x, i) => `
+      <tr>
+        <td style="white-space:nowrap">${fmtTime(x.at)}</td>
+        <td>${esc(TRASH_KIND[x.kind] || x.kind)}</td>
+        <td>${esc(trashLabel(x))}</td>
+        <td>${esc((x.by || '').split('@')[0])}</td>
+        <td class="r"><button class="link trash-restore" data-i="${i}" style="color:var(--teal);font-weight:700">↩ Restore</button></td>
+      </tr>`).join('');
+    el('trash-rows').querySelectorAll('.trash-restore').forEach(b =>
+      b.addEventListener('click', async () => {
+        const x = t[Number(b.dataset.i)]; if (!x) return;
+        if (!confirm(`Restore this ${(TRASH_KIND[x.kind] || x.kind).toLowerCase()}?\n\n${trashLabel(x)}`)) return;
+        b.disabled = true; b.textContent = 'Restoring…';
+        try {
+          await api('/api/trash', { method: 'POST', body: JSON.stringify({ at: x.at, kind: x.kind }) });
+          await loadAll();
+          toast('Restored ✓  ' + trashLabel(x));
+          renderTrash();
+        } catch (err) { b.disabled = false; b.textContent = '↩ Restore'; alert('Could not restore: ' + err.message); }
+      }));
+  }
+  if (el('a-trash')) el('a-trash').addEventListener('click', () => {
+    const card = el('trash-card');
+    const show = card.style.display === 'none';
+    card.style.display = show ? 'block' : 'none';
+    if (show) renderTrash();
+  });
+
   /* ================= 8. BOOT ================= */
   function start() {
     calMonth = todayLocal().slice(0, 7); showApp(); loadAll().catch(() => {});

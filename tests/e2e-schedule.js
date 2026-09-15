@@ -170,6 +170,21 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     const H = findAll(await entries(), '2026-09-25');
     check('25 saved as Priority with no type click at all', H.length === 1 && H[0].priority === 'Garnet arrive' && !H[0].job, JSON.stringify(H).slice(0, 160));
 
+    console.log('— L: a booker deletes an entry (human click) → the Director restores it from the Trash screen —');
+    await loginAs('booker@test', 'booker', 'Tawa');
+    const L0 = findAll(await entries(), '2026-09-26'); check('entry on 26 exists before delete', L0.length === 1);
+    const delR = await fetch(BASE + '/api/schedule/' + L0[0].id, { method: 'DELETE', headers: { 'x-admin-token': auth.token } });
+    check('booker delete accepted', delR.ok); check('26 gone after the human delete', findAll(await entries(), '2026-09-26').length === 0);
+    await loginAs('admin@test', 'admin', 'Admin');
+    await ev(`document.querySelector('.tab[data-view="activity"]').click(); 'ok'`); await sleep(400);
+    await ev(`document.getElementById('a-trash').click(); 'ok'`); await sleep(800);
+    const rowsL = await ev(`[...document.querySelectorAll('#trash-rows tr')].map(r => r.innerText.replace(/\\s+/g, ' '))`);
+    check('Trash screen lists the deleted 26 Sep entry with who deleted it', rowsL.some(r => /Schedule entry/.test(r) && /2026-09-26/.test(r) && /Boho, Uliana/.test(r) && /booker/.test(r)), JSON.stringify(rowsL).slice(0, 200));
+    await ev(`[...document.querySelectorAll('#trash-rows tr')].find(r => /Schedule entry/.test(r.innerText) && /2026-09-26/.test(r.innerText)).querySelector('.trash-restore').click(); 'ok'`); await sleep(3500);
+    const L1 = findAll(await entries(), '2026-09-26');
+    check('26 Sep entry is back, same id, same content', L1.length === 1 && L1[0].id === L0[0].id && L1[0].job === L0[0].job, JSON.stringify(L1).slice(0, 160));
+    check('row left the Trash list', !(await ev(`[...document.querySelectorAll('#trash-rows tr')].some(r => /Schedule entry/.test(r.innerText) && /2026-09-26/.test(r.innerText))`)));
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }
