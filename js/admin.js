@@ -1704,7 +1704,7 @@
       // that one to the job instead of creating a duplicate card.
       const clash = schedule.find(e => e.date === dt && e.jobRef !== job.id
         && norm(e.models) === norm(modelStr)
-        && (e.job || e.stage === 'shooting' || e.status === 'confirmed'));
+        && (schedCat(e) === 'job' || e.status === 'confirmed'));   // the one type rule, not the raw text
       if (clash) {
         try {
           // Link only. Its column is NOT touched — an entry moves only by human action (Lisa 2026-09-10).
@@ -1781,12 +1781,17 @@
     const tomorrow = addDays(todayLocal(), 1);
     const mine = sessionStorage.getItem('mp_admin_bookername') || '';
     const isMgr = canSeeMoney();
-    // Only CASTINGS and JOBS need a heads-up — options are tentative "maybe" notes
-    // and don't count until they confirm. Skip declined/postponed too.
+    // Only JOBS, FITTINGS, CASTINGS and GO & SEEs need a heads-up — options and
+    // shortlists are tentative and don't count until they confirm. Skip declined/postponed.
+    // ONE RULE FOR "WHAT IS THIS ENTRY": schedCat (the Board column wins, then the
+    // text). Lisa 2026-09-18: an entry in the Options column with its text in the
+    // job field was announced here as a JOB. Every view asks schedCat, never the
+    // raw text fields, so no two screens can disagree about the same entry.
+    const NEEDS_HEADS_UP = ['job', 'fit', 'cast', 'gosee'];
     let items = schedule.filter(e => e.date === tomorrow
       && e.status !== 'declined' && e.status !== 'postponed'
       && e.models && e.models.trim()
-      && (e.casting || e.fitting || e.job));
+      && NEEDS_HEADS_UP.includes(schedCat(e)));
     if (!isMgr && mine) items = items.filter(e => (e.booker || '').toLowerCase() === mine.toLowerCase());
     if (!items.length) {
       box.innerHTML = '';
@@ -1799,8 +1804,10 @@
     const label = new Date(tomorrow + 'T00:00:00Z')
       .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
     const rows = items.map(e => {
-      const kind = e.job ? '<span class="rem-kind job">JOB</span>' : e.fitting ? '<span class="rem-kind cast">FITTING</span>' : '<span class="rem-kind cast">CASTING</span>';
-      const detail = e.subject || firstLine(e.job || e.fitting || e.casting) || '(no details)';
+      const cat = schedCat(e);
+      const kind = cat === 'job' ? '<span class="rem-kind job">JOB</span>' : cat === 'fit' ? '<span class="rem-kind cast">FITTING</span>'
+        : cat === 'gosee' ? '<span class="rem-kind cast">GO &amp; SEE</span>' : '<span class="rem-kind cast">CASTING</span>';
+      const detail = e.subject || firstLine(primaryText(e)) || '(no details)';
       const time = e.timeStart ? ' · ' + e.timeStart + (e.timeEnd ? '–' + e.timeEnd : '') : '';
       const who = (isMgr && e.booker) ? ` · <b>${esc(e.booker)}</b>` : '';
       return `<div class="rem-row ${e.notified ? 'sent' : ''}" data-id="${e.id}">
@@ -1973,6 +1980,9 @@
     if (e.option) return 'opt';
     return 'note';
   }
+  // The text that belongs to the entry's ONE category (as schedCat decides it).
+  const CAT_FIELD = { job: 'job', short: 'shortlist', fit: 'fitting', cast: 'casting', gosee: 'casting', opt: 'option', prio: 'priority', note: 'note' };
+  function primaryText(e) { return String(e[CAT_FIELD[schedCat(e)]] || '').trim(); }
   // Human label for an entry's ONE category — history, copy, conflicts, notify all
   // use this so no view ever names the same entry two different things.
   const CAT_LABELS = { prio: 'Priority', short: 'Shortlist', job: 'Job', fit: 'Fitting', cast: 'Casting', gosee: 'Go & See', opt: 'Option', note: 'Entry' };
@@ -3083,7 +3093,7 @@
       // (Tawa 2026-09-14: picker started empty, today got ticked, the sync then
       // moved the job to today and deleted her 22 Sep entry.)
       shootDates: [e.date, ...(e.holdGroup ? schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id && x.status === 'confirmed').map(x => x.date) : [])].filter(isISODate).sort(),
-      jobTitle: e.subject || firstLine(e.job || e.fitting || e.casting || e.option || e.note || ''),
+      jobTitle: e.subject || firstLine(primaryText(e) || entryText(e)),   // the text of the entry's ONE type first
       notes: details,
       shootDays: e.shootDays || '',
       leadSource: e.leadSource || '',        // carry the lead source from the casting → the job

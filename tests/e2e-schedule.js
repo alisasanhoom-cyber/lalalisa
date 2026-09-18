@@ -230,6 +230,21 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('day 2 got the new models (shared info follows the hold)', N2 && N2.models === 'Hold Pair Updated', N2 && N2.models);
     check('day 2 kept its OWN time 14:00; day 1 kept 10:00', N2 && N2.timeStart === '14:00' && N1 && N1.timeStart === '10:00', JSON.stringify({ d1: N1 && N1.timeStart, d2: N2 && N2.timeStart }));
 
+    console.log('— P: one type rule everywhere: an entry in the Options column is an Option to the Reminders too —');
+    const tmr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    const optWithJobText = await post({ date: tmr, models: 'Yogurt Models', job: 'Job: Yogurt', subject: 'Job: Yogurt', stage: 'option', booker: 'Tawa' });
+    const realJob = await post({ date: tmr, models: 'Coway Models', job: 'Job: Coway', subject: 'Job: Coway', stage: 'shooting', status: 'confirmed', booker: 'Tawa' });
+    check('tomorrow\'s two entries were created', !!(optWithJobText && optWithJobText.id && realJob && realJob.id), JSON.stringify({ a: optWithJobText, b: realJob }).slice(0, 200));
+    console.log('  api has for tomorrow:', findAll(await entries(), tmr).length);
+    await ev(`document.querySelector('.tab[data-view="schedule"]').click(); 'ok'`); await sleep(300);
+    const refreshed = await ev(`(()=>{const b=document.getElementById('s-refresh'); if(b){b.click(); return 'clicked';} window.dispatchEvent(new Event('focus')); return 'focus';})()`); await sleep(2500);
+    console.log('  refresh via:', refreshed);
+    await ev(`(()=>{const l=document.getElementById('rem-launcher'); if(l) l.click(); return !!l;})()`); await sleep(400);
+    const remRows = await ev(`[...document.querySelectorAll('.rem-row')].map(r => r.innerText.replace(/\\s+/g, ' '))`);
+    if (!remRows.length) console.log('  diag reminders:', JSON.stringify({ box: await ev(`(document.getElementById('s-reminders')||{}).innerHTML?.slice(0,200)`), launcher: await ev(`(document.getElementById('rem-launcher')||{}).style?.display`), tmr, n: await ev(`document.querySelectorAll('.rem-row').length`) }));
+    check('Options-column entry is NOT in tomorrow\'s reminders', !remRows.some(r => /Yogurt/.test(r)), JSON.stringify(remRows).slice(0, 200));
+    check('Shooting-column entry IS listed, labelled JOB', remRows.some(r => /Coway/.test(r) && /JOB/.test(r)), JSON.stringify(remRows).slice(0, 200));
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }
