@@ -457,7 +457,7 @@
         const e = schedule.find(x => x.id === id);
         // Confirming an OPTION (not a casting) auto-books it: decline the other held
         // days + create the job. Castings just change status normally.
-        if (val === 'confirmed' && e && e.option && !e.job && !e.jobCreated) {
+        if (val === 'confirmed' && e && schedCat(e) === 'opt' && !e.jobCreated) {   // "is it an option?" — the one type rule
           const ok = await confirmOptionToJob(e);
           if (!ok) { ev.target.value = e.status; sel.className = 'inline-status st-' + e.status; return; }
           renderJobs(); buildFilters(); renderSchedule();
@@ -556,8 +556,11 @@
     const bookerSel = el('j-booker').value;
     const monthSched = schedule.filter(e =>
       (month === 'all' || e.month === month) && (!bookerSel || e.booker === bookerSel));
-    const castings = monthSched.filter(e => e.casting).length;
-    const options = monthSched.filter(e => e.option).length;
+    // Same rule and same counting as the Schedule Summary (schedCat; a multi-day hold
+    // counts once) — so the tracker header and the summary table always agree.
+    const countCat = (cats) => new Set(monthSched.filter(e => cats.includes(schedCat(e))).map(e => e.holdGroup || e.id)).size;
+    const castings = countCat(['cast', 'gosee']);
+    const options = countCat(['opt']);
 
     // Team total is in THB — foreign-currency jobs are CONVERTED to THB and included.
     // The bank-account totals (KBank/SCB) stay pure THB (those accounts only hold THB).
@@ -1952,14 +1955,11 @@
   // Where a booking sits if it has no explicit stage yet — inferred from its type tags.
   function deriveStage(e) {
     if (e.priority) return 'priority';         // admin task (visa/flight/vacation) = hard "don't book" block; wins over any stage
-    if (STAGE_KEYS.includes(e.stage)) return e.stage;
-    if (e.jobCreated || e.job) return 'shooting';
-    if (e.shortlist) return 'shortlist';
-    if (e.fitting) return 'fitting';
-    if (e.casting && isGoSee(e.casting)) return 'goandsee';   // "Go & See" is its own column
-    if (e.option) return 'option';
-    if (e.casting) return 'casting';
-    return 'casting';
+    if (STAGE_KEYS.includes(e.stage)) return e.stage;   // an explicit column wins (incl. Waiting payment / Complete)
+    // No column yet → the Board column IS the entry's one category (schedCat), so the
+    // Board can never file an entry differently from the Month view or the Reminders.
+    // (Before, this had its own copy of the rule with casting/option swapped.)
+    return { job: 'shooting', short: 'shortlist', fit: 'fitting', cast: 'casting', gosee: 'goandsee', opt: 'option', prio: 'priority' }[schedCat(e)] || 'casting';
   }
   // The ONE category an entry belongs to — shared by Month, stats AND Board so they never
   // disagree. MUST mirror deriveStage exactly (same order): a Priority admin task is a hard
