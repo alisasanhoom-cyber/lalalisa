@@ -18,6 +18,13 @@ const chromeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-chrome-'));
 const chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ['--headless=new', `--remote-debugging-port=${CDP}`, `--user-data-dir=${chromeDir}`, '--no-first-run', '--window-size=1400,1000', 'about:blank'], { stdio: 'ignore' });
 let failures = 0;
+// WATCHDOG: a hung browser or a promise that never settles must fail the run, never
+// block a deploy for hours (2026-09-18: one run sat idle for 25 minutes).
+setTimeout(() => {
+  console.error('\nTIMEOUT: the browser flows did not finish within 10 minutes — treating as FAILED');
+  try { chrome.kill(); } catch (_) {} try { server.kill(); } catch (_) {}
+  process.exit(1);
+}, 10 * 60 * 1000).unref();
 const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + n + (ok ? '' : '  ' + extra)); if (!ok) failures++; };
 (async () => {
   try {
