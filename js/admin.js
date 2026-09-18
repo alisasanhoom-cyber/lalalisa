@@ -322,6 +322,22 @@
       .filter(Boolean).sort();
   }
 
+  // The Schedule month list for ONE year: "Whole year" + Jan…Dec of that year (every
+  // month is pickable, even an empty future one, so the team can plan ahead).
+  function fillScheduleMonths(year) {
+    const sel = el('s-month'); if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="all">Whole year ${year}</option>` +
+      Array.from({ length: 12 }, (_, i) => { const m = `${year}-${String(i + 1).padStart(2, '0')}`; return `<option value="${m}">${monthLabel(m)}</option>`; }).join('');
+    if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  }
+  // Keep the year + month dropdowns in step with the calendar cursor (‹ › can cross a year).
+  function syncScheduleYear(month) {
+    if (!el('s-year') || !/^\d{4}-\d{2}$/.test(month || '')) return;
+    const y = month.slice(0, 4);
+    if (![...el('s-year').options].some(o => o.value === y)) el('s-year').add(new Option(y, y));
+    if (el('s-year').value !== y) { el('s-year').value = y; fillScheduleMonths(y); }
+  }
   function buildFilters() {
     // Months: newest first
     const months = distinct(jobs.map(j => j.month).concat(schedule.map(s => s.month)))
@@ -333,14 +349,23 @@
     const curYM = todayLocal().slice(0, 7);
     const prevJ = el('j-month').value, prevS = el('s-month').value;
     el('j-month').innerHTML = opts;
-    el('s-month').innerHTML = opts;
     const pick = (prev, pool) => {
       if (prev && (prev === 'all' || months.includes(prev))) return prev;   // keep valid choice
       if (months.includes(curYM)) return curYM;                             // else this month
       return (distinct(pool).sort().reverse()[0] || 'all');                 // else latest with data
     };
     el('j-month').value = pick(prevJ, jobs.map(j => j.month));
-    el('s-month').value = pick(prevS, schedule.map(s => s.month));
+    // Schedule: a YEAR picker + that year's twelve months (Lisa 2026-09-18 — the old
+    // single list mixed 2025 and 2026). "Whole year" = the year overview, per booker.
+    const thisYear = curYM.slice(0, 4);
+    const years = distinct(schedule.map(s => (s.month || '').slice(0, 4)).filter(Boolean).concat([thisYear, String(+thisYear + 1)])).sort().reverse();
+    const prevY = el('s-year').value;
+    el('s-year').innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    const wantYear = (prevS && prevS !== 'all') ? prevS.slice(0, 4) : (years.includes(prevY) ? prevY : thisYear);
+    el('s-year').value = years.includes(wantYear) ? wantYear : years[0];
+    fillScheduleMonths(el('s-year').value);
+    el('s-month').value = (prevS && [...el('s-month').options].some(o => o.value === prevS)) ? prevS
+      : (el('s-year').value === thisYear ? curYM : 'all');
 
     // Bookers (used by both the Job Tracker and Schedule filters)
     const bkOpts = bookerRoster().map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('');
@@ -2179,7 +2204,7 @@
   function renderScheduleSummary() {
     if (!canSeeMoney()) { el('s-summary').innerHTML = ''; return; }   // Director/Admin only
     const month = el('s-month').value;   // 'YYYY-MM' or 'all'
-    const year = (month !== 'all' ? month : (distinct(schedule.map(s => s.month)).sort().reverse()[0] || '')).slice(0, 4);
+    const year = (el('s-year') && el('s-year').value) || (month !== 'all' ? month : (distinct(schedule.map(s => s.month)).sort().reverse()[0] || '')).slice(0, 4);   // the toolbar's Year picker
 
     const table = (title, entries) => {
       const bookers = distinct(entries.map(e => e.booker || '(untagged)')).sort();
@@ -2357,11 +2382,9 @@
     // every month that has activity, with its totals. Click a month to open it.
     if (el('s-month').value === 'all') {
       const bkr = el('s-booker').value;
-      // One year at a time (Lisa 2026-09-13): default to the current year, with a
-      // picker for past/future years — no more mixed 2025/2026/2027 rows.
-      if (!yoYear) yoYear = todayLocal().slice(0, 4);
-      const allYears = distinct(schedule.map(s => (s.month || '').slice(0, 4))).filter(Boolean).sort().reverse();
-      if (!allYears.includes(yoYear)) yoYear = allYears[0] || todayLocal().slice(0, 4);
+      // One year at a time (Lisa 2026-09-13): the year comes from the toolbar's Year
+      // picker (2026-09-18), so Month / Whole year / Board / Summary all share it.
+      yoYear = (el('s-year') && el('s-year').value) || todayLocal().slice(0, 4);
       const months = distinct(schedule.map(s => s.month)).filter(m => m && m.startsWith(yoYear)).sort().reverse();
       const inScope = e => (!bkr || (bkr === '__untagged__' ? !e.booker : e.booker === bkr))
         && (e.status !== 'declined' || e.autoDeclined)
@@ -2378,20 +2401,18 @@
       const yTot = pick => new Set(yearScope.filter(pick).map(e => e.holdGroup || e.id)).size;
       const statCards = STAT_DEFS.map(([label, pick, cls]) =>
         `<div class="stat"><div class="n">${yTot(pick)}</div><div class="l"><span class="cal-stat-dot ${cls}"></span> ${label}</div></div>`).join('');
-      const yearSel = `<select id="yo-year" style="padding:7px 10px;border:1px solid var(--line,#ddd);border-radius:8px;font-size:13.5px;font-weight:700">${
-        allYears.map(y => `<option value="${y}"${y === yoYear ? ' selected' : ''}>${y}</option>`).join('')}</select>`;
+      const whose = bkr === '__untagged__' ? 'untagged entries' : bkr ? bkr : 'all bookers';
       el('s-calendar').innerHTML = `
-        <div class="cal-nav"><p class="cal-title">${yoYear} · year overview</p>
-          <div style="display:flex;align-items:center;gap:10px">${yearSel}
-          <span style="color:var(--grey);font-size:12.5px">totals for ${yoYear} · click a month to open its calendar</span></div></div>
+        <div class="cal-nav"><p class="cal-title">${yoYear} · year overview · ${esc(whose)}</p>
+          <span style="color:var(--grey);font-size:12.5px">totals for ${yoYear} · pick a booker above to see their year · click a month to open its calendar</span></div>
         <div class="stats" style="margin-bottom:14px">${statCards}</div>
         <div class="yo-list">${months.map(rowFor).join('') || '<div class="empty" style="padding:24px">No entries for ' + yoYear + ' yet.</div>'}</div>`;
       el('s-calendar').querySelectorAll('.yo-row').forEach(r =>
-        r.addEventListener('click', () => { el('s-month').value = r.dataset.month; calMonth = r.dataset.month; renderCalendar(); }));
-      el('yo-year').addEventListener('change', () => { yoYear = el('yo-year').value; renderCalendar(); });
+        r.addEventListener('click', () => { calMonth = r.dataset.month; syncScheduleYear(calMonth); el('s-month').value = calMonth; renderCalendar(); }));
       return;
     }
-    // Keep the month dropdown locked in step with the grid (so they never disagree).
+    // Keep the year + month dropdowns locked in step with the grid (so they never disagree).
+    syncScheduleYear(calMonth);
     ensureMonthOption(el('s-month'), calMonth);
     el('s-month').value = calMonth;
     const month = calMonth;
@@ -3448,6 +3469,14 @@
     // 'all' → the calendar shows a year overview; keep calMonth on the last real
     // month so Board/Summary (which don't do a 12-month grid) still behave.
     if (v !== 'all') calMonth = v;
+    renderSchedule();
+  });
+  // Year picker: same month in the chosen year (Aug 2026 → Aug 2025); "Whole year" stays whole year.
+  el('s-year').addEventListener('change', () => {
+    const y = el('s-year').value, wasAll = el('s-month').value === 'all';
+    fillScheduleMonths(y);
+    if (wasAll) el('s-month').value = 'all';
+    else { calMonth = y + '-' + (calMonth || todayLocal()).slice(5, 7); el('s-month').value = calMonth; }
     renderSchedule();
   });
   el('s-refresh').addEventListener('click', loadAll);

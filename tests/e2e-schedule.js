@@ -252,6 +252,19 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('Options-column entry is NOT in tomorrow\'s reminders', !remRows.some(r => /Yogurt/.test(r)), JSON.stringify(remRows).slice(0, 200));
     check('Shooting-column entry IS listed, labelled JOB', remRows.some(r => /Coway/.test(r) && /JOB/.test(r)), JSON.stringify(remRows).slice(0, 200));
 
+    console.log('— Q: Schedule has a Year picker; the month list holds one year; Whole year shows the booker\'s year —');
+    await ev(`document.querySelector('.tab[data-view="schedule"]').click(); 'ok'`); await sleep(300);
+    const yearVal = await ev(`document.getElementById('s-year').value`);
+    const monthOpts = await ev(`[...document.getElementById('s-month').options].map(o => o.value)`);
+    check('year picker defaults to this year', yearVal === String(new Date().getFullYear()), yearVal);
+    check('month list = Whole year + 12 months of that year only', monthOpts.length === 13 && monthOpts[0] === 'all' && monthOpts.slice(1).every(v => v.startsWith(yearVal + '-')), JSON.stringify(monthOpts));
+    await ev(`(()=>{const m=document.getElementById('s-month'); m.value='all'; m.dispatchEvent(new Event('change')); document.getElementById('s-cal-btn').click(); return 'ok';})()`); await sleep(500);
+    const yoTitle = await ev(`document.querySelector('.cal-title')?.innerText || ''`);
+    check('Whole year shows the year overview for the chosen year', new RegExp(yearVal + ' · year overview').test(yoTitle), yoTitle);
+    await ev(`(()=>{const y=document.getElementById('s-year'); if(![...y.options].some(o=>o.value==='2025')) y.add(new Option('2025','2025')); y.value='2025'; y.dispatchEvent(new Event('change')); return 'ok';})()`); await sleep(500);
+    const monthOpts25 = await ev(`[...document.getElementById('s-month').options].map(o => o.value)`);
+    check('switching the year rebuilds the month list for that year', monthOpts25.length === 13 && monthOpts25.slice(1).every(v => v.startsWith('2025-')), JSON.stringify(monthOpts25).slice(0, 120));
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }
