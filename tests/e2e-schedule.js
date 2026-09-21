@@ -271,7 +271,9 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await post({ date: '2026-10-11', models: 'Rosa T', job: 'Job : Bank', subject: 'Job : Bank', status: 'confirmed', booker: 'Tawa' });
     await ev(`(()=>{const b=document.getElementById('s-refresh'); if(b) b.click(); return 'ok';})()`); await sleep(2500);
     await openAdd(); await ev(`document.getElementById('d-models').value = 'Rosa T'; document.getElementById('d-models').dispatchEvent(new Event('input')); 'ok'`);
-    await clickBrush('casting'); await clickDay('2026-10-10'); await sleep(300);
+    await clickBrush('casting');
+    await ev(`(()=>{const n=document.getElementById('sc-next'); if(n) n.click(); return !!n;})()`); await sleep(300);   // the mini-calendar opens on this month — go to October
+    await clickDay('2026-10-10'); await sleep(300);
     const clashDeclined = await ev(`(()=>{const b=document.getElementById('d-conflict'); return b ? b.style.display + '|' + b.innerText.replace(/\\s+/g,' ') : 'nobox';})()`);
     check('no clash box for a day where the model only has a DECLINED entry', /^none\|/.test(clashDeclined), clashDeclined);
     await clickDay('2026-10-10'); await clickDay('2026-10-11'); await sleep(300);
