@@ -2977,7 +2977,7 @@
           presetPaint = { stage: activeBrush, dates: new Set(stageDays[activeBrush]) };
         }
         brushChosen = true;
-        renderStagePicker();
+        renderStagePicker(); saveDraft();
       }));
     // If days sit on ONE other brush and the active brush has none, offer a
     // one-click transfer. (Aim painted 7 days on the default Shooting brush,
@@ -3031,7 +3031,7 @@
         // Hand-painting AFTER a type was chosen takes over — no more auto-moving.
         // Before any type click, the painted days keep following the type picked next.
         presetPaint = brushChosen ? null : { stage: activeBrush, dates: new Set(stageDays[activeBrush]) };
-        renderStagePicker();
+        renderStagePicker(); saveDraft();
         if (onPickerChange) onPickerChange();
       }));
     const parts = STAGE_BRUSHES.filter(([b]) => stageDays[b].size)
@@ -3280,6 +3280,7 @@
       wireClientBlock();   // lead source / client type buttons on the quick-add form
       const getAddDates = () => pickedList();
       setupConflictCheck(getAddDates, null);
+      startDraft('dayadd:' + dateStr); restoreDraft('dayadd:' + dateStr);
       el('d-add-day').addEventListener('click', async (ev) => {
         const btn = ev.currentTarget;
         if (btn.disabled) return;                 // guard: ignore rapid repeat taps
@@ -3299,6 +3300,7 @@
         try {
           const created = await createScheduleForDates(base, dates);
           created.forEach(e => schedule.push(e));
+          clearDraft('dayadd:' + dateStr);
           buildFilters(); renderSchedule(); openDay(dateStr);
         } catch (err) { btn.disabled = false; btn.textContent = 'Add entry'; await saidAndResynced(err); }
       });
@@ -3393,7 +3395,7 @@
       if (e.createdBy && e.createdBy === (sessionStorage.getItem('mp_admin_email') || '')) scoutEntryDrawer(e);
       return;
     }
-    const done = () => { buildFilters(); renderSchedule(); if (afterSave) afterSave(); else closeDrawer(); };
+    const done = () => { clearDraft('edit:' + id); buildFilters(); renderSchedule(); if (afterSave) afterSave(); else closeDrawer(); };
     el('d-title').textContent = 'Edit schedule entry';
     el('drawer-body').innerHTML = `
       <div class="field"><label>Date</label><input id="d-date" type="date" value="${esc(e.date)}"></div>
@@ -3422,6 +3424,7 @@
     });
     const getEditDates = () => [el('d-date').value];
     setupConflictCheck(getEditDates, id);
+    startDraft('edit:' + id); restoreDraft('edit:' + id);
     el('d-save').addEventListener('click', async () => {
       if (!passesConflictGuard(getEditDates, id)) return;
       const data = { date: el('d-date').value, models: el('d-models').value, subject: schedSubject(), booker: schedBooker(), status: schedStatus(), timeStart: schedTimeStart(), timeEnd: schedTimeEnd(), shootDays: schedShootDays(), leadSource: el('d-sleadSource') ? el('d-sleadSource').value : '', clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(), ...collectTypeDetails(e) };
@@ -3594,6 +3597,7 @@
       }
     }
     renderStagePicker();
+    startDraft('add'); restoreDraft('add');   // bring back anything typed before a reload / close
     const getDates = () => allStageDates();
     setupConflictCheck(getDates, null);
     el('d-save').addEventListener('click', async (ev) => {
@@ -3638,6 +3642,7 @@
           return;
         }
         created.forEach(e => schedule.push(e));
+        clearDraft('add');   // saved for real — the draft has done its job
         // Jump the view to the day we just added to, so the new entry is visible
         // right away (bookers were confused when they added for another day).
         const firstDay = dates.slice().sort()[0];
@@ -3672,12 +3677,63 @@
   // (Tawa: in the installed app there was no way back from a form). A history
   // entry is pushed when the drawer opens; popping it closes the drawer.
   let drawerHist = false;
+  // ===== UNSAVED TYPING IS NEVER LOST (Lisa 2026-09-21: a filled Go & See vanished
+  // before Add was pressed — a reload, Back, Esc or a tap outside the panel threw the
+  // form away). Every keystroke in the schedule forms is kept in this browser as a
+  // draft; the form restores it when reopened; closing a form with typing asks first;
+  // leaving the page with typing warns. A draft is cleared only by a successful save.
+  let draftKey = null, draftBase = '';
+  const DRAFT_TTL = 3 * 24 * 3600 * 1000;
+  function snapshotForm() {
+    const out = {};
+    el('drawer-body').querySelectorAll('input[id], textarea[id], select[id]').forEach(x => {
+      if (x.type === 'hidden' || x.type === 'checkbox' || x.readOnly) return;
+      out[x.id] = x.value;
+    });
+    if (el('brush-btns') && stageDays) {   // the add form's day painter
+      out.__stageDays = {}; Object.keys(stageDays).forEach(k => out.__stageDays[k] = [...stageDays[k]]);
+      out.__brush = activeBrush;
+    }
+    return out;
+  }
+  function saveDraft() {
+    if (!draftKey) return;
+    try { localStorage.setItem('mp_draft:' + draftKey, JSON.stringify({ at: Date.now(), form: snapshotForm() })); } catch (_) {}
+  }
+  function clearDraft(key) {
+    try { localStorage.removeItem('mp_draft:' + (key || draftKey)); } catch (_) {}
+    if (!key || key === draftKey) { draftKey = null; draftBase = ''; }
+  }
+  function startDraft(key) { draftKey = key; draftBase = JSON.stringify(snapshotForm()); }
+  function draftDirty() { return !!draftKey && JSON.stringify(snapshotForm()) !== draftBase; }
+  function restoreDraft(key) {
+    let d = null; try { d = JSON.parse(localStorage.getItem('mp_draft:' + key) || 'null'); } catch (_) {}
+    if (!d || !d.form || Date.now() - (d.at || 0) > DRAFT_TTL) return false;
+    const f = d.form; let touched = 0;
+    Object.keys(f).forEach(id => { if (id.startsWith('__')) return; const x = el(id); if (x && String(x.value) !== String(f[id])) { x.value = f[id]; touched++; } });
+    if (f.__stageDays && el('brush-btns') && stageDays) {
+      Object.keys(stageDays).forEach(k => { stageDays[k] = new Set(f.__stageDays[k] || []); });
+      if (f.__brush) { activeBrush = f.__brush; brushChosen = true; }
+      renderStagePicker(); touched++;
+    }
+    if (touched) { saveDraft(); toast('Your unsaved entry was restored — check it and press Add / Save.'); }
+    return !!touched;
+  }
+  el('drawer-body').addEventListener('input', saveDraft);
+  el('drawer-body').addEventListener('change', saveDraft);
+  window.addEventListener('beforeunload', ev => {
+    if (el('drawer').classList.contains('open') && draftDirty()) { saveDraft(); ev.preventDefault(); ev.returnValue = ''; }
+  });
   function reallyCloseDrawer() { el('drawer').classList.remove('open'); el('drawer-bg').classList.remove('open'); }
   function openDrawer()  {
     el('drawer').classList.add('open'); el('drawer-bg').classList.add('open');
     if (!drawerHist) { try { history.pushState({ mpDrawer: 1 }, ''); drawerHist = true; } catch (_) {} }
   }
   function closeDrawer() {
+    if (draftDirty()) {
+      saveDraft();
+      if (!confirm('You have unsaved typing in this form.\n\nOK = close anyway (your typing is kept and comes back when you open this form again)\nCancel = stay here')) return;
+    }
     if (drawerHist) { drawerHist = false; try { history.back(); return; } catch (_) {} }
     reallyCloseDrawer();
   }

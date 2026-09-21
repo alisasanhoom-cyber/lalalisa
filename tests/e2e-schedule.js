@@ -37,7 +37,12 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(r => ws.onopen = r);
     let id = 0; const pending = {};
-    ws.onmessage = m => { const d = JSON.parse(m.data); if (d.id && pending[d.id]) { pending[d.id](d); delete pending[d.id]; } };
+    ws.onmessage = m => {
+      const d = JSON.parse(m.data);
+      if (d.id && pending[d.id]) { pending[d.id](d); delete pending[d.id]; }
+      // a "leave this page?" prompt (unsaved typing) must not stall the run — accept it
+      if (d.method === 'Page.javascriptDialogOpening') send('Page.handleJavaScriptDialog', { accept: true });
+    };
     const send = (method, params = {}) => new Promise(r => { const i = ++id; pending[i] = r; ws.send(JSON.stringify({ id: i, method, params })); });
     const ev = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400)); return r.result.result.value; };
     await send('Page.enable');
@@ -307,6 +312,33 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await ev(`(()=>{const y=document.getElementById('j-year'); y.value='2025'; y.dispatchEvent(new Event('change')); return 'ok';})()`); await sleep(400);
     const heads25 = await ev(`[...document.querySelectorAll('.month-head')].map(h => h.innerText)`);
     check('switching the tracker year to 2025 shows the 2025 job', heads25.some(h => /2025/.test(h)) && !heads25.some(h => /2026/.test(h)), JSON.stringify(heads25).slice(0, 160));
+
+    console.log('— U: typing in the add form survives a page reload, and closing with typing asks first —');
+    await loginAs('booker@test', 'booker', 'Tawa');
+    await openAdd();
+    await ev(`const s=document.getElementById('d-ssubject'); s.value='W360 Women management'; s.dispatchEvent(new Event('input', {bubbles:true})); document.getElementById('d-models').value='Tomtam, Lazum'; document.getElementById('d-models').dispatchEvent(new Event('input', {bubbles:true})); 'ok'`);
+    await clickBrush('goandsee'); await clickDay('2026-09-29');
+    await send('Page.navigate', { url: BASE + '/admin.html' }); await sleep(3000);   // the reload that used to throw the form away
+    await ev(`window.alert = m => { window.__alerts = (window.__alerts||[]).concat(m); }; window.__confirms = []; window.__confirmAnswer = false; window.confirm = m => { window.__confirms.push(m); return window.__confirmAnswer; }; 'ok'`);
+    await ev(`document.querySelector('.tab[data-view="schedule"]').click(); 'ok'`); await sleep(400);
+    await openAdd();
+    const restored = await ev(`JSON.stringify({ subject: document.getElementById('d-ssubject').value, models: document.getElementById('d-models').value, summary: document.getElementById('stage-summary').innerText })`);
+    const R = JSON.parse(restored);
+    check('subject, models and the painted day came back after the reload', R.subject === 'W360 Women management' && R.models === 'Tomtam, Lazum' && /Go & See:.*29/.test(R.summary), restored.slice(0, 160));
+    await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
+    const askedU = await ev(`window.__confirms.length`); const stillOpen = await ev(`document.getElementById('drawer').classList.contains('open')`);
+    check('closing with unsaved typing asks, and Cancel keeps the form open', askedU === 1 && stillOpen === true, JSON.stringify({ askedU, stillOpen }));
+    await ev(`window.__confirmAnswer = true; document.getElementById('d-close').click(); 'ok'`); await sleep(300);
+    await openAdd();
+    const again = await ev(`document.getElementById('d-ssubject').value`);
+    check('after closing anyway, the typing is still there when the form reopens', again === 'W360 Women management', again);
+    await ev(`document.getElementById('d-sleadSource').value='LINE'; document.getElementById('d-save').click(); 'ok'`); await sleep(1500);
+    const U1 = findAll(await entries(), '2026-09-29').filter(e => /W360/.test(e.subject || ''));
+    check('saved for real on 29 Sep as a Go & See', U1.length === 1 && U1[0].stage === 'goandsee', JSON.stringify(U1).slice(0, 120));
+    await openAdd();
+    const cleared = await ev(`document.getElementById('d-ssubject').value`);
+    check('after a real save the draft is gone (form opens empty)', cleared === '', cleared);
+    await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
 
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
