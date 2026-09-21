@@ -59,6 +59,11 @@
 
   let token = sessionStorage.getItem(STORE_KEY) || '';
   let role  = sessionStorage.getItem('mp_admin_role') || '';
+  // Every login IS a booker tag: a Director/Admin account without an explicit booker
+  // name uses the first word of its name ("Lisa (Director)" → "Lisa"), so every form
+  // pre-fills who is booking — nobody has to pick themselves (Lisa 2026-09-21).
+  const bookerNameFrom = (name, r) => (['master', 'admin'].includes(r) ? String(name || '').trim().split(/[\s(]/)[0] : '');
+  if (!sessionStorage.getItem('mp_admin_bookername') && role) sessionStorage.setItem('mp_admin_bookername', bookerNameFrom(sessionStorage.getItem('mp_admin_name'), role));
   let jobs = [];
   let schedule = [];
 
@@ -98,7 +103,7 @@
       sessionStorage.setItem(STORE_KEY, token);
       sessionStorage.setItem('mp_admin_role', role);
       sessionStorage.setItem('mp_admin_name', data.name || '');
-      sessionStorage.setItem('mp_admin_bookername', data.bookerName || '');
+      sessionStorage.setItem('mp_admin_bookername', data.bookerName || bookerNameFrom(data.name, role));
       sessionStorage.setItem('mp_admin_email', (el('email') ? el('email').value : '').trim().toLowerCase());
       start();
       try { window.mpEnablePush && window.mpEnablePush(); } catch (_) {}   // ask on the login tap (iPhone rule)
@@ -318,8 +323,8 @@
   // team (so Admin — who handles visa/work-permit tasks — is always selectable).
   const EXTRA_BOOKERS = ['Admin'];
   function bookerRoster() {
-    return distinct(jobs.map(j => j.booker).concat(schedule.map(s => s.booker), EXTRA_BOOKERS))
-      .filter(Boolean).sort();
+    return distinct(jobs.map(j => j.booker).concat(schedule.map(s => s.booker), EXTRA_BOOKERS, [sessionStorage.getItem('mp_admin_bookername') || '']))
+      .filter(Boolean).sort();   // always includes the person logged in, so their own name can be pre-selected
   }
 
   // The Schedule month list for ONE year: "Whole year" + Jan…Dec of that year (every

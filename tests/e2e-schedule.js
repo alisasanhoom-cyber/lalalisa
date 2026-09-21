@@ -11,6 +11,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-e2e-'));
 fs.writeFileSync(path.join(tmp, 'users.json'), JSON.stringify([
   { email: 'admin@test', name: 'Admin', role: 'admin', bookerName: 'Admin', password: 'pw' },
   { email: 'booker@test', name: 'Tawa', role: 'booker', bookerName: 'Tawa', password: 'pw' },
+  { email: 'lisa@test', name: 'Lisa (Director)', role: 'master', password: 'pw' },
 ]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const server = spawn('node', ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR: tmp, SERVICE_KEY: 'k' }, stdio: 'ignore' });
@@ -30,7 +31,7 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
   try {
     for (let i = 0; i < 40; i++) { try { if ((await fetch(BASE + '/api/version')).ok) break; } catch (_) {} await sleep(250); }
     const tokens = {};
-    for (const u of ['admin@test', 'booker@test']) { const r = await (await fetch(BASE + '/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: u, password: 'pw' }) })).json(); if (!r.token) throw new Error('login failed ' + u); tokens[u] = r; }
+    for (const u of ['admin@test', 'booker@test', 'lisa@test']) { const r = await (await fetch(BASE + '/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: u, password: 'pw' }) })).json(); if (!r.token) throw new Error('login failed ' + u); tokens[u] = r; }
     let auth = tokens['booker@test'];
     let targets; for (let i = 0; i < 40; i++) { try { targets = await (await fetch(`http://127.0.0.1:${CDP}/json`)).json(); if (targets.length) break; } catch (_) {} await sleep(250); }
     const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
@@ -43,7 +44,8 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await send('Page.navigate', { url: BASE + '/admin.html' }); await sleep(1500);
     const loginAs = async (email, role, name) => {
       auth = tokens[email];
-      await ev(`sessionStorage.setItem('mp_admin_token', ${JSON.stringify(auth.token)}); sessionStorage.setItem('mp_admin_role','${role}'); sessionStorage.setItem('mp_admin_name','${name}'); sessionStorage.setItem('mp_admin_bookername','${name}'); sessionStorage.setItem('mp_admin_email','${email}'); 'ok'`);
+      const bn = role === 'master' ? '' : name;   // a Director account has no booker name of its own (like the real one)
+      await ev(`sessionStorage.setItem('mp_admin_token', ${JSON.stringify(auth.token)}); sessionStorage.setItem('mp_admin_role','${role}'); sessionStorage.setItem('mp_admin_name','${name}'); sessionStorage.setItem('mp_admin_bookername','${bn}'); sessionStorage.setItem('mp_admin_email','${email}'); 'ok'`);
       await send('Page.navigate', { url: BASE + '/admin.html' }); await sleep(2500);
       await ev(`window.alert = m => { window.__alerts = (window.__alerts||[]).concat(m); }; window.__confirms = []; window.__confirmAnswer = true; window.confirm = m => { window.__confirms.push(m); return window.__confirmAnswer; }; 'ok'`);
       const loggedIn = await ev(`getComputedStyle(document.getElementById('login')).display`);
@@ -279,6 +281,13 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await clickDay('2026-10-10'); await clickDay('2026-10-11'); await sleep(300);
     const clashConfirmed = await ev(`(()=>{const b=document.getElementById('d-conflict'); return b ? b.style.display + '|' + b.innerText.replace(/\\s+/g,' ') : 'nobox';})()`);
     check('clash box shows for a day where the model has a CONFIRMED job', /^block\|.*Clash.*Bank/.test(clashConfirmed), clashConfirmed.slice(0, 120));
+    await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
+
+    console.log('— S: the Director\'s own name is pre-selected as booker, without a booker name on the account —');
+    await loginAs('lisa@test', 'master', 'Lisa (Director)');
+    await openAdd();
+    const preBooker = await ev(`document.getElementById('d-sbooker') ? document.getElementById('d-sbooker').value : '(none)'`);
+    check('booker pre-selected as "Lisa" for the Director', preBooker === 'Lisa', preBooker);
     await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
 
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
