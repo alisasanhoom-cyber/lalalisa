@@ -290,6 +290,24 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     check('booker pre-selected as "Lisa" for the Director', preBooker === 'Lisa', preBooker);
     await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
 
+    console.log('— T: Job Tracker has a Year picker; Whole year lists only that year\'s jobs —');
+    const postJob = async body => (await (await fetch(BASE + '/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': auth.token }, body: JSON.stringify(body) })).json()).job;
+    const oldJob = await postJob({ jobTitle: 'Old Year Job', jobDate: '2025-06-10', bookingDate: '2025-06-01', model: 'Kris M', budget: 1000, booker: 'Tawa', leadSource: 'LINE', clientCategory: 'Fashion' });
+    check('a 2025 job was created for the test', !!(oldJob && oldJob.id && oldJob.month === '2025-06'), oldJob && oldJob.month);
+    const thisJob = await postJob({ jobTitle: 'This Year Job', jobDate: tmr, bookingDate: tmr, model: 'Kris M', budget: 2000, booker: 'Tawa', leadSource: 'LINE', clientCategory: 'Fashion' });
+    check('a this-year job was created for the test', !!(thisJob && thisJob.id), thisJob && thisJob.month);
+    await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(300);
+    await ev(`(()=>{const b=document.getElementById('j-refresh'); if(b) b.click(); return 'ok';})()`); await sleep(2500);
+    const jy = await ev(`document.getElementById('j-year').value`);
+    const jm = await ev(`[...document.getElementById('j-month').options].map(o => o.value)`);
+    check('tracker year defaults to this year; month list is one year', jy === String(new Date().getFullYear()) && jm.length === 13 && jm.slice(1).every(v => v.startsWith(jy + '-')), JSON.stringify({ jy, n: jm.length }));
+    await ev(`(()=>{const m=document.getElementById('j-month'); m.value='all'; m.dispatchEvent(new Event('input')); return 'ok';})()`); await sleep(400);
+    const heads = await ev(`[...document.querySelectorAll('.month-head')].map(h => h.innerText)`);
+    check('Whole year shows only this year\'s month groups (no 2025)', heads.length > 0 && !heads.some(h => /2025/.test(h)), JSON.stringify(heads).slice(0, 160));
+    await ev(`(()=>{const y=document.getElementById('j-year'); y.value='2025'; y.dispatchEvent(new Event('change')); return 'ok';})()`); await sleep(400);
+    const heads25 = await ev(`[...document.querySelectorAll('.month-head')].map(h => h.innerText)`);
+    check('switching the tracker year to 2025 shows the 2025 job', heads25.some(h => /2025/.test(h)) && !heads25.some(h => /2026/.test(h)), JSON.stringify(heads25).slice(0, 160));
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }

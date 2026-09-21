@@ -343,26 +343,31 @@
     if (![...el('s-year').options].some(o => o.value === y)) el('s-year').add(new Option(y, y));
     if (el('s-year').value !== y) { el('s-year').value = y; fillScheduleMonths(y); }
   }
+  // Job Tracker month list for ONE year: "Whole year" + Jan…Dec (Lisa 2026-09-21).
+  function fillTrackerMonths(year) {
+    const sel = el('j-month'); if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="all">Whole year ${year}</option>` +
+      Array.from({ length: 12 }, (_, i) => { const m = `${year}-${String(i + 1).padStart(2, '0')}`; return `<option value="${m}">${monthLabel(m)}</option>`; }).join('');
+    if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  }
+  const trackerYear = () => (el('j-year') && el('j-year').value) || todayLocal().slice(0, 4);
   function buildFilters() {
-    // Months: newest first
-    const months = distinct(jobs.map(j => j.month).concat(schedule.map(s => s.month)))
-      .sort().reverse();
-    const opts = ['<option value="all">All months</option>']
-      .concat(months.map(m => `<option value="${m}">${monthLabel(m)}</option>`)).join('');
-    // Preserve the current selection across rebuilds; on first load default to the
-    // CURRENT month (fall back to the latest month with data if this month is empty).
     const curYM = todayLocal().slice(0, 7);
-    const prevJ = el('j-month').value, prevS = el('s-month').value;
-    el('j-month').innerHTML = opts;
-    const pick = (prev, pool) => {
-      if (prev && (prev === 'all' || months.includes(prev))) return prev;   // keep valid choice
-      if (months.includes(curYM)) return curYM;                             // else this month
-      return (distinct(pool).sort().reverse()[0] || 'all');                 // else latest with data
-    };
-    el('j-month').value = pick(prevJ, jobs.map(j => j.month));
+    const thisYear = curYM.slice(0, 4);
+    const prevS = el('s-month').value;
+    // Job Tracker: a YEAR picker + that year's twelve months; "Whole year" = every job
+    // of that year with the year's totals (the old single list mixed 2025–2027).
+    const jYears = distinct(jobs.map(j => (j.month || '').slice(0, 4)).filter(Boolean).concat([thisYear, String(+thisYear + 1)])).sort().reverse();
+    const prevJ = el('j-month').value, prevJY = el('j-year').value;
+    el('j-year').innerHTML = jYears.map(y => `<option value="${y}">${y}</option>`).join('');
+    const wantJY = (prevJ && prevJ !== 'all') ? prevJ.slice(0, 4) : (jYears.includes(prevJY) ? prevJY : thisYear);
+    el('j-year').value = jYears.includes(wantJY) ? wantJY : jYears[0];
+    fillTrackerMonths(el('j-year').value);
+    el('j-month').value = (prevJ && [...el('j-month').options].some(o => o.value === prevJ)) ? prevJ
+      : (el('j-year').value === thisYear ? curYM : 'all');
     // Schedule: a YEAR picker + that year's twelve months (Lisa 2026-09-18 — the old
     // single list mixed 2025 and 2026). "Whole year" = the year overview, per booker.
-    const thisYear = curYM.slice(0, 4);
     const years = distinct(schedule.map(s => (s.month || '').slice(0, 4)).filter(Boolean).concat([thisYear, String(+thisYear + 1)])).sort().reverse();
     const prevY = el('s-year').value;
     el('s-year').innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
@@ -553,8 +558,10 @@
     const booker = el('j-booker').value;
     const invtype = el('j-invtype') ? el('j-invtype').value : '';
     const term = el('j-search').value.trim().toLowerCase();
+    const year = trackerYear();
     return jobs.filter(j => {
       if (month !== 'all' && j.month !== month) return false;
+      if (month === 'all' && !(j.month || '').startsWith(year)) return false;   // "Whole year" = that year only
       if (booker && j.booker !== booker) return false;
       if (invtype === 'tax' && isNonTax(j)) return false;       // show only C (tax invoice)
       if (invtype === 'nontax' && !isNonTax(j)) return false;   // show only B (non-tax)
@@ -585,7 +592,7 @@
     const month = el('j-month').value;
     const bookerSel = el('j-booker').value;
     const monthSched = schedule.filter(e =>
-      (month === 'all' || e.month === month) && (!bookerSel || e.booker === bookerSel));
+      (month === 'all' ? (e.month || '').startsWith(trackerYear()) : e.month === month) && (!bookerSel || e.booker === bookerSel));
     // Same rule and same counting as the Schedule Summary (schedCat; a multi-day hold
     // counts once) — so the tracker header and the summary table always agree.
     const countCat = (cats) => new Set(monthSched.filter(e => cats.includes(schedCat(e))).map(e => e.holdGroup || e.id)).size;
@@ -808,6 +815,13 @@
 
   ['j-month', 'j-booker', 'j-invtype', 'j-search'].forEach(idc =>
     el(idc).addEventListener('input', renderJobs));
+  // Year picker: same month in the chosen year; "Whole year" stays whole year.
+  el('j-year').addEventListener('change', () => {
+    const y = el('j-year').value, prev = el('j-month').value;
+    fillTrackerMonths(y);
+    el('j-month').value = prev === 'all' ? 'all' : (y + '-' + prev.slice(5, 7));
+    renderJobs();
+  });
   el('j-refresh').addEventListener('click', loadAll);
   // Ploy's master tick: sets/clears "collected" on every job the current
   // filter shows (asks first — this touches many records at once).
@@ -895,7 +909,7 @@
       <div class="field"><button class="btn ghost" id="ex-permodel" style="width:100%">⬇ Download this model's jobs</button></div>`;
     const stamp = todayLocal();
     el('ex-filtered').addEventListener('click', () => {
-      const scope = el('j-month').value === 'all' ? 'all-months' : el('j-month').value;
+      const scope = el('j-month').value === 'all' ? 'year-' + trackerYear() : el('j-month').value;
       downloadCsv(jobsCsvRows(sortedJobs()), `MP Job Tracker ${scope} ${stamp}.csv`);
     });
     el('ex-all').addEventListener('click', () => {
