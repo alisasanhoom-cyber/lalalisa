@@ -2745,15 +2745,21 @@
         const hits = [];
         schedule.forEach(e => {
           if (e.id === excludeId || e.date !== date) return;
+          // Declined / postponed = set aside by a person — the model is NOT committed
+          // (Ness 2026-09-21: her declined Car job kept warning on every new entry).
+          if (e.status === 'declined' || e.status === 'postponed') return;
           if (!modelTokens(e.models).some(m => m.norm === tg.norm)) return;
           const type = catLabel(e);
           // HARD = model is really committed that day (confirmed / shortlist / priority / job).
           // SOFT = a pending option or casting — normal to have several the same day.
-          const hard = !!(e.priority || e.shortlist || e.status === 'confirmed' || e.job);
+          // Type by the ONE rule (schedCat), never the raw text fields.
+          const cat = schedCat(e);
+          const hard = e.status === 'confirmed' || cat === 'prio' || cat === 'short' || cat === 'job';
           hits.push({ label: type + (e.subject ? ' ' + e.subject : '') + (e.booker ? ' (' + e.booker + ')' : ''), hard });
         });
         jobs.forEach(j => {
           if (!isISODate(j.jobDate) || j.jobDate !== date) return;
+          if (/declin|cancel/i.test(j.status || '')) return;   // a dropped job is no commitment
           if (![normName(j.model), normName(j.freelance)].includes(tg.norm)) return;
           hits.push({ label: 'JOB ' + (j.jobTitle || '') + (j.booker ? ' (' + j.booker + ')' : ''), hard: true });
         });

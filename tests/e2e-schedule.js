@@ -265,6 +265,20 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     const monthOpts25 = await ev(`[...document.getElementById('s-month').options].map(o => o.value)`);
     check('switching the year rebuilds the month list for that year', monthOpts25.length === 13 && monthOpts25.slice(1).every(v => v.startsWith('2025-')), JSON.stringify(monthOpts25).slice(0, 120));
 
+    console.log('— R: a DECLINED entry never counts as a clash; a confirmed one does —');
+    await loginAs('booker@test', 'booker', 'Tawa');
+    await post({ date: '2026-10-10', models: 'Rosa T', shortlist: 'Job : Car', subject: 'Job : Car', status: 'declined', booker: 'Tawa' });
+    await post({ date: '2026-10-11', models: 'Rosa T', job: 'Job : Bank', subject: 'Job : Bank', status: 'confirmed', booker: 'Tawa' });
+    await ev(`(()=>{const b=document.getElementById('s-refresh'); if(b) b.click(); return 'ok';})()`); await sleep(2500);
+    await openAdd(); await ev(`document.getElementById('d-models').value = 'Rosa T'; document.getElementById('d-models').dispatchEvent(new Event('input')); 'ok'`);
+    await clickBrush('casting'); await clickDay('2026-10-10'); await sleep(300);
+    const clashDeclined = await ev(`(()=>{const b=document.getElementById('d-conflict'); return b ? b.style.display + '|' + b.innerText.replace(/\\s+/g,' ') : 'nobox';})()`);
+    check('no clash box for a day where the model only has a DECLINED entry', /^none\|/.test(clashDeclined), clashDeclined);
+    await clickDay('2026-10-10'); await clickDay('2026-10-11'); await sleep(300);
+    const clashConfirmed = await ev(`(()=>{const b=document.getElementById('d-conflict'); return b ? b.style.display + '|' + b.innerText.replace(/\\s+/g,' ') : 'nobox';})()`);
+    check('clash box shows for a day where the model has a CONFIRMED job', /^block\|.*Clash.*Bank/.test(clashConfirmed), clashConfirmed.slice(0, 120));
+    await ev(`document.getElementById('d-close').click(); 'ok'`); await sleep(300);
+
     const alerts = await ev(`JSON.stringify(window.__alerts||[])`); console.log('alerts during run:', alerts);
     console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
   } catch (e) { console.error('ERROR', e.message); failures++; }
