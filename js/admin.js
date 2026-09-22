@@ -56,6 +56,9 @@
     custom:  { label: 'Custom hours…',               hours: null, brk: 0 },
   };
   const isISODate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+  // Job Tracker date cell: a real date shows as dd/mm/yy on one line (Lisa 2026-09-22);
+  // a free-typed date ("17,18,19 June 2026") is shown exactly as typed.
+  const fmtJobDate = d => isISODate(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : (esc(d) || '—');
 
   let token = sessionStorage.getItem(STORE_KEY) || '';
   let role  = sessionStorage.getItem('mp_admin_role') || '';
@@ -671,14 +674,14 @@
       return `
       <tr class="row ${j.source === 'website' ? 'web' : ''}${j.collected ? ' collected' : ''}" data-id="${j.id}">
         <td class="col-collected"><input type="checkbox" class="collect-box" data-id="${j.id}"${j.collected ? ' checked' : ''} title="Collected — photos/videos gathered"></td>
-        <td>${esc(j.jobDate) || '—'}</td>
+        <td style="white-space:nowrap">${fmtJobDate(j.jobDate)}</td>
         <td class="code-c">${esc(taxCode) || '<span class="code-dash">—</span>'}</td>
         <td class="code-b">${esc(nonTaxCode) || '<span class="code-dash">—</span>'}</td>
+        <td class="num money">${budgetCell(j)}</td>
         <td class="title-cell">${esc(j.jobTitle) || '—'}${webBadge}${usageBadge}${matBadge(j.materials)}${j.internalNote ? ' <span class="note-dot" title="Has an internal note">📝</span>' : ''}</td>
         <td>${who}</td>
         <td>${esc(j.client) || '—'}${j.leadSource ? ` <span class="src-badge" title="Lead source">${SOURCE_ICON[j.leadSource] || ''} ${esc(j.leadSource)}</span>` : ''}</td>
         <td>${esc(j.booker) || '—'}</td>
-        <td class="num money">${budgetCell(j)}</td>
         <td class="conf-cell"><span class="prev-icon" data-id="${j.id}" title="Open this job's confirmation form">🔍</span><span class="conf-icon ${j.confirmationMade ? 'done' : ''}" data-id="${j.id}" title="${j.confirmationMade ? 'Confirmation made ✓ (click to unmark)' : 'Confirmation not made yet (click when done)'}">${j.confirmationMade ? '📄✓' : '📄'}</span>${j.signedDocUrl ? `<a href="${esc(j.signedDocUrl)}" target="_blank" rel="noopener" class="signed-link" title="Client signed ✓ — open the signed confirmation" onclick="event.stopPropagation()">🖊️✓</a>` : ''}</td>
       </tr>`;
     };
