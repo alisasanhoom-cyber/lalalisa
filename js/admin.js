@@ -301,12 +301,14 @@
     if (!jobAmount(j)) return '—';
     const cur = j.currency || 'THB';
     const singleJob = !Array.isArray(j.lines) || !j.lines.length;
+    // The OT tag sits IN FRONT of the amount (Lisa 2026-09-23) so the money
+    // figures stay right-aligned in one column.
     const otTag = singleJob && otNum(j.overtimeFee)
-      ? ` <span class="fx-tag" title="includes overtime ${money(otNum(j.overtimeFee), cur)} (base fee ${money(j.budget, cur)})">⏱ OT</span>`
+      ? `<span class="fx-tag fx-tag-lead" title="includes overtime ${money(otNum(j.overtimeFee), cur)} (base fee ${money(j.budget, cur)})">⏱ OT</span> `
       : (singleJob && String(j.overtimeFee || '').trim()
-        ? ` <span class="fx-tag" title="OT condition: ${esc(j.overtimeFee)} — not in total until a number is entered">⏱ cond.</span>` : '');
-    if (cur === 'THB') return money(jobAmount(j), 'THB') + otTag;
-    return `${money(toThb(j))} <span class="fx-tag" title="Converted from ${cur} at ฿${fxRates[cur] || '?'}/${CUR_SYM[cur] || cur}">🌐 ${money(jobAmount(j), cur)}</span>${otTag}`;
+        ? `<span class="fx-tag fx-tag-lead" title="OT condition: ${esc(j.overtimeFee)} — not in total until a number is entered">⏱ cond.</span> ` : '');
+    if (cur === 'THB') return otTag + money(jobAmount(j), 'THB');
+    return `${otTag}${money(toThb(j))} <span class="fx-tag" title="Converted from ${cur} at ฿${fxRates[cur] || '?'}/${CUR_SYM[cur] || cur}">🌐 ${money(jobAmount(j), cur)}</span>`;
   }
   function money(n, cur) { return (CUR_SYM[cur] || '฿') + Math.round(Number(n || 0)).toLocaleString('en-US'); }
   // Thousands separators that PRESERVE decimals — stripping the dot corrupted
