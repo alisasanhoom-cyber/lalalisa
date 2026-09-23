@@ -3372,6 +3372,12 @@
       Object.keys(e).forEach(k => { if (!SKIP[k]) baseCopy[k] = e[k]; });
       baseCopy.models = el('d-copy-models').value;
       baseCopy.status = 'open';              // a fresh copy starts open, not declined
+      // The copy lands in the SAME Board column as the original (Lisa 2026-09-23: a
+      // Go & See copied to a new day showed up under Casting, because the column was
+      // dropped and re-guessed from the type text). Only the set-aside / progress
+      // columns are not carried over — a copy is a fresh booking, not paid/postponed/declined.
+      const KEEP_COLUMN = ['shooting', 'priority', 'shortlist', 'fitting', 'casting', 'option', 'goandsee'];
+      baseCopy.stage = KEEP_COLUMN.includes(e.stage) ? e.stage : '';
       try {
         const created = [];
         for (const dt of days) {
