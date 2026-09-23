@@ -45,7 +45,7 @@
     'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•' };
   const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
     'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
-    'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•' };
+    'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•', 'Model / no client': '🧍' };
 
   // Work packages. Presets pre-fill the contracted hours; "Custom" lets the booker
   // type ANY hours (shoots aren't always 4/8 anymore — flexible per job).
@@ -2701,7 +2701,7 @@
         <button type="button" class="cbt ${ct === 'old' ? 'active' : ''}" data-ct="old">🔁 Returning client</button>
       </div>
       <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span></label>
-      <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
+      <select id="d-sleadSource"><option value="">— pick a source —</option><option value="Model / no client" ${(e.leadSource || '') === 'Model / no client' ? 'selected' : ''}>🧍 Model / no client (casting call, Go &amp; See, test shoot)</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
       <select id="d-sclientCategory"><option value="">— pick a type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
