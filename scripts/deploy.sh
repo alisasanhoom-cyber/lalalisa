@@ -9,7 +9,7 @@ echo "1/4 server checks…"
 if ! node tests/smoke.js > "$LOG" 2>&1; then tail -5 "$LOG"; echo "STOP: server checks failed — not deploying"; exit 1; fi
 tail -1 "$LOG"
 echo "2/4 browser flows (about 2 minutes)…"
-if ! node tests/e2e-schedule.js > "$LOG" 2>&1; then grep -E "✗|FAILED|ERROR" "$LOG"; echo "STOP: browser flows failed — not deploying"; exit 1; fi
+if ! node tests/e2e-schedule.js > "$LOG" 2>&1; then grep -E "✗|FAILED|ERROR|STUCK|^— " "$LOG" | tail -8; echo "STOP: browser flows failed — not deploying"; exit 1; fi
 grep -E "PASSED" "$LOG"
 OLD=$(curl -s --max-time 10 https://booking.mpmodelsbkk.com/api/version)
 echo "3/4 uploading (live is $OLD)…"

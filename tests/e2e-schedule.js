@@ -43,7 +43,11 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
       // a "leave this page?" prompt (unsaved typing) must not stall the run — accept it
       if (d.method === 'Page.javascriptDialogOpening') send('Page.handleJavaScriptDialog', { accept: true });
     };
-    const send = (method, params = {}) => new Promise(r => { const i = ++id; pending[i] = r; ws.send(JSON.stringify({ id: i, method, params })); });
+    // STUCK diagnostics (2026-09-24): unattended runs hit the 10-min watchdog with no
+    // clue which browser call never answered. Print it after 45s of silence.
+    let lastCall = '', lastAt = Date.now();
+    setInterval(() => { if (Date.now() - lastAt > 45000) { console.error('STUCK on: ' + lastCall.slice(0, 300)); lastAt = Date.now(); } }, 5000).unref();
+    const send = (method, params = {}) => new Promise(r => { const i = ++id; pending[i] = r; lastCall = method + ' ' + (params.expression || ''); lastAt = Date.now(); ws.send(JSON.stringify({ id: i, method, params })); });
     const ev = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400)); return r.result.result.value; };
     await send('Page.enable');
     await send('Page.navigate', { url: BASE + '/admin.html' }); await sleep(1500);
