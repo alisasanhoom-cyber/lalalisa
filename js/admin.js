@@ -693,9 +693,25 @@
       const byMonth = {};
       list.forEach(j => { const m = j.month || '(no month)'; (byMonth[m] = byMonth[m] || []).push(j); });
       const months = Object.keys(byMonth).sort().reverse();   // newest month first
+      // Month header carries the month's sales (Lisa 2026-09-28: the year-by-month
+      // booker summary lives here too). Same formula as the Team total tile (toThb:
+      // all statuses, OT, foreign converted). With "All bookers" the split per booker
+      // follows on the same line. Money is shown under the same rule as the Team
+      // total tile (Director/Admin), plus a booker looking at their OWN filter.
+      const mine = (sessionStorage.getItem('mp_admin_bookername') || '').toLowerCase();
+      const showMoney = canSeeMoney() || (!!bookerSel && bookerSel.toLowerCase() === mine);
+      const monthSales = rows => {
+        if (!showMoney) return '';
+        const total = rows.reduce((s, j) => s + toThb(j), 0);
+        if (bookerSel) return ` · ${money(total)}`;
+        const per = {};
+        rows.forEach(j => { const b = j.booker || '—'; per[b] = (per[b] || 0) + toThb(j); });
+        const split = Object.keys(per).sort((a, b) => per[b] - per[a]).map(b => `${esc(b)} ${money(per[b])}`).join(' · ');
+        return ` · ${money(total)}<span style="font-weight:400;opacity:.75"> · ${split}</span>`;
+      };
       el('j-rows').innerHTML = months.map(m => {
         const rows = byMonth[m].map(jobRowHtml).join('');
-        return `<tr class="month-head"><td colspan="10">📅 ${m === '(no month)' ? 'No month' : monthLabel(m)} · ${byMonth[m].length} jobs</td></tr>` + rows;
+        return `<tr class="month-head"><td colspan="10">📅 ${m === '(no month)' ? 'No month' : monthLabel(m)} · ${byMonth[m].length} jobs${monthSales(byMonth[m])}</td></tr>` + rows;
       }).join('');
     } else {
       // Single-month view: show the jobs PLUS marker rows for codes that fall inside
