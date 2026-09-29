@@ -37,7 +37,10 @@
 
   // CRM — where a lead/client came from. Bookers pick one on every new job.
   const LEAD_SOURCES = ['Website', 'LINE', 'Instagram', 'Facebook', 'Email', 'Phone call',
-    'WhatsApp', 'Referral', 'Repeat client', 'Agency', 'Walk-in', 'Other'];
+    'WhatsApp', 'Referral', 'Agency', 'Walk-in', 'Other'];
+  // 'Repeat client' was removed from the list 2026-09-29 (Lisa: it doubled the
+  // New/Returning client toggle). Records that already carry it keep showing it.
+  const legacySourceOpt = cur => cur === 'Repeat client' ? '<option value="Repeat client" selected>🔁 Repeat client (old)</option>' : '';
   // CRM — client industry, for marketing segmentation.
   const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
     'Magazine / Editorial', 'Agency', 'Other'];
@@ -1001,7 +1004,7 @@
         <div class="field" style="margin:0"><label>Lead source <span style="font-weight:400;color:var(--declined);font-size:11px">· required</span></label>
           <select id="d-leadSource">
             <option value="">— source —</option>
-            ${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(j?.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}
+            ${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(j?.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(j?.leadSource || '')}
           </select></div>
         <div class="field" style="margin:0"><label>Client type <span style="font-weight:400;color:var(--declined);font-size:11px">· required</span></label>
           <select id="d-clientCategory">
@@ -2717,7 +2720,7 @@
         <button type="button" class="cbt ${ct === 'old' ? 'active' : ''}" data-ct="old">🔁 Returning client</button>
       </div>
       <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span> <span style="color:var(--grey)">· not needed when Client type is Model</span></label>
-      <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
+      <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(e.leadSource || '')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
       <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Model (casting call, Go &amp; See, test shoot — no client)</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
@@ -3938,7 +3941,7 @@
             + (r.budget ? `\nBudget: ${r.budget}` : '')
             + (r.description ? `\n${r.description}` : ''),
           stage: 'option',
-          leadSource: ({ Instagram: 'Instagram', Facebook: 'Facebook', TikTok: 'Other', 'Google / Website': 'Website', LINE: 'LINE', Referral: 'Referral', 'Worked together before': 'Repeat client' })[r.foundVia] || 'Other',
+          leadSource: ({ Instagram: 'Instagram', Facebook: 'Facebook', TikTok: 'Other', 'Google / Website': 'Website', LINE: 'LINE', Referral: 'Referral', 'Worked together before': 'Website' })[r.foundVia] || 'Other',   // returning-ness lives in clientType below
           clientType: r.foundVia === 'Worked together before' ? 'old' : 'new',
           clientContact: reqContact(r),
           booker: el('rq-booker').value.trim() || undefined,
@@ -4325,7 +4328,7 @@
         <div class="field" style="margin:0"><label>Client type</label>
           <select id="cf-clientCategory"><option value="">— type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(src.clientCategory || src.category || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select></div>
         <div class="field" style="margin:0"><label>Lead source</label>
-          <select id="cf-leadSource"><option value="">— source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(src.leadSource || (src.sources && src.sources[0]) || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select></div>
+          <select id="cf-leadSource"><option value="">— source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(src.leadSource || (src.sources && src.sources[0]) || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(src.leadSource || (src.sources && src.sources[0]) || '')}</select></div>
       </div>
       ${f('Company name', 'company', src.company)}
       <div class="field two">${f('Tax ID', 'taxId', src.taxId)}${f('Contact person', 'contactPerson', src.contactPerson || src.person)}</div>
