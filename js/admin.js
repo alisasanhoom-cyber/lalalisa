@@ -42,7 +42,7 @@
   const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
     'Magazine / Editorial', 'Agency', 'Other'];
   const CAT_ICON = { 'Fashion': '👗', 'Commercial': '📺', 'Film & TV': '🎬', 'Event organizer': '🎪',
-    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•', 'Model / no client': '🧍' };
+    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•', 'Model': '🧍' };
   const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
     'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
     'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•', 'Model / no client': '🧍' };
@@ -2716,10 +2716,10 @@
         <button type="button" class="cbt ${ct === 'new' ? 'active' : ''}" data-ct="new">🆕 New client</button>
         <button type="button" class="cbt ${ct === 'old' ? 'active' : ''}" data-ct="old">🔁 Returning client</button>
       </div>
-      <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span></label>
-      <select id="d-sleadSource"><option value="">— pick a source —</option><option value="Model / no client" ${(e.leadSource || '') === 'Model / no client' ? 'selected' : ''}>🧍 Model / no client (casting call, Go &amp; See, test shoot)</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
+      <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span> <span style="color:var(--grey)">· not needed when Client type is Model</span></label>
+      <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
-      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model / no client" ${(e.clientCategory || '') === 'Model / no client' ? 'selected' : ''}>🧍 Model / no client (casting call, Go &amp; See, test shoot)</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
+      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Model (casting call, Go &amp; See, test shoot — no client)</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
       <input id="d-sclientContact" value="${esc(e.clientContact || '')}" placeholder="e.g. K. Nan · 08x-xxx-xxxx · LINE @nan · nan@brand.com">
     </div>`;
@@ -3655,7 +3655,7 @@
         clientType: schedClientType(), clientContact: schedClientContact(), clientCategory: schedClientCategory(),
       };
       if (!(base.models || details || base.subject)) { alert('Add a model or some details first.'); return; }
-      if (!base.leadSource) { alert('Please pick a Lead source — where did this client come from?'); if (el('d-sleadSource')) el('d-sleadSource').focus(); return; }
+      if (!base.leadSource && base.clientCategory !== 'Model') { alert('Please pick a Lead source — where did this client come from? (Not needed when Client type is Model.)'); if (el('d-sleadSource')) el('d-sleadSource').focus(); return; }
       // These guards use a Yes/No popup — clicking "Cancel" means "don't add".
       if (!passesDuplicateGuard({ ...base, casting: details }, dates)) return;
       if (!passesConflictGuard(getDates, null)) return;
