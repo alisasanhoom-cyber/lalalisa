@@ -42,7 +42,7 @@
   const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
     'Magazine / Editorial', 'Agency', 'Other'];
   const CAT_ICON = { 'Fashion': '👗', 'Commercial': '📺', 'Film & TV': '🎬', 'Event organizer': '🎪',
-    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•' };
+    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•', 'Model / no client': '🧍' };
   const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
     'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
     'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•', 'Model / no client': '🧍' };
@@ -2719,7 +2719,7 @@
       <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span></label>
       <select id="d-sleadSource"><option value="">— pick a source —</option><option value="Model / no client" ${(e.leadSource || '') === 'Model / no client' ? 'selected' : ''}>🧍 Model / no client (casting call, Go &amp; See, test shoot)</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
-      <select id="d-sclientCategory"><option value="">— pick a type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
+      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model / no client" ${(e.clientCategory || '') === 'Model / no client' ? 'selected' : ''}>🧍 Model / no client (casting call, Go &amp; See, test shoot)</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
       <input id="d-sclientContact" value="${esc(e.clientContact || '')}" placeholder="e.g. K. Nan · 08x-xxx-xxxx · LINE @nan · nan@brand.com">
     </div>`;
