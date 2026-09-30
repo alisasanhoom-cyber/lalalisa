@@ -44,9 +44,9 @@
   const legacySourceOpt = cur => (cur && !LEAD_SOURCES.includes(cur)) ? `<option value="${esc(cur)}" selected>${SOURCE_ICON[cur] || ''} ${esc(cur)} (old)</option>` : '';
   // CRM — client industry, for marketing segmentation.
   const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
-    'Magazine / Editorial', 'Agency', 'Other'];
+    'Magazine / Editorial', 'Agency', 'Brand / In-house marketing', 'Other'];   // Brand = a company's own marketing team (hotel, mall, product) — Commercial reads as production (Lisa 2026-09-30)
   const CAT_ICON = { 'Fashion': '👗', 'Commercial': '📺', 'Film & TV': '🎬', 'Event organizer': '🎪',
-    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Other': '•', 'Model': '🧍' };
+    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Brand / In-house marketing': '🏨', 'Other': '•', 'Model': '🧍' };
   const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
     'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
     'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•', 'Model / no client': '🧍' };
