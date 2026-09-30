@@ -37,10 +37,11 @@
 
   // CRM — where a lead/client came from. Bookers pick one on every new job.
   const LEAD_SOURCES = ['Website', 'LINE', 'Instagram', 'Facebook', 'Email', 'Phone call',
-    'WhatsApp', 'Referral', 'Agency', 'Walk-in', 'Other'];
-  // 'Repeat client' was removed from the list 2026-09-29 (Lisa: it doubled the
-  // New/Returning client toggle). Records that already carry it keep showing it.
-  const legacySourceOpt = cur => cur === 'Repeat client' ? '<option value="Repeat client" selected>🔁 Repeat client (old)</option>' : '';
+    'WhatsApp', 'Referral', 'Walk-in', 'Other'];
+  // Removed from the list (Lisa 2026-09-29/30): 'Repeat client' doubled the
+  // New/Returning client toggle; 'Agency' is a CLIENT TYPE, not a source.
+  // Records that already carry a removed value keep showing it, marked (old).
+  const legacySourceOpt = cur => (cur && !LEAD_SOURCES.includes(cur)) ? `<option value="${esc(cur)}" selected>${SOURCE_ICON[cur] || ''} ${esc(cur)} (old)</option>` : '';
   // CRM — client industry, for marketing segmentation.
   const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
     'Magazine / Editorial', 'Agency', 'Other'];
@@ -2722,7 +2723,7 @@
       <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span> <span style="color:var(--grey)">· not needed when Client type is Model</span></label>
       <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(e.leadSource || '')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
-      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Model (casting call, Go &amp; See, test shoot — no client)</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
+      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Models</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
       <input id="d-sclientContact" value="${esc(e.clientContact || '')}" placeholder="e.g. K. Nan · 08x-xxx-xxxx · LINE @nan · nan@brand.com">
     </div>`;
