@@ -43,10 +43,16 @@
   // Records that already carry a removed value keep showing it, marked (old).
   const legacySourceOpt = cur => (cur && !LEAD_SOURCES.includes(cur)) ? `<option value="${esc(cur)}" selected>${SOURCE_ICON[cur] || ''} ${esc(cur)} (old)</option>` : '';
   // CRM — client industry, for marketing segmentation.
-  const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Film & TV', 'Event organizer',
-    'Magazine / Editorial', 'Agency', 'Brand / In-house marketing', 'Other'];   // Brand = a company's own marketing team (hotel, mall, product) — Commercial reads as production (Lisa 2026-09-30)
+  const CLIENT_CATEGORIES = ['Fashion', 'Commercial', 'Casting director', 'Photographer', 'Event organizer',
+    'Magazine / Editorial', 'Agency', 'Brand / In-house marketing', 'Other'];
+  // CRM client types (Lisa 2026-09-30). Stored VALUES never change so old and new records
+  // group together; only the LABEL shown in the lists changes. 'Film & TV' was merged into
+  // Commercial (= production house) — old records keep the value, shown marked (old).
+  const CAT_LABEL = { 'Fashion': 'Fashion / Stylist', 'Commercial': 'Production house (commercial, film & TV)', 'Model': 'Models' };
+  const catLabel_ = c => CAT_LABEL[c] || c;
+  const legacyCatOpt = cur => (cur && cur !== 'Model' && !CLIENT_CATEGORIES.includes(cur)) ? `<option value="${esc(cur)}" selected>${CAT_ICON[cur] || ''} ${esc(cur)} (old)</option>` : '';
   const CAT_ICON = { 'Fashion': '👗', 'Commercial': '📺', 'Film & TV': '🎬', 'Event organizer': '🎪',
-    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Brand / In-house marketing': '🏨', 'Other': '•', 'Model': '🧍' };
+    'Magazine / Editorial': '📰', 'Agency': '🏢', 'Brand / In-house marketing': '🏨', 'Casting director': '🎯', 'Photographer': '📸', 'Other': '•', 'Model': '🧍' };
   const SOURCE_ICON = { 'Website': '🌐', 'LINE': '💬', 'Instagram': '📷', 'Facebook': '👍',
     'Email': '✉️', 'Phone call': '📞', 'WhatsApp': '📱', 'Referral': '🤝', 'Repeat client': '🔁',
     'Agency': '🏢', 'Walk-in': '🚶', 'Other': '•', 'Model / no client': '🧍' };
@@ -1010,7 +1016,7 @@
         <div class="field" style="margin:0"><label>Client type <span style="font-weight:400;color:var(--declined);font-size:11px">· required</span></label>
           <select id="d-clientCategory">
             <option value="">— type —</option>
-            ${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(j?.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}
+            ${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(j?.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(catLabel_(c))}</option>`).join('')}${legacyCatOpt(j?.clientCategory || '')}
           </select></div>
       </div>
       <div class="field two money">
@@ -2723,7 +2729,7 @@
       <label class="cb-lbl">Lead source <span style="color:var(--declined)">· required — where did this client come from?</span> <span style="color:var(--grey)">· not needed when Client type is Model</span></label>
       <select id="d-sleadSource"><option value="">— pick a source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(e.leadSource || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(e.leadSource || '')}</select>
       <label class="cb-lbl">Client type <span style="color:var(--grey)">· fashion, commercial, film & TV, organizer…</span></label>
-      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Models</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select>
+      <select id="d-sclientCategory"><option value="">— pick a type —</option><option value="Model" ${(e.clientCategory || '') === 'Model' ? 'selected' : ''}>🧍 Models</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(e.clientCategory || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(catLabel_(c))}</option>`).join('')}${legacyCatOpt(e.clientCategory || '')}</select>
       <label class="cb-lbl">Client contact <span style="color:var(--grey)">· name · phone · LINE · email</span></label>
       <input id="d-sclientContact" value="${esc(e.clientContact || '')}" placeholder="e.g. K. Nan · 08x-xxx-xxxx · LINE @nan · nan@brand.com">
     </div>`;
@@ -4225,7 +4231,7 @@
     const srcSel = el('cl-source');
     if (srcSel && srcSel.options.length <= 1) srcSel.innerHTML = '<option value="">All sources</option>' + LEAD_SOURCES.map(s => `<option value="${s}">${SOURCE_ICON[s] || ''} ${s}</option>`).join('');
     const catSel = el('cl-cat');
-    if (catSel && catSel.options.length <= 1) catSel.innerHTML = '<option value="">All types</option>' + CLIENT_CATEGORIES.map(c => `<option value="${c}">${CAT_ICON[c] || ''} ${c}</option>`).join('');
+    if (catSel && catSel.options.length <= 1) catSel.innerHTML = '<option value="">All types</option>' + CLIENT_CATEGORIES.map(c => `<option value="${c}">${CAT_ICON[c] || ''} ${catLabel_(c)}</option>`).join('');
     const ySel = el('cl-year');
     if (ySel && ySel.options.length <= 1) {
       const years = distinct(jobs.map(j => String(j.jobDate || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y))).sort().reverse();
@@ -4264,7 +4270,7 @@
     el('cl-empty').style.display = rows.length ? 'none' : 'block';
     el('cl-rows').innerHTML = rows.map(r => `
       <tr class="cl-row" data-key="${esc(r.key)}">
-        <td><b>${esc(r.name)}</b>${r.category ? ` <span class="src-badge cat">${CAT_ICON[r.category] || ''} ${esc(r.category)}</span>` : ''}${r.company && clientKey(r.company) !== r.key ? `<div style="font-size:11px;color:#888">${esc(r.company)}</div>` : ''}${r.count > 1 ? ' <span class="src-badge">🔁 returning</span>' : ''}</td>
+        <td><b>${esc(r.name)}</b>${r.category ? ` <span class="src-badge cat">${CAT_ICON[r.category] || ''} ${esc(catLabel_(r.category))}</span>` : ''}${r.company && clientKey(r.company) !== r.key ? `<div style="font-size:11px;color:#888">${esc(r.company)}</div>` : ''}${r.count > 1 ? ' <span class="src-badge">🔁 returning</span>' : ''}</td>
         <td>${r.sources.length ? r.sources.map(s => `<span class="src-badge">${SOURCE_ICON[s] || ''} ${esc(s)}</span>`).join(' ') : '<span class="src-badge none">no source</span>'}</td>
         <td class="num">${r.count}</td>
         <td>${esc(r.first) || '—'}</td>
@@ -4285,7 +4291,7 @@
     el('drawer-body').innerHTML = `
       <div class="client-block">
         <div class="cb-head">Client details ${p.count > 1 ? '· 🔁 returning' : ''}</div>
-        ${line('Client type', p.category ? (CAT_ICON[p.category] || '') + ' ' + p.category : '')}
+        ${line('Client type', p.category ? (CAT_ICON[p.category] || '') + ' ' + catLabel_(p.category) : '')}
         ${line('Company', p.company)}
         ${line('Tax ID', p.taxId)}
         ${line('Address', p.address)}
@@ -4327,7 +4333,7 @@
         <input id="cf-name" value="${esc(rec ? rec.name : (src.name || ''))}" placeholder="as bookers type it"></div>
       <div class="field two">
         <div class="field" style="margin:0"><label>Client type</label>
-          <select id="cf-clientCategory"><option value="">— type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(src.clientCategory || src.category || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(c)}</option>`).join('')}</select></div>
+          <select id="cf-clientCategory"><option value="">— type —</option>${CLIENT_CATEGORIES.map(c => `<option value="${esc(c)}" ${(src.clientCategory || src.category || '') === c ? 'selected' : ''}>${CAT_ICON[c] || ''} ${esc(catLabel_(c))}</option>`).join('')}${legacyCatOpt(src.clientCategory || src.category || '')}</select></div>
         <div class="field" style="margin:0"><label>Lead source</label>
           <select id="cf-leadSource"><option value="">— source —</option>${LEAD_SOURCES.map(s => `<option value="${esc(s)}" ${(src.leadSource || (src.sources && src.sources[0]) || '') === s ? 'selected' : ''}>${SOURCE_ICON[s] || ''} ${esc(s)}</option>`).join('')}${legacySourceOpt(src.leadSource || (src.sources && src.sources[0]) || '')}</select></div>
       </div>
