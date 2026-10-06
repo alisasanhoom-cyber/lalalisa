@@ -3509,12 +3509,30 @@
         });
         if (Object.keys(sibPatch).length) {
           const siblings = schedule.filter(x => x.holdGroup === e.holdGroup && x.id !== e.id);
-          let sibFailed = 0;
-          for (const s of siblings) {
-            try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ ...sibPatch, _seen: s.updated || '' }) }); Object.assign(s, rs.entry); }
-            catch (_) { sibFailed++; }
+          // The booker decides (Lisa 2026-10-06, Tawa's SARA hold: Ola on the 7th,
+          // Vitoria on the 8th): OK = the change is for every day of the hold;
+          // Cancel = only this day — it becomes its own card and the other days keep
+          // what they had. No delete-and-re-add needed.
+          const allDays = [e.date, ...siblings.map(x => x.date)].sort();
+          const changed = Object.keys(sibPatch).map(k => ({ models: 'Models', subject: 'Subject', booker: 'Booker', job: 'Details', casting: 'Details', option: 'Details', fitting: 'Details', shortlist: 'Details', priority: 'Details', timeStart: 'Time', shootDays: 'Shoot days' })[k] || k);
+          const applyAll = confirm(`This booking is a ${allDays.length}-day hold (${allDays[0]} → ${allDays[allDays.length - 1]}).\nYou changed: ${[...new Set(changed)].join(', ')}.\n\nOK = apply to ALL ${allDays.length} days\nCancel = ONLY ${e.date} (this day becomes its own card; the other days stay as they were)`);
+          if (applyAll) {
+            let sibFailed = 0;
+            for (const s of siblings) {
+              try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ ...sibPatch, _seen: s.updated || '' }) }); Object.assign(s, rs.entry); }
+              catch (_) { sibFailed++; }
+            }
+            if (sibFailed) alert(`Saved this day, but ${sibFailed} other day(s) of the hold could not be updated (someone else may have just edited them). Open those days to check.`);
+          } else {
+            // Detach this day; the rest of the hold keeps its range.
+            try { const rd = await api('/api/schedule/' + e.id, { method: 'PATCH', body: JSON.stringify({ holdGroup: '', holdStart: '', holdEnd: '', _seen: e.updated || '' }) }); Object.assign(e, rd.entry); } catch (_) {}
+            const ds = siblings.map(x => x.date).sort();
+            for (const s of siblings) {
+              const patch = siblings.length === 1 ? { holdGroup: '', holdStart: '', holdEnd: '' } : { holdStart: ds[0], holdEnd: ds[ds.length - 1] };
+              try { const rs = await api('/api/schedule/' + s.id, { method: 'PATCH', body: JSON.stringify({ ...patch, _seen: s.updated || '' }) }); Object.assign(s, rs.entry); } catch (_) {}
+            }
+            toast(`Saved ${e.date} only — it is now its own card`);
           }
-          if (sibFailed) alert(`Saved this day, but ${sibFailed} other day(s) of the hold could not be updated (someone else may have just edited them). Open those days to check.`);
         }
       }
       done();
