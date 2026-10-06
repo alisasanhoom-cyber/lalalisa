@@ -64,7 +64,10 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await loginAs('booker@test', 'booker', 'Tawa');
 
     const openAdd = async () => { await ev(`document.getElementById('s-add').click(); 'ok'`); await sleep(400); };
-    const clickDay = async d => { const ok = await ev(`(()=>{const c=document.querySelector('.mc-cell[data-d="${d}"]'); if(!c) return 'nocell'; c.click(); return 'ok';})()`); if (ok !== 'ok') throw new Error('no cell ' + d); await sleep(150); };
+    // The mini-calendar opens on the CURRENT month; the flows use fixed 2026 dates, so
+    // step the picker (‹ ›) to the wanted month first (2026-10-06: every flow broke
+    // the day the calendar turned to October).
+    const clickDay = async d => { const ok = await ev(`(()=>{for(let i=0;i<36;i++){const c=document.querySelector('.mc-cell[data-d="${d}"]'); if(c){c.click();return 'ok';} const any=document.querySelector('.mc-cell[data-d]'); if(!any) return 'nocal'; const m=any.dataset.d.slice(0,7); const btn=document.getElementById(m<'${d.slice(0,7)}'?'mc-next':'mc-prev'); if(!btn) return 'nonav'; btn.click();} return 'nocell';})()`); if (ok !== 'ok') throw new Error('no cell ' + d + ' (' + ok + ')'); await sleep(150); };
     const clickBrush = async b => { await ev(`document.querySelector('#brush-btns .cat-btn[data-brush="${b}"]').click(); 'ok'`); await sleep(150); };
     const fill = async (details, models) => ev(`document.getElementById('d-details').value=${JSON.stringify(details)}; document.getElementById('d-models').value=${JSON.stringify(models)}; document.getElementById('d-sleadSource').value='LINE'; 'ok'`);
     const summary = () => ev(`document.getElementById('stage-summary').innerText`);
@@ -158,8 +161,8 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(500);
     const rowHit = await ev(`(()=>{const r=document.querySelector('tr[data-id="${job && job.id}"]'); if(!r) return false; r.click(); return true;})()`); await sleep(600);
     check('job row opened', rowHit === true);
-    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-26"]').click(); 'ok'`); await sleep(150);
-    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-27"]').click(); 'ok'`); await sleep(150);
+    await clickDay('2026-09-26');
+    await clickDay('2026-09-27');
     await ev(`document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
     const allJ = await entries(); const J26 = findAll(allJ, '2026-09-26'), J27 = findAll(allJ, '2026-09-27');
     check('26 Sep hand-made entry NOT deleted, just unlinked', J26.length === 1 && J26[0].id === I0[0].id && !J26[0].jobRef, JSON.stringify(J26.map(e=>({id:e.id,jobRef:e.jobRef}))));
@@ -168,7 +171,7 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     console.log('— J2: postpone the shoot 27 → 28: the program\'s own card MOVES (same card), nothing deleted —');
     await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(400);
     await ev(`document.querySelector('tr[data-id="${job && job.id}"]').click(); 'ok'`); await sleep(600);
-    await ev(`document.querySelector('#d-picker .mc-cell[data-d="2026-09-27"]').click(); document.querySelector('#d-picker .mc-cell[data-d="2026-09-28"]').click(); document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
+    await clickDay('2026-09-27'); await clickDay('2026-09-28'); await ev(`document.getElementById('d-save').click(); 'ok'`); await sleep(2000);
     const allJ2 = await entries(); const J2_27 = findAll(allJ2, '2026-09-27'), J2_28 = findAll(allJ2, '2026-09-28');
     check('27 card moved to 28 (same id), 27 empty', J2_27.length === 0 && J2_28.length === 1 && J2_28[0].id === J27[0].id && J2_28[0].jobRef === job.id, JSON.stringify({ n27: J2_27.length, n28: J2_28.map(e => e.id) }));
 
