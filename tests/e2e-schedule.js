@@ -160,7 +160,7 @@ const check = (n, ok, extra = '') => { console.log((ok ? '  ✓ ' : '  ✗ ') + 
     console.log('— J: change the job\'s shoot date 26 → 27: 26 (hand-made) stays, unlinked; 27 auto-created —');
     await ev(`document.querySelector('.tab[data-view="jobs"]').click(); 'ok'`); await sleep(500);
     // The tracker opens on the CURRENT month; the test job lives in Sep 2026 → show the whole year.
-    await ev(`(()=>{const y=document.getElementById('j-year'); if(y && [...y.options].some(o=>o.value==='2026')){y.value='2026'; y.dispatchEvent(new Event('change'));} const m=document.getElementById('j-month'); m.value='all'; m.dispatchEvent(new Event('change')); return m.value;})()`); await sleep(500);
+    await ev(`(()=>{const y=document.getElementById('j-year'); if(y && [...y.options].some(o=>o.value==='2026')){y.value='2026'; y.dispatchEvent(new Event('change'));} const m=document.getElementById('j-month'); m.value='all'; m.dispatchEvent(new Event('input')); m.dispatchEvent(new Event('change')); return m.value;})()`); await sleep(500);
     const rowHit = await ev(`(()=>{const r=document.querySelector('tr[data-id="${job && job.id}"]'); if(!r) return false; r.click(); return true;})()`); await sleep(600);
     check('job row opened', rowHit === true);
     await clickDay('2026-09-26');
