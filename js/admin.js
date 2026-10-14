@@ -4896,6 +4896,75 @@
       }
     });
   }
+  // ---- Agreements (Lisa 2026-10-14): status + split per period, kept as history ----
+  const DEAL_PRESETS = [
+    { key: 'ex40', label: 'Exclusive — MP covers expenses (60 / 0 / 40)', status: 'exclusive', modelPct: 60, maPct: 0, mpPct: 40 },
+    { key: 'ex30', label: 'Exclusive — model pays own expenses (70 / 0 / 30)', status: 'exclusive', modelPct: 70, maPct: 0, mpPct: 30 },
+    { key: 'ma30', label: 'Exclusive with mother agency (60 / 10 / 30)', status: 'exclusive', modelPct: 60, maPct: 10, mpPct: 30 },
+    { key: 'ma40', label: 'Exclusive with mother agency (50 / 10 / 40)', status: 'exclusive', modelPct: 50, maPct: 10, mpPct: 40 },
+    { key: 'fl30', label: 'Freelance — 30% commission (70 / 0 / 30)', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 },
+  ];
+  const canTerms = () => ['master', 'admin', 'designer'].includes(role);
+  const fmtTermFrom = t => t.from ? t.from : 'from the start';
+  function agreementsHtml(m) {
+    const rows = (m && Array.isArray(m.terms)) ? m.terms : [];
+    const cat = (m && m.category) || '';
+    const preset = cat === 'MP Models' ? 'ex40' : 'fl30';
+    const whtDefault = /thai/i.test(cat) || /^thai/i.test(String((m && m.country) || '')) ? 3 : 5;
+    const table = rows.length ? `<table class="agr-table"><thead><tr><th>From</th><th>Status</th><th>Model</th><th>MA</th><th>MP</th><th>WHT</th><th>MA paid to</th><th>Note</th><th>By</th>${role === 'master' ? '<th></th>' : ''}</tr></thead><tbody>${rows.map((t, i) =>
+      `<tr><td>${esc(fmtTermFrom(t))}</td><td>${t.status === 'freelance' ? 'Freelance' : 'Exclusive'}</td><td>${t.modelPct}%</td><td>${t.maPct}%</td><td><b>${t.mpPct}%</b></td><td>${t.wht}%</td><td>${esc(t.maPaidTo || '')}</td><td>${esc(t.note || '')}</td><td style="color:var(--grey)">${esc(t.by || '')}${t.at ? ' · ' + String(t.at).slice(0, 10) : ''}</td>${role === 'master' ? `<td><button class="link ag-del" data-i="${i}" style="color:var(--declined)">remove</button></td>` : ''}</tr>`).join('')}</tbody></table>`
+      : '<p style="color:#b06a1a;font-size:12px;margin:4px 0 8px">No agreement on file yet.</p>';
+    const presetOpts = DEAL_PRESETS.map(p => `<option value="${p.key}" ${p.key === preset ? 'selected' : ''}>${esc(p.label)}</option>`).join('') + '<option value="custom">Custom…</option>';
+    const P = DEAL_PRESETS.find(p => p.key === preset);
+    return `<div class="field" id="agr-block"><label>Agreement — status &amp; split <span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0">· every change is a NEW agreement from a date, old ones stay as history</span></label>
+      ${table}
+      <div style="border:1px dashed var(--line2);border-radius:8px;padding:10px;margin-top:6px">
+        <div style="font-size:12px;font-weight:600;color:var(--grey);margin-bottom:6px">${rows.length ? 'New agreement' : 'First agreement'}</div>
+        <div class="field two" style="margin:0 0 6px">
+          <div class="field" style="margin:0"><label>From (month the deal starts)</label><input type="date" id="ag-from" value="${rows.length ? new Date().toISOString().slice(0, 8) + '01' : ''}"></div>
+          <div class="field" style="margin:0"><label>Preset</label><select id="ag-preset">${presetOpts}</select></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px">
+          <div class="field" style="margin:0;width:90px"><label>Model %</label><input id="ag-model" type="number" step="0.5" min="0" max="100" value="${P.modelPct}"></div>
+          <div class="field" style="margin:0;width:90px"><label>MA %</label><input id="ag-ma" type="number" step="0.5" min="0" max="100" value="${P.maPct}"></div>
+          <div class="field" style="margin:0;width:90px"><label>MP %</label><input id="ag-mp" type="number" step="0.5" min="0" max="100" value="${P.mpPct}"></div>
+          <div class="field" style="margin:0;width:110px"><label>Withholding</label><select id="ag-wht"><option value="5" ${whtDefault === 5 ? 'selected' : ''}>5% foreign</option><option value="3" ${whtDefault === 3 ? 'selected' : ''}>3% Thai</option></select></div>
+          <div class="field" style="margin:0;flex:1;min-width:140px"><label>MA paid to</label><input id="ag-mapaid" placeholder="agency name, or the model herself"></div>
+        </div>
+        <div class="field" style="margin:0 0 8px"><label>Note</label><input id="ag-note" placeholder="e.g. pays own expenses / special deal to keep her"></div>
+        <div style="display:flex;gap:10px;align-items:center"><span id="ag-total" style="font-size:12px;font-weight:700">= 100%</span>${rows.length ? '<button class="btn ghost" id="ag-add">Add agreement</button>' : '<span style="font-size:11.5px;color:var(--grey)">Saved together with the model.</span>'}</div>
+      </div></div>`;
+  }
+  function readAgreement() {
+    const num = id => Math.min(100, Math.max(0, parseFloat(el(id).value) || 0));
+    const r = { from: el('ag-from').value || '', status: (DEAL_PRESETS.find(p => p.key === el('ag-preset').value) || {}).status || (el('ag-preset').value === 'custom' ? (num('ag-mp') >= 40 ? 'exclusive' : 'freelance') : 'exclusive'),
+      modelPct: num('ag-model'), maPct: num('ag-ma'), mpPct: num('ag-mp'), wht: +el('ag-wht').value, maPaidTo: el('ag-mapaid').value.trim(), note: el('ag-note').value.trim() };
+    const tot = Math.round((r.modelPct + r.maPct + r.mpPct) * 10) / 10;
+    if (Math.abs(tot - 100) > 0.05) { alert('The split must total 100% (now ' + tot + '%).'); return null; }
+    return r;
+  }
+  function wireAgreement(m) {
+    if (!el('ag-preset')) return;
+    const total = () => { const t = Math.round(((+el('ag-model').value || 0) + (+el('ag-ma').value || 0) + (+el('ag-mp').value || 0)) * 10) / 10; const s = el('ag-total'); s.textContent = '= ' + t + '%'; s.style.color = Math.abs(t - 100) < 0.05 ? 'var(--teal)' : 'var(--declined)'; };
+    el('ag-preset').addEventListener('change', () => { const p = DEAL_PRESETS.find(x => x.key === el('ag-preset').value); if (p) { el('ag-model').value = p.modelPct; el('ag-ma').value = p.maPct; el('ag-mp').value = p.mpPct; } total(); });
+    ['ag-model', 'ag-ma', 'ag-mp'].forEach(id => el(id).addEventListener('input', () => { el('ag-preset').value = 'custom'; total(); }));
+    if (m && el('ag-add')) el('ag-add').addEventListener('click', async () => {
+      const r = readAgreement(); if (!r) return;
+      if (!r.from) { alert('Pick the month the new agreement starts (the old one stays for earlier jobs).'); return; }
+      try {
+        const res = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ terms: [...(m.terms || []), r], _seen: m.updated || '' }) });
+        Object.assign(m, res.model); toast('Agreement added'); openModelEdit(m.id);
+      } catch (e) { if (e.message !== 'unauthorized') alert(e.message || 'Could not add the agreement.'); }
+    });
+    if (m && role === 'master') document.querySelectorAll('.ag-del').forEach(b => b.addEventListener('click', async () => {
+      const i = +b.getAttribute('data-i'); const t = m.terms[i];
+      if (!confirm('Remove the agreement ' + fmtTermFrom(t) + ' (' + t.modelPct + '/' + t.maPct + '/' + t.mpPct + ')? Only for mistakes — a changed deal should be a new agreement.')) return;
+      try {
+        const res = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ terms: m.terms.filter((_, k) => k !== i), _seen: m.updated || '' }) });
+        Object.assign(m, res.model); toast('Agreement removed'); openModelEdit(m.id);
+      } catch (e) { if (e.message !== 'unauthorized') alert(e.message || 'Could not remove.'); }
+    }));
+  }
   function modelField(label, id, val, ph) {
     const list = id === 'country' ? 'list="m-country-list"' : '';
     return `<div class="field"><label>${label}</label><input id="md-${id}" ${list} value="${esc(val || '')}" placeholder="${ph || ''}" ${canEditModels() ? '' : 'readonly'}></div>`;
@@ -4947,10 +5016,12 @@
       <div class="field"><label>Mother agency (name / contact)</label><textarea id="md-motherAgency" rows="2" ${canEditModels() ? '' : 'readonly'} placeholder="e.g. Supermoda · name · email">${esc(m && m.motherAgency || '')}</textarea></div>
       <div class="field two">${modelField('Arrival', 'arrival', m && m.arrival, 'YYYY-MM-DD')}${modelField('Departure', 'departure', m && m.departure, 'YYYY-MM-DD')}</div>
       <div class="field"><label>Note</label><textarea id="md-note" rows="3" ${edit ? '' : 'readonly'}>${esc(m && m.note || '')}</textarea></div>
+      ${canTerms() ? agreementsHtml(m) : (m && m.deal ? `<p style="font-size:12.5px;color:var(--grey)">Agreement on file: <b>${m.deal === 'freelance' ? 'Freelance' : 'Exclusive'}</b></p>` : '')}
       ${edit ? `<div class="drawer-actions">
         <button class="btn" id="md-save">${m ? 'Save' : 'Add model'}</button>
         ${m ? '<button class="link" id="md-del" style="color:var(--declined)">Delete</button>' : ''}
       </div>` : '<p style="color:var(--grey);font-size:12.5px">View only — ask Admin or the designer to edit.</p>'}`;
+    if (canTerms()) wireAgreement(m);
     if (edit) {
       // Live "already on the list" check as the name is typed.
       const nameEl = el('md-name'), warnEl = el('md-name-warn');
@@ -4987,6 +5058,8 @@
         const data = { category: cat, agency: cat === 'MP Models' ? 'MP' : (cat ? 'Freelance' : ''), status: el('md-status').value === '—' ? '' : el('md-status').value, sex: el('md-sex').value === '—' ? '' : el('md-sex').value };
         F.forEach(k => data[k] = el('md-' + k).value);
         if (!data.name.trim()) { alert('Please enter a name.'); return; }
+        // A new model is saved together with its first agreement (Ploy / Admin / Director).
+        if (!m && canTerms()) { const r = readAgreement(); if (!r) return; data.terms = [r]; }
         const btn = el('md-save'); btn.disabled = true; btn.textContent = 'Saving…';
         try {
           if (m) { const r = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ ...data, _seen: m.updated || '' }) }); Object.assign(m, r.model); }

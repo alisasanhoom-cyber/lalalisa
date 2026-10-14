@@ -569,6 +569,57 @@ const MODEL_FIELDS = ['name', 'nickname', 'sex', 'country', 'status', 'agency', 
 // Aim uses as the product code in FlowAccount. One-time seed maps our models to it.
 const MODEL_CODE_SEED = path.join(__dirname, 'model_code_seed.json');
 const MODEL_LONG = { note: 1000, motherAgency: 600 };
+// ---- Model agreements (Lisa 2026-10-14): status + split per period ----
+// Each model carries `terms`: dated agreements {from, status, modelPct, maPct, mpPct,
+// maPaidTo, wht, note, by, at}. Ploy files the first one with the model; Admin and the
+// Director may add more. A change of % is ALWAYS a new agreement from a date — old
+// rows are history and never edited (only the Director may correct a mistake).
+// `deal` = the latest agreement's status, so a model who goes freelance keeps her code.
+const TERMS_SEED = path.join(__dirname, 'terms_seed.json');
+function sanitizeTerms(rows, user) {
+  const pct = v => Math.min(100, Math.max(0, number(v)));
+  const out = [];
+  (Array.isArray(rows) ? rows.slice(0, 30) : []).forEach(t => {
+    if (!t || typeof t !== 'object') return;
+    const r = {
+      from: /^\d{4}-\d{2}-\d{2}$/.test(String(t.from || '')) ? String(t.from) : '',
+      status: t.status === 'freelance' ? 'freelance' : 'exclusive',
+      modelPct: pct(t.modelPct), maPct: pct(t.maPct), mpPct: pct(t.mpPct),
+      maPaidTo: text(t.maPaidTo, 120), wht: number(t.wht) === 3 ? 3 : 5, note: text(t.note, 200),
+      by: text(t.by, 60) || (user && user.name) || '', at: text(t.at, 40) || new Date().toISOString(),
+    };
+    if (Math.abs(r.modelPct + r.maPct + r.mpPct - 100) > 0.06) return;
+    out.push(r);
+  });
+  out.sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
+  return out;
+}
+const termKey = t => [t.from, t.status, t.modelPct, t.maPct, t.mpPct, t.maPaidTo, t.wht, t.note].join('|');
+function defaultTerms(m, user) {
+  const cat = String(m.category || '');
+  const cc = /-(\d\d)-/.exec(String(m.modelCode || ''));
+  const exclusive = cc ? cc[1] === '01' : cat === 'MP Models';
+  const thai = /thai/i.test(cat) || /^thai/i.test(String(m.country || ''));
+  return [{ from: '', status: exclusive ? 'exclusive' : 'freelance', modelPct: exclusive ? 60 : 70, maPct: 0, mpPct: exclusive ? 40 : 30,
+    maPaidTo: '', wht: thai ? 3 : 5, note: 'default — to be confirmed', by: (user && user.name) || 'system', at: new Date().toISOString() }];
+}
+// One-time: every model without agreements gets them — from the finance app's saved
+// splits (terms_seed.json, by name) where known, else the default by code/category.
+function backfillTerms() {
+  const list = load(MODELS_FILE);
+  if (!Array.isArray(list) || !list.length) return;
+  let seed = {};
+  try { seed = JSON.parse(fs.readFileSync(TERMS_SEED, 'utf8')); } catch (_) {}
+  let changed = 0;
+  list.forEach(m => {
+    if (Array.isArray(m.terms) && m.terms.length) return;
+    const rows = sanitizeTerms(seed[String(m.name || '').trim().toLowerCase()], { name: 'Finance app' });
+    m.terms = rows.length ? rows : defaultTerms(m);
+    m.deal = m.terms[m.terms.length - 1].status;
+    changed++;
+  });
+  if (changed) { save(MODELS_FILE, list); console.log('[terms] agreements backfilled for ' + changed + ' models'); }
+}
 // Running Model ID — a unique sequential number per model (tells duplicate names apart).
 function nextModelNo(list) {
   const max = (list || []).reduce((m, x) => Math.max(m, parseInt(x.modelNo, 10) || 0), 0);
@@ -602,13 +653,19 @@ function nextModelCode(category, list) {
   });
   return pref + String(max + 1).padStart(3, '0');
 }
-function buildModel(input, list) {
+function buildModel(input, list, user) {
   const m = { id: crypto.randomUUID() };
   MODEL_FIELDS.forEach(k => { m[k] = text(input[k], MODEL_LONG[k] || 200); });
   const all = list || load(MODELS_FILE);
   m.modelNo = nextModelNo(all);
   // New models get their real code straight away — same running format as always.
   if (!m.modelCode) m.modelCode = nextModelCode(m.category, all);
+  // First agreement comes with the model (Ploy); anyone else creating one gets the
+  // default for the category, flagged "to be confirmed" — never blank.
+  const canTerms = user && (user.role === 'master' || user.role === 'admin' || user.role === 'designer');
+  m.terms = canTerms ? sanitizeTerms(input.terms, user) : [];
+  if (!m.terms.length) m.terms = defaultTerms(m, user);
+  m.deal = m.terms[m.terms.length - 1].status;
   return m;
 }
 // CRM client record (managers only). Contact/marketing data — never money.
@@ -996,12 +1053,33 @@ async function handleApi(req, res) {
         const clash = list.find(x => String(x.name || '').trim().toLowerCase() === wanted);
         if (clash) return reply(res, 409, { error: `A model named “${text(body.name)}” is already on the list.`, duplicate: true, existingId: clash.id });
       }
-      const m = buildModel(body, list);
+      const m = buildModel(body, list, user);
       list.push(m); save(MODELS_FILE, list);
-      logActivity(user, 'added model', m.name);
+      logActivity(user, 'added model', m.name + ' · agreement ' + m.deal + ' ' + m.terms[0].modelPct + '/' + m.terms[0].maPct + '/' + m.terms[0].mpPct);
       return reply(res, 201, { ok: true, model: m });
     }
     if (method === 'PATCH' && id) {
+      if (body && body.terms !== undefined) {
+        if (!(isManager || user.role === 'designer')) return reply(res, 403, { error: 'Agreements: Director, Admin or the designer only.' });
+        const tlist = load(MODELS_FILE); const mm = tlist.find(x => x.id === id);
+        if (!mm) return reply(res, 404, { error: 'Model not found.' });
+        if (body._seen !== undefined && mm.updated && body._seen !== mm.updated) return reply(res, 409, { error: 'Someone else saved this model after you opened it. Close the form, reopen it, then add your agreement again.', conflict: true });
+        const next = sanitizeTerms(body.terms, user);
+        if (!next.length) return reply(res, 400, { error: 'An agreement needs a status and a split that totals 100%.' });
+        for (let i = 1; i < next.length; i++) if (next[i].from === next[i - 1].from) return reply(res, 400, { error: 'Two agreements start on the same date — pick the month the new deal starts.' });
+        const prev = Array.isArray(mm.terms) ? mm.terms : [];
+        // History rule: old agreements stay exactly as they are; a change is a NEW one from a date.
+        const same = prev.length <= next.length && prev.every((t, i) => termKey(t) === termKey(next[i]));
+        if (!same && user.role !== 'master') return reply(res, 400, { error: 'Agreements are history: add a new agreement from a date instead of changing an old one. Only the Director can correct a past agreement.' });
+        mm.terms = next; mm.deal = next[next.length - 1].status;
+        mm.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
+        save(MODELS_FILE, tlist);
+        const L = next[next.length - 1];
+        logActivity(user, 'model agreement', `${mm.name}: ${L.status} ${L.modelPct}/${L.maPct}/${L.mpPct}${L.from ? ' from ' + L.from : ''} (${next.length} on file)`);
+        delete body.terms;
+        if (!Object.keys(body).some(k => k !== '_seen')) return reply(res, 200, { ok: true, model: mm });
+        body._seen = mm.updated;
+      }
       const m = updateModel(id, body);
       if (!m) return reply(res, 404, { error: 'Model not found.' });
       if (m.__duplicate) return reply(res, 409, { error: `A model named “${m.__duplicate}” is already on the list.`, duplicate: true });
@@ -1627,6 +1705,7 @@ server.listen(PORT, () => {
   migratePasswords();   // hash any plaintext passwords still on disk
   seedModels();         // build the model directory from booking names on first run
   backfillModelNos();   // give every model a running number
+  backfillTerms();      // every model has an agreement (finance app splits or the default)
   autoDeclinePastOptions();   // tidy expired option holds on boot
   setInterval(autoDeclinePastOptions, 6 * 3600 * 1000);   // …and every 6 hours
   dailySnapshot();            // on-volume daily backup (14 days kept)

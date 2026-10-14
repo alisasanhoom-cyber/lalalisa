@@ -105,6 +105,18 @@ async function login(email, password) {
     const am2 = await api('/api/models', { method: 'POST', body: { name: 'Auto Coded Talent 2', category: 'Talents' } }, booker);
     check('running number increments (…-002)', am2.body && am2.body.model && /-11-002$/.test(am2.body.model.modelCode), am2.body && am2.body.model && am2.body.model.modelCode);
     const noCat = await api('/api/models', { method: 'POST', body: { name: 'No Category Person' } }, booker);
+    // Agreements (Lisa 2026-10-14): first one saved with the model; history is append-only.
+    const tm = await api('/api/models', { method: 'POST', body: { name: 'Terms Test Model', category: 'MP Models', terms: [{ from: '', status: 'exclusive', modelPct: 60, maPct: 0, mpPct: 40, wht: 5 }] } }, master);
+    check('model created with its first agreement', tm.status === 201 && tm.body.model.terms.length === 1 && tm.body.model.deal === 'exclusive', tm.body);
+    const tmId = tm.body.model && tm.body.model.id;
+    const bkTerms = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 }] } }, booker);
+    check('booker cannot set agreements', bkTerms.status === 403, bkTerms.body);
+    const edited = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'exclusive', modelPct: 70, maPct: 0, mpPct: 30, wht: 5 }] } }, designer);
+    check('designer cannot change a past agreement (history rule)', edited.status === 400, edited.body);
+    const appended = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [tm.body.model.terms[0], { from: '2026-08-01', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30, wht: 5, note: 'went freelance' }] } }, designer);
+    check('designer appends a new agreement from a date', appended.status === 200 && appended.body.model.terms.length === 2 && appended.body.model.deal === 'freelance', appended.body);
+    const bkModel = await api('/api/models/' + bmod.body.model.id, {}, master);
+    check('booker-made model got a default agreement to confirm', !!(bmod.body.model.terms && bmod.body.model.terms.length === 1 && /to be confirmed/.test(bmod.body.model.terms[0].note)), bmod.body.model.terms);
     const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);
     check('⚙ Auto code PATCH mints per category (Kids → -07-001)', auto.body && auto.body.model && /-07-001$/.test(auto.body.model.modelCode), auto.body && auto.body.model && auto.body.model.modelCode);
     await api('/api/models', { method: 'POST', body: { name: 'Old Talent Seed', category: 'Talents (Old)', modelCode: 'MP26-05-001' } }, booker);
