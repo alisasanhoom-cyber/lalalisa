@@ -224,6 +224,8 @@ async function login(email, password) {
     check('OT display shows hourly basis', /4h × ฿3,500\/Hour/.test(c1.otDisplay), c1.otDisplay);
     check('EUR job hides WHT (auto)', MP.calc({ budget: 500, currency: 'EUR' }, 'tax').whtOn === false);
     check('whtMode on overrides for EUR', MP.calc({ budget: 500, currency: 'EUR', whtMode: 'on' }, 'tax').whtOn === true);
+    const c3 = MP.calc({ budget: 28000, overtimeFee: '14000', currency: 'THB', whtMode: 'on1' }, 'tax');
+    check('whtMode on1 = 1% e-WHT: wht 420, net 44520', c3.whtOn === true && c3.whtPct === 1 && Math.round(c3.wht) === 420 && Math.round(c3.netPay) === 44520);
     const cText = MP.calc({ budget: 1000, overtimeFee: '12,50', currency: 'THB' }, 'tax');
     check('"12,50" never becomes money', cText.ot === 0 && cText.otDisplay === '12,50', cText.otDisplay);
     const cLines = MP.calc({ budget: 30000, overtimeFee: '5000', lines: [{ name: 'A', rate: 15000, ot: 0 }, { name: 'B', rate: 12000, ot: 3000 }] }, 'tax');

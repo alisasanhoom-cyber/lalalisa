@@ -309,7 +309,7 @@ function buildJob(input, fromWebsite) {
     materialsNote: text(input.materialsNote, 500),
     collected:     !!input.collected,   // graphic ticks this once the work is collected/done
     confirmationMade: !!input.confirmationMade,   // set when the job confirmation has been generated
-    whtMode: ['on', 'off'].includes(input.whtMode) ? input.whtMode : '',   // WHT on the confirmation: '' auto (THB only) | on | off
+    whtMode: ['on', 'off', 'on1'].includes(input.whtMode) ? input.whtMode : '',   // WHT on the confirmation: '' auto 3% (THB only) | on 3% | on1 1% (e-WHT) | off
     // Shooting date(s) — the days the shoot happens; auto-placed on the Schedule.
     shootDates:    Array.isArray(input.shootDates) ? input.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [],
     // Team-only scratch note — never printed on the client confirmation:
@@ -359,7 +359,7 @@ function updateJob(id, changes) {
     else if (key === 'confirmationMade') job.confirmationMade = !!changes.confirmationMade;
     else if (key === 'shootDates') job.shootDates = Array.isArray(changes.shootDates) ? changes.shootDates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30) : [];
     else if (key === 'shootDays') job.shootDays = Math.max(1, Math.round(number(changes.shootDays)) || 1);
-    else if (key === 'whtMode') job.whtMode = ['on', 'off'].includes(changes.whtMode) ? changes.whtMode : '';
+    else if (key === 'whtMode') job.whtMode = ['on', 'off', 'on1'].includes(changes.whtMode) ? changes.whtMode : '';
     else if (key === 'internalNote') job.internalNote = text(changes.internalNote, 5000);
     else if (key === 'currency')  job.currency = ['THB', 'USD', 'CNY', 'EUR'].includes(changes.currency) ? changes.currency : 'THB';
     else if (key === 'confirmed') job.confirmed = !!changes.confirmed;

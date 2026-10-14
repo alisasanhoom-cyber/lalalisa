@@ -38,8 +38,11 @@
     // cannot issue a Thai withholding certificate (Aim's rule) — showing "−3%"
     // just tempts them to underpay, so it auto-hides for foreign-currency jobs.
     // job.whtMode overrides: 'on' = always show, 'off' = always hide, '' = auto.
-    const whtOn = job.whtMode === 'on' || (job.whtMode !== 'off' && v.vat && (job.currency || 'THB') === 'THB');
-    const wht = whtOn ? subtotal * 0.03 : 0;
+    // Rate: 3% by default; 1% when the client pays through the e-Withholding Tax
+    // system (whtMode 'on1' — Merge/Neera's letter, 2026-10-14).
+    const whtPct = job.whtMode === 'on1' ? 1 : 3;
+    const whtOn = job.whtMode === 'on' || job.whtMode === 'on1' || (job.whtMode !== 'off' && v.vat && (job.currency || 'THB') === 'THB');
+    const wht = whtOn ? subtotal * whtPct / 100 : 0;
     const netPay = total - wht;                            // what a withholding client transfers
     const sym = { THB: '฿', USD: '$', EUR: '€', CNY: '¥' }[job.currency] || '฿';
     const cash = n => sym + Math.round(Number(n || 0)).toLocaleString('en-US');
@@ -64,7 +67,7 @@
     } else {
       otDisplay = otText || (otRate ? cash(otRate) + '/Hour' : '');
     }
-    return { v, num, fee, otIsNumber, ot, subtotal, vat, total, whtOn, wht, netPay, sym, cash, otDisplay };
+    return { v, num, fee, otIsNumber, ot, subtotal, vat, total, whtOn, whtPct, wht, netPay, sym, cash, otDisplay };
   }
 
   const VARIANTS = {
@@ -174,6 +177,7 @@
     // Multiple models on one job (each their own fee) → a per-model fee table.
     const multi = Array.isArray(job.modelFees) && job.modelFees.length > 1 ? job.modelFees : null;
     let feeBlock;
+    const whtPct = job.whtMode === 'on1' ? 1 : 3;   // same rule as calc()
     if (multi) {
       const rows = multi.map(mf => {
         const f = num(mf.fee), fvat = v.vat ? f * 0.07 : 0, ft = f + fvat;
@@ -185,7 +189,7 @@
       const sumFee = multi.reduce((s, mf) => s + num(mf.fee), 0);
       const sumVat = v.vat ? sumFee * 0.07 : 0;
       const grand = sumFee + sumVat;
-      const sumWht = whtOn ? sumFee * 0.03 : 0;
+      const sumWht = whtOn ? sumFee * whtPct / 100 : 0;
       const netGrand = grand - sumWht;
       feeBlock = `
       <table class="mf-table">
@@ -194,8 +198,8 @@
         <tr class="mf-total"><td>TOTAL (${multi.length} models)</td><td class="mf-num">${cash(sumFee)}</td>${v.vat ? `<td class="mf-num">${cash(sumVat)}</td>` : ''}<td class="mf-num"><b>${cash(grand)}</b></td></tr>
       </table>
       ${otDisplay ? `<p class="pay"><b>Overtime:</b> ${esc(otDisplay)}</p>` : ''}
-      ${whtOn ? `<div class="row cols2 wht-row">${field('Less withholding tax 3%', '− ' + cash(sumWht))}${field('Net amount to transfer', cash(netGrand))}</div>
-      <p class="wht-note">If you withhold tax (companies), transfer the <b>net amount ${cash(netGrand)}</b> and issue us a 3% withholding-tax certificate. Otherwise transfer the full total ${cash(grand)}.</p>`
+      ${whtOn ? `<div class="row cols2 wht-row">${field(`Less withholding tax ${whtPct}%`, '− ' + cash(sumWht))}${field('Net amount to transfer', cash(netGrand))}</div>
+      <p class="wht-note">If you withhold tax (companies), transfer the <b>net amount ${cash(netGrand)}</b> and issue us a ${whtPct}% withholding-tax certificate. Otherwise transfer the full total ${cash(grand)}.</p>`
       : (v.vat ? `<p class="wht-note">Please transfer the <b>full total ${cash(grand)}</b>.</p>` : '')}`;
     } else if (v.vat) {
       feeBlock = `
@@ -209,10 +213,10 @@
         ${field('Total Payment Amount (incl. 7% VAT)', total ? cash(total) : '')}
       </div>
       ${whtOn ? `<div class="row cols2 wht-row">
-        ${field('Less withholding tax 3%', subtotal ? '− ' + cash(wht) : '')}
+        ${field(`Less withholding tax ${whtPct}%`, subtotal ? '− ' + cash(wht) : '')}
         ${field('Net amount to transfer', total ? cash(netPay) : '')}
       </div>
-      <p class="wht-note">If you withhold tax (companies), transfer the <b>net amount ${cash(netPay)}</b> and issue us a 3% withholding-tax certificate. Otherwise transfer the full total ${cash(total)}.</p>`
+      <p class="wht-note">If you withhold tax (companies), transfer the <b>net amount ${cash(netPay)}</b> and issue us a ${whtPct}% withholding-tax certificate. Otherwise transfer the full total ${cash(total)}.</p>`
       : `<p class="wht-note">Please transfer the <b>full total ${cash(total)}</b>.</p>`}`;
     } else {
       feeBlock = `

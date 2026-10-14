@@ -1547,9 +1547,10 @@
         <select id="d-form-type" title="Confirmation form">
           ${MPConfirmation.types.map(t => `<option value="${t.key}" ${t.key === MPConfirmation.defaultType(j) ? 'selected' : ''}>${t.label}</option>`).join('')}
         </select>
-        <select id="d-whtMode" title="Withholding tax 3% on the confirmation — Auto shows it for THB clients only (foreign clients can't issue a Thai WHT certificate)">
+        <select id="d-whtMode" title="Withholding tax on the confirmation — Auto shows 3% for THB clients only; pick 1% for clients who pay through e-Withholding Tax; Hide for foreign clients">
           <option value="" ${!j?.whtMode ? 'selected' : ''}>WHT 3%: Auto (THB only)</option>
           <option value="on" ${j?.whtMode === 'on' ? 'selected' : ''}>WHT 3%: Show</option>
+          <option value="on1" ${j?.whtMode === 'on1' ? 'selected' : ''}>WHT 1% (e-WHT): Show</option>
           <option value="off" ${j?.whtMode === 'off' ? 'selected' : ''}>WHT 3%: Hide (foreign)</option>
         </select>
         <button class="btn ghost" id="d-confirm-doc" title="Open the client confirmation. Tick the 📄 in the tracker yourself once it's actually created/sent.">Confirmation</button>` : '';
