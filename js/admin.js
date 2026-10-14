@@ -4904,7 +4904,7 @@
     { key: 'ma40', label: 'Exclusive with mother agency (50 / 10 / 40)', status: 'exclusive', modelPct: 50, maPct: 10, mpPct: 40 },
     { key: 'fl30', label: 'Freelance — 30% commission (70 / 0 / 30)', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 },
   ];
-  const canTerms = () => ['master', 'admin', 'designer'].includes(role);
+  const canTerms = () => canEditModels();   // whole team adds agreements (Lisa 2026-10-14); history stays append-only
   const fmtTermFrom = t => t.from ? t.from : 'from the start';
   function agreementsHtml(m) {
     const rows = (m && Array.isArray(m.terms)) ? m.terms : [];

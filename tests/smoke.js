@@ -110,7 +110,7 @@ async function login(email, password) {
     check('model created with its first agreement', tm.status === 201 && tm.body.model.terms.length === 1 && tm.body.model.deal === 'exclusive', tm.body);
     const tmId = tm.body.model && tm.body.model.id;
     const bkTerms = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 }] } }, booker);
-    check('booker cannot set agreements', bkTerms.status === 403, bkTerms.body);
+    check('booker cannot rewrite a past agreement (history rule)', bkTerms.status === 400, bkTerms.body);
     const edited = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'exclusive', modelPct: 70, maPct: 0, mpPct: 30, wht: 5 }] } }, designer);
     check('designer cannot change a past agreement (history rule)', edited.status === 400, edited.body);
     const appended = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [tm.body.model.terms[0], { from: '2026-08-01', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30, wht: 5, note: 'went freelance' }] } }, designer);

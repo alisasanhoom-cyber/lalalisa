@@ -571,8 +571,8 @@ const MODEL_CODE_SEED = path.join(__dirname, 'model_code_seed.json');
 const MODEL_LONG = { note: 1000, motherAgency: 600 };
 // ---- Model agreements (Lisa 2026-10-14): status + split per period ----
 // Each model carries `terms`: dated agreements {from, status, modelPct, maPct, mpPct,
-// maPaidTo, wht, note, by, at}. Ploy files the first one with the model; Admin and the
-// Director may add more. A change of % is ALWAYS a new agreement from a date — old
+// maPaidTo, wht, note, by, at}. Ploy files the first one with the model; the whole team
+// may add more (Lisa 2026-10-14). A change of % is ALWAYS a new agreement from a date — old
 // rows are history and never edited (only the Director may correct a mistake).
 // `deal` = the latest agreement's status, so a model who goes freelance keeps her code.
 const TERMS_SEED = path.join(__dirname, 'terms_seed.json');
@@ -662,8 +662,8 @@ function buildModel(input, list, user) {
   if (!m.modelCode) m.modelCode = nextModelCode(m.category, all);
   // First agreement comes with the model (Ploy); anyone else creating one gets the
   // default for the category, flagged "to be confirmed" — never blank.
-  const canTerms = user && (user.role === 'master' || user.role === 'admin' || user.role === 'designer');
-  m.terms = canTerms ? sanitizeTerms(input.terms, user) : [];
+  // Anyone who can add a model may file its first agreement (Lisa 2026-10-14).
+  m.terms = sanitizeTerms(input.terms, user);
   if (!m.terms.length) m.terms = defaultTerms(m, user);
   m.deal = m.terms[m.terms.length - 1].status;
   return m;
@@ -1060,7 +1060,7 @@ async function handleApi(req, res) {
     }
     if (method === 'PATCH' && id) {
       if (body && body.terms !== undefined) {
-        if (!(isManager || user.role === 'designer')) return reply(res, 403, { error: 'Agreements: Director, Admin or the designer only.' });
+        // The whole team may add an agreement (Lisa 2026-10-14) — history stays append-only.
         const tlist = load(MODELS_FILE); const mm = tlist.find(x => x.id === id);
         if (!mm) return reply(res, 404, { error: 'Model not found.' });
         if (body._seen !== undefined && mm.updated && body._seen !== mm.updated) return reply(res, 409, { error: 'Someone else saved this model after you opened it. Close the form, reopen it, then add your agreement again.', conflict: true });
