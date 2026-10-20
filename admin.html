@@ -548,7 +548,7 @@
     /* Model statement mirror (finance app) in the model drawer */
     .stmt-wrap{font-size:11px;font-variant-numeric:tabular-nums}.stmt-wrap .h2{font-weight:700;font-size:12px}.stmt-wrap .h3{color:#444;margin:2px 0 6px}
     .stmt-wrap table.stmt{border-collapse:collapse;width:100%}.stmt-wrap table.stmt th,.stmt-wrap table.stmt td{border:1px solid #ccc;padding:3px 5px;font-size:10.5px;vertical-align:top}
-    .stmt-wrap table.stmt th{background:#eee;font-size:9px;white-space:normal;line-height:1.2}.stmt-wrap td.dt{white-space:nowrap}.stmt-wrap table.stmt{table-layout:fixed}.stmt-wrap td.r,.stmt-wrap th.r{text-align:right;white-space:nowrap}.stmt-wrap tr.tot td{font-weight:700;background:#fff2cc}
+    .stmt-wrap table.stmt th{background:#eee;font-size:9px;white-space:normal;line-height:1.2}.stmt-wrap td.dt{white-space:normal;overflow-wrap:anywhere}.stmt-wrap table.stmt{table-layout:fixed}.stmt-wrap td.r,.stmt-wrap th.r{text-align:right;white-space:nowrap}.stmt-wrap tr.tot td{font-weight:700;background:#fff2cc}
     .stmt-wrap .neg{color:#b00000}.stmt-wrap .out{margin-top:8px;font-weight:700;font-size:12px}.stmt-wrap .upd{color:#666;font-size:10px}
 </style>
 </head>
@@ -718,7 +718,7 @@
         <datalist id="st-list"></datalist>
         <select id="st-year"></select>
         <button class="btn" id="st-view">📄 View statement</button>
-        <button class="btn ghost" id="st-pdf" style="display:none">🖨 Print / PDF</button>
+        <button class="btn ghost" id="st-pdf" style="display:none">🖨 Print / PDF</button><button class="btn ghost" id="st-pdf-land" style="display:none">🖨 Landscape</button>
       </div>
       <p style="color:var(--grey);font-size:12.5px;margin:6px 0 10px">Click a model for her statement — jobs, split, advances, running balance — live from the finance app. Clear the search box and press View to get back to the list.</p>
       <div id="st-box"></div>

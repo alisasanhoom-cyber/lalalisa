@@ -4918,22 +4918,25 @@
   function statementTable(st) {
     const n2 = v => (v === undefined || v === null || v === 0) ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const pct = v => (Math.round((+v || 0) * 10) / 10) + '%';
-    const head = `<tr><th>DATE</th><th>JOB ID</th><th>DETAILS</th><th class="r">GROSS<br>100%</th><th class="r">MODEL<br>${pct(st.split.model)}</th><th class="r">HOLDING TAX<br>${pct(st.wht)}</th><th class="r">MODEL<br>NET</th><th class="r">MA<br>${pct(st.split.ma)}</th><th class="r">MP<br>${pct(st.split.mp)}</th><th class="r">EXPENSES /<br>ADVANCE</th><th class="r">BALANCE</th></tr>`;
-    const body = (st.rows || []).map(x => `<tr><td class="dt">${esc(x.date || '')}</td><td>${esc(x.jobId || '')}</td><td class="d">${esc(x.details || '')}</td><td class="r">${n2(x.gross)}</td><td class="r">${n2(x.model)}</td><td class="r">${n2(x.tax)}</td><td class="r">${n2(x.net)}</td><td class="r">${n2(x.ma)}</td><td class="r">${n2(x.mp)}</td><td class="r">${n2(x.advance)}</td><td class="r${x.balance < 0 ? ' neg' : ''}">${n2(x.balance)}</td></tr>`).join('')
-      || '<tr><td colspan="11" style="text-align:center;color:#888">No jobs or advances in this period</td></tr>';
+    // No mother agency → no MA column (Lisa 2026-10-20).
+    const hasMA = !!st.motherAgency || (+st.split.ma || 0) > 0 || (+(st.totals || {}).ma || 0) > 0;
+    const head = `<tr><th>DATE</th><th>JOB ID</th><th>DETAILS</th><th class="r">GROSS<br>100%</th><th class="r">MODEL<br>${pct(st.split.model)}</th><th class="r">HOLDING TAX<br>${pct(st.wht)}</th><th class="r">MODEL<br>NET</th>${hasMA ? `<th class="r">MA<br>${pct(st.split.ma)}</th>` : ''}<th class="r">MP<br>${pct(st.split.mp)}</th><th class="r">EXPENSES /<br>ADVANCE</th><th class="r">BALANCE</th></tr>`;
+    const body = (st.rows || []).map(x => `<tr><td class="dt">${esc(x.date || '')}</td><td>${esc(x.jobId || '')}</td><td class="d">${esc(x.details || '')}</td><td class="r">${n2(x.gross)}</td><td class="r">${n2(x.model)}</td><td class="r">${n2(x.tax)}</td><td class="r">${n2(x.net)}</td>${hasMA ? `<td class="r">${n2(x.ma)}</td>` : ''}<td class="r">${n2(x.mp)}</td><td class="r">${n2(x.advance)}</td><td class="r${x.balance < 0 ? ' neg' : ''}">${n2(x.balance)}</td></tr>`).join('')
+      || `<tr><td colspan="${hasMA ? 11 : 10}" style="text-align:center;color:#888">No jobs or advances in this period</td></tr>`;
     const t = st.totals || {};
-    const tot = `<tr class="tot"><td></td><td></td><td class="d">Total:</td><td class="r">${n2(t.gross)}</td><td class="r">${n2(t.model)}</td><td class="r">${n2(t.tax)}</td><td class="r">${n2(t.net)}</td><td class="r">${n2(t.ma)}</td><td class="r">${n2(t.mp)}</td><td class="r">${n2(t.advance)}</td><td class="r${st.balance < 0 ? ' neg' : ''}">${n2(st.balance)}</td></tr>`;
+    const tot = `<tr class="tot"><td></td><td></td><td class="d">Total:</td><td class="r">${n2(t.gross)}</td><td class="r">${n2(t.model)}</td><td class="r">${n2(t.tax)}</td><td class="r">${n2(t.net)}</td>${hasMA ? `<td class="r">${n2(t.ma)}</td>` : ''}<td class="r">${n2(t.mp)}</td><td class="r">${n2(t.advance)}</td><td class="r${st.balance < 0 ? ' neg' : ''}">${n2(st.balance)}</td></tr>`;
     return `<div class="h2">MODEL: ${esc(String(st.name || '').toUpperCase())}${st.code ? '&nbsp;&nbsp; CODE: ' + esc(st.code) : ''}</div>
-      <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Split: model ${pct(st.split.model)} / MA ${pct(st.split.ma)} / MP ${pct(st.split.mp)}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
-      <table class="stmt"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
+      <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Split: model ${pct(st.split.model)}${hasMA ? ' / MA ' + pct(st.split.ma) : ''} / MP ${pct(st.split.mp)}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
+      <table class="stmt${hasMA ? '' : ' noma'}"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n">${hasMA ? '<col class="c-n">' : ''}<col class="c-n"><col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
       <div class="out">OUTSTANDING BALANCE: ${(st.balance || 0) < 0 ? '- ' : ''}${n2(Math.abs(st.balance || 0))}</div>
       <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · Morgan &amp; Preston Models Bangkok</div>`;
   }
-  const STMT_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:12mm 14mm 12mm 12mm;font-size:9.5px;font-variant-numeric:tabular-nums lining-nums}@page{size:A4;margin:0}' +
+  const STMT_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:12mm 14mm 12mm 12mm;font-size:9.5px;font-variant-numeric:tabular-nums lining-nums}' +
     '.h1{font-size:16px;font-weight:bold;margin:0 0 2px}.h2{font-size:12px;font-weight:bold;margin:0}.h3{font-size:11px;color:#333;margin:2px 0}' +
     'table.stmt{width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed}table.stmt th,table.stmt td{border:1px solid #bbb;padding:3px 4px;vertical-align:top;overflow-wrap:anywhere}' +
-    'table.stmt th{background:#e8e8e8;font-size:8px;text-align:center;white-space:normal;line-height:1.2}td.r{text-align:right;white-space:nowrap}th.r{text-align:right}td.dt{white-space:nowrap}' +
-    'col.c-date{width:9%}col.c-jid{width:8%}col.c-det{width:23%}col.c-n{width:7.5%}' +
+    'table.stmt th{background:#e8e8e8;font-size:7.5px;text-align:center;white-space:normal;overflow-wrap:normal;line-height:1.2;padding:3px 2px}td.r{text-align:right;white-space:nowrap}th.r{text-align:right}td.dt{white-space:normal;overflow-wrap:anywhere}' +
+    'col.c-date{width:10%}col.c-jid{width:10%}col.c-det{width:20%}col.c-n{width:7.5%}' +
+    'table.noma col.c-date{width:10.5%}table.noma col.c-jid{width:12.5%}table.noma col.c-det{width:21%}table.noma col.c-n{width:8%}' +
     'tr.tot td{font-weight:bold;background:#fff2cc}.neg{color:#b00000}.out{margin-top:12px;font-size:13px;font-weight:bold}.upd{font-size:10px;color:#555;margin-top:4px}';
   function wireStatement(m) {
     const btn = el('md-stmt'), pdf = el('md-stmt-pdf'), box = el('md-stmt-box');
@@ -4944,16 +4947,18 @@
         const st = await api(`/api/models/${m.id}/statement?year=${el('md-stmt-year').value}`);
         lastStatement = st;
         box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(st)}</div>`;
-        pdf.style.display = '';
+        pdf.style.display = ''; const pl = el('md-stmt-pdf-land'); if (pl) pl.style.display = '';
       } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; }
       btn.disabled = false;
     });
     pdf.addEventListener('click', printStatement);
+    const pdfL = el('md-stmt-pdf-land'); if (pdfL) pdfL.addEventListener('click', ev => printStatement(ev, true));
   }
-  function printStatement() {
+  function printStatement(ev, landscape) {
       if (!lastStatement) return;
       const w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups to export the PDF.'); return; }
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Statement — ${esc(lastStatement.name)}</title><style>${STMT_CSS}</style></head><body><div class="h1">MP MODELS</div>${statementTable(lastStatement)}</body></html>`);
+      const page = `@page{size:A4${landscape ? ' landscape' : ''};margin:0}`;
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Statement — ${esc(lastStatement.name)}</title><style>${page}${STMT_CSS}</style></head><body><div class="h1">MP MODELS</div>${statementTable(lastStatement)}</body></html>`);
       w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 350);
   }
   // Statements tab (Lisa 2026-10-20: "live it on the bar") — same statement as the
@@ -4966,21 +4971,23 @@
     if (stWired) return; stWired = true;
     const run = async () => {
       const q = el('st-search').value.trim().toLowerCase(); const box = el('st-box'); const pdf = el('st-pdf');
-      if (!q) { lastStatement = null; pdf.style.display = 'none'; renderStatementRoster(); return; }
+      const pdfL = el('st-pdf-land');
+      if (!q) { lastStatement = null; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; renderStatementRoster(); return; }
       const m = models.find(x => String(x.name || '').toLowerCase() === q) || models.find(x => String(x.nickname || '').toLowerCase() === q) || models.filter(x => String(x.name || '').toLowerCase().startsWith(q))[0];
-      if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; pdf.style.display = 'none'; return; }
+      if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; return; }
       el('st-view').disabled = true; box.innerHTML = '<span style="color:var(--grey);font-size:12px">Loading from the finance app…</span>';
       try {
         const st = await api(`/api/models/${m.id}/statement?year=${el('st-year').value}`);
         lastStatement = st;
         box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(st)}</div>`;
-        pdf.style.display = '';
-      } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; pdf.style.display = 'none'; }
+        pdf.style.display = ''; if (pdfL) pdfL.style.display = '';
+      } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; }
       el('st-view').disabled = false;
     };
     el('st-view').addEventListener('click', run);
     el('st-search').addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
     el('st-pdf').addEventListener('click', printStatement);
+    const stL = el('st-pdf-land'); if (stL) stL.addEventListener('click', ev => printStatement(ev, true));
     el('st-year').addEventListener('change', () => { if (!lastStatement) renderStatementRoster(); });
     renderStatementRoster();
   }
@@ -5143,7 +5150,7 @@
       ${canTerms() ? agreementsHtml(m) : (m && m.deal ? `<p style="font-size:12.5px;color:var(--grey)">Agreement on file: <b>${m.deal === 'freelance' ? 'Freelance' : 'Exclusive'}</b></p>` : '')}
       ${m && canSeeStatement() ? `<div class="field"><label>Model statement <span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0">· what the model and her mother agency see — from the finance app</span></label>
         <div style="display:flex;gap:8px;align-items:center"><select id="md-stmt-year" style="width:auto">${[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => `<option value="${y}">${y}</option>`).join('')}</select>
-        <button class="btn ghost" id="md-stmt">📄 View statement</button><button class="btn ghost" id="md-stmt-pdf" style="display:none">🖨 Print / PDF</button></div>
+        <button class="btn ghost" id="md-stmt">📄 View statement</button><button class="btn ghost" id="md-stmt-pdf" style="display:none">🖨 Print / PDF</button><button class="btn ghost" id="md-stmt-pdf-land" style="display:none">🖨 Landscape</button></div>
         <div id="md-stmt-box" style="margin-top:8px"></div></div>` : ''}
       ${edit ? `<div class="drawer-actions">
         <button class="btn" id="md-save">${m ? 'Save' : 'Add model'}</button>
