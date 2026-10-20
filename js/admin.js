@@ -4971,23 +4971,26 @@
     if (stWired) return; stWired = true;
     const run = async () => {
       const q = el('st-search').value.trim().toLowerCase(); const box = el('st-box'); const pdf = el('st-pdf');
-      const pdfL = el('st-pdf-land');
-      if (!q) { lastStatement = null; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; renderStatementRoster(); return; }
+      const pdfL = el('st-pdf-land'), back = el('st-back');
+      const showBtns = on => { pdf.style.display = on ? '' : 'none'; if (pdfL) pdfL.style.display = on ? '' : 'none'; if (back) back.style.display = on ? '' : 'none'; };
+      if (!q) { lastStatement = null; showBtns(false); renderStatementRoster(); return; }
       const m = models.find(x => String(x.name || '').toLowerCase() === q) || models.find(x => String(x.nickname || '').toLowerCase() === q) || models.filter(x => String(x.name || '').toLowerCase().startsWith(q))[0];
-      if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; return; }
+      if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; showBtns(false); if (back) back.style.display = ''; return; }
       el('st-view').disabled = true; box.innerHTML = '<span style="color:var(--grey);font-size:12px">Loading from the finance app…</span>';
       try {
         const st = await api(`/api/models/${m.id}/statement?year=${el('st-year').value}`);
         lastStatement = st;
         box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(st)}</div>`;
-        pdf.style.display = ''; if (pdfL) pdfL.style.display = '';
-      } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; pdf.style.display = 'none'; if (pdfL) pdfL.style.display = 'none'; }
+        showBtns(true);
+      } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; showBtns(false); if (back) back.style.display = ''; }
       el('st-view').disabled = false;
     };
     el('st-view').addEventListener('click', run);
     el('st-search').addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
     el('st-pdf').addEventListener('click', printStatement);
     const stL = el('st-pdf-land'); if (stL) stL.addEventListener('click', ev => printStatement(ev, true));
+    // Back to the roster (Lisa 2026-10-20: "need back button to go back see other models")
+    const stB = el('st-back'); if (stB) stB.addEventListener('click', () => { el('st-search').value = ''; run(); });
     el('st-year').addEventListener('change', () => { if (!lastStatement) renderStatementRoster(); });
     renderStatementRoster();
   }
