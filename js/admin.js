@@ -4964,7 +4964,7 @@
     if (stWired) return; stWired = true;
     const run = async () => {
       const q = el('st-search').value.trim().toLowerCase(); const box = el('st-box'); const pdf = el('st-pdf');
-      if (!q) { box.innerHTML = '<span style="color:var(--grey);font-size:12.5px">Type a model\'s name first.</span>'; return; }
+      if (!q) { lastStatement = null; pdf.style.display = 'none'; renderStatementRoster(); return; }
       const m = models.find(x => String(x.name || '').toLowerCase() === q) || models.find(x => String(x.nickname || '').toLowerCase() === q) || models.filter(x => String(x.name || '').toLowerCase().startsWith(q))[0];
       if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; pdf.style.display = 'none'; return; }
       el('st-view').disabled = true; box.innerHTML = '<span style="color:var(--grey);font-size:12px">Loading from the finance app…</span>';
@@ -4979,6 +4979,32 @@
     el('st-view').addEventListener('click', run);
     el('st-search').addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
     el('st-pdf').addEventListener('click', printStatement);
+    el('st-year').addEventListener('change', () => { if (!lastStatement) renderStatementRoster(); });
+    renderStatementRoster();
+  }
+  // Roster (Lisa 2026-10-20, like the finance app's "profit per model"): every MP model
+  // and every freelancer with the code and the split in force this year — click a row
+  // to open that model's statement.
+  function currentTerm(m, year) {
+    const rows = (Array.isArray(m.terms) ? m.terms : []).filter(t => !t.from || t.from <= year + '-12-31');
+    return rows.length ? rows[rows.length - 1] : null;
+  }
+  function renderStatementRoster() {
+    const box = el('st-box'); if (!box) return;
+    const year = el('st-year').value || String(new Date().getFullYear());
+    const row = m => { const t = currentTerm(m, year); const split = t ? `${t.modelPct}/${t.maPct}/${t.mpPct}` : '—';
+      return `<div class="st-row" data-name="${esc(m.name || '')}" style="display:flex;gap:10px;align-items:baseline;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer">
+        <span style="font-family:var(--mono,monospace);font-size:12px;font-weight:700;color:#b8860b;min-width:96px">${esc(m.modelCode || ('MP-' + String(m.modelNo || '').padStart(4, '0')))}</span>
+        <span style="font-weight:700">${esc(m.name || '')}</span><span style="color:var(--grey);font-size:12.5px;font-weight:600">${split}</span>
+        ${m.status === 'Left' ? '<span style="margin-left:auto;font-size:11px;color:var(--grey)">left</span>' : ''}</div>`; };
+    const section = (title, list) => `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden">
+      <div style="padding:10px 12px;font-weight:700;border-bottom:1px solid var(--line)">${esc(title)} · ${esc(year)} <span style="color:var(--grey);font-weight:500;font-size:12px">· ${list.length} models · code · name · split M/MA/MP · click a row for the statement</span></div>
+      ${list.map(row).join('') || '<div style="padding:12px;color:var(--grey)">—</div>'}</div>`;
+    const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+    const mp = models.filter(m => m.category === 'MP Models' && m.status !== 'Left').sort(byName);
+    const fl = models.filter(m => m.category === 'Freelancer' && m.status !== 'Left').sort(byName);
+    box.innerHTML = section('MP Models', mp) + section('Freelance', fl);
+    box.querySelectorAll('.st-row').forEach(r => r.addEventListener('click', () => { el('st-search').value = r.dataset.name; el('st-view').click(); }));
   }
   const fmtTermFrom = t => t.from ? t.from : 'from the start';
   function agreementsHtml(m) {
