@@ -115,6 +115,16 @@ async function login(email, password) {
     check('designer cannot change a past agreement (history rule)', edited.status === 400, edited.body);
     const appended = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [tm.body.model.terms[0], { from: '2026-08-01', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30, wht: 5, note: 'went freelance' }] } }, designer);
     check('designer appends a new agreement from a date', appended.status === 200 && appended.body.model.terms.length === 2 && appended.body.model.deal === 'freelance', appended.body);
+    // Deal switch (Lisa 2026-10-20): one record, new agreement + category + new code, old code kept.
+    const swm = await api('/api/models', { method: 'POST', body: { name: 'Switch Test Model', category: 'MP Models', terms: [{ from: '', status: 'exclusive', modelPct: 60, maPct: 0, mpPct: 40, wht: 5 }] } }, master);
+    const swCode = swm.body.model.modelCode;
+    const swF = await api('/api/models/' + swm.body.model.id, { method: 'PATCH', body: { switchDeal: { to: 'freelance', from: '2026-10-01' } } }, booker);
+    check('deal switch → freelance: new 02 code, old code kept, 2 agreements, category Freelancer',
+      swF.status === 200 && /-02-\d{3}$/.test(swF.body.model.modelCode) && swF.body.model.formerCode === swCode && swF.body.model.terms.length === 2 && swF.body.model.deal === 'freelance' && swF.body.model.category === 'Freelancer' && swF.body.model.agency === 'Freelance', swF.body);
+    const swBack = await api('/api/models/' + swm.body.model.id, { method: 'PATCH', body: { switchDeal: { to: 'exclusive', from: '2027-01-01' } } }, booker);
+    check('deal switch back → exclusive: 01 code, both former codes kept, 3 agreements', swBack.status === 200 && /-01-\d{3}$/.test(swBack.body.model.modelCode) && swBack.body.model.formerCode.split(', ').length === 2 && swBack.body.model.terms.length === 3 && swBack.body.model.deal === 'exclusive', swBack.body);
+    const swDup = await api('/api/models/' + swm.body.model.id, { method: 'PATCH', body: { switchDeal: { to: 'freelance', from: '2027-01-01' } } }, booker);
+    check('deal switch refuses a second agreement on the same date', swDup.status === 400, swDup.body);
     const bkModel = await api('/api/models/' + bmod.body.model.id, {}, master);
     check('booker-made model got a default agreement to confirm', !!(bmod.body.model.terms && bmod.body.model.terms.length === 1 && /to be confirmed/.test(bmod.body.model.terms[0].note)), bmod.body.model.terms);
     const auto = await api('/api/models/' + noCat.body.model.id, { method: 'PATCH', body: { modelCode: '__auto__', category: 'Kids' } }, booker);

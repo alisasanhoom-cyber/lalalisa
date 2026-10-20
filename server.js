@@ -564,7 +564,7 @@ function updateScheduleEntry(id, changes) {
 // ---- Model directory (operational contacts only — NEVER money) ---
 const MODEL_FIELDS = ['name', 'nickname', 'sex', 'country', 'status', 'agency', 'category',
   'motherAgency', 'phone', 'whatsapp', 'line', 'email', 'ig', 'visaType', 'visaExpiry',
-  'workPermit', 'arrival', 'departure', 'compCard', 'note', 'age', 'location', 'modelCode', 'scouter'];
+  'workPermit', 'arrival', 'departure', 'compCard', 'note', 'age', 'location', 'modelCode', 'scouter', 'formerCode'];
 // The REAL model code (MP-YY-MM-###) from the master Google Sheet — the same code
 // Aim uses as the product code in FlowAccount. One-time seed maps our models to it.
 const MODEL_CODE_SEED = path.join(__dirname, 'model_code_seed.json');
@@ -1059,6 +1059,33 @@ async function handleApi(req, res) {
       return reply(res, 201, { ok: true, model: m });
     }
     if (method === 'PATCH' && id) {
+      // Deal switch (Lisa 2026-10-20): an MP model goes freelance, or a freelancer signs
+      // exclusive. ONE record, three changes in one save: a NEW agreement from a date
+      // (history stays), the category/agency, and a NEW code in the matching series —
+      // the old code is kept as formerCode so searches and old papers still match.
+      if (body && body.switchDeal && typeof body.switchDeal === 'object') {
+        const to = body.switchDeal.to === 'freelance' ? 'freelance' : (body.switchDeal.to === 'exclusive' ? 'exclusive' : '');
+        const from = /^\d{4}-\d{2}-\d{2}$/.test(String(body.switchDeal.from || '')) ? String(body.switchDeal.from) : '';
+        if (!to || !from) return reply(res, 400, { error: 'Pick freelance or exclusive, and the month it starts.' });
+        const tlist = load(MODELS_FILE); const mm = tlist.find(x => x.id === id);
+        if (!mm) return reply(res, 404, { error: 'Model not found.' });
+        if (body._seen !== undefined && mm.updated && body._seen !== mm.updated) return reply(res, 409, { error: 'Someone else saved this model after you opened it. Close the form, reopen it, then try again.', conflict: true });
+        const prev = Array.isArray(mm.terms) ? mm.terms : [];
+        if (prev.some(t => t.from === from)) return reply(res, 400, { error: 'An agreement already starts on that date — pick another month.' });
+        const last = prev[prev.length - 1];
+        const term = { from, status: to, modelPct: to === 'freelance' ? 70 : 60, maPct: 0, mpPct: to === 'freelance' ? 30 : 40,
+          maPaidTo: '', wht: last ? last.wht : (defaultTerms(mm, user)[0].wht), note: (to === 'freelance' ? 'went freelance' : 'signed exclusive') + ' — split to confirm', by: user.name, at: new Date().toISOString() };
+        const newCat = to === 'freelance' ? 'Freelancer' : 'MP Models';
+        const newCode = nextModelCode(newCat, tlist);
+        if (newCode && mm.modelCode && mm.modelCode !== newCode) mm.formerCode = [mm.formerCode, mm.modelCode].filter(Boolean).join(', ').slice(0, 200);
+        if (newCode) mm.modelCode = newCode;
+        mm.category = newCat; mm.agency = to === 'freelance' ? 'Freelance' : 'MP';
+        mm.terms = sanitizeTerms([...prev, term], user); mm.deal = mm.terms[mm.terms.length - 1].status;
+        mm.updated = new Date().toISOString() + '#' + crypto.randomBytes(3).toString('hex');
+        save(MODELS_FILE, tlist);
+        logActivity(user, 'model deal switch', `${mm.name}: ${to} from ${from} · code ${mm.modelCode}${mm.formerCode ? ' (was ' + mm.formerCode + ')' : ''}`);
+        return reply(res, 200, { ok: true, model: mm });
+      }
       if (body && body.terms !== undefined) {
         // The whole team may add an agreement (Lisa 2026-10-14) — history stays append-only.
         const tlist = load(MODELS_FILE); const mm = tlist.find(x => x.id === id);

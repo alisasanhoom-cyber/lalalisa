@@ -4808,7 +4808,7 @@
       if (sex && !sexMatch(m, sex)) return false;
       if (country && !(m.country || '').toLowerCase().includes(country)) return false;
       if (mStatus && (m.status || '') !== mStatus) return false;
-      if (term) return [m.name, m.nickname, m.country, m.phone, m.line, m.email, m.location, m.modelCode, ('mp-' + String(m.modelNo || '').padStart(4, '0')), String(m.modelNo || '')].join(' ').toLowerCase().includes(term);
+      if (term) return [m.name, m.nickname, m.country, m.phone, m.line, m.email, m.location, m.modelCode, m.formerCode, ('mp-' + String(m.modelNo || '').padStart(4, '0')), String(m.modelNo || '')].join(' ').toLowerCase().includes(term);
       return true;
     });
     // Order by real code: newest YEAR first, then category, then running number
@@ -4934,7 +4934,13 @@
         </div>
         <div class="field" style="margin:0 0 8px"><label>Note</label><input id="ag-note" placeholder="e.g. pays own expenses / special deal to keep her"></div>
         <div style="display:flex;gap:10px;align-items:center"><span id="ag-total" style="font-size:12px;font-weight:700">= 100%</span>${rows.length ? '<button class="btn ghost" id="ag-add">Add agreement</button>' : '<span style="font-size:11.5px;color:var(--grey)">Saved together with the model.</span>'}</div>
-      </div></div>`;
+      </div>
+      ${m && m.id ? `<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)">
+        <div style="font-size:12px;font-weight:600;color:var(--grey);margin-bottom:6px">Deal change <span style="font-weight:400">· new agreement + category + a new code in one go; the old code stays as "former code"</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="month" id="sw-from" style="width:150px">
+          <button class="btn ghost" id="sw-go">${(m.deal === 'exclusive' || (!m.deal && cat === 'MP Models')) ? 'Went freelance from this month' : 'Signed exclusive (MP) from this month'}</button>
+        </div></div>` : ''}</div>`;
   }
   function readAgreement() {
     const num = id => Math.min(100, Math.max(0, parseFloat(el(id).value) || 0));
@@ -4956,6 +4962,16 @@
         const res = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ terms: [...(m.terms || []), r], _seen: m.updated || '' }) });
         Object.assign(m, res.model); toast('Agreement added'); openModelEdit(m.id);
       } catch (e) { if (e.message !== 'unauthorized') alert(e.message || 'Could not add the agreement.'); }
+    });
+    if (m && el('sw-go')) el('sw-go').addEventListener('click', async () => {
+      const ym = el('sw-from').value; if (!ym) { alert('Pick the month the change starts.'); return; }
+      const toFree = (m.deal === 'exclusive' || (!m.deal && m.category === 'MP Models'));
+      const to = toFree ? 'freelance' : 'exclusive';
+      if (!confirm(`${m.name}: ${toFree ? 'goes FREELANCE' : 'signs EXCLUSIVE with MP'} from ${ym}.\n\nThis will:\n• add a new agreement from that month (${toFree ? '70/0/30' : '60/0/40'} — change it after if the deal differs)\n• move the model to ${toFree ? 'Freelancer' : 'MP Models'}\n• give a new ${toFree ? '02' : '01'}-series code; the old code is kept as former code\n\nContinue?`)) return;
+      try {
+        const res = await api('/api/models/' + m.id, { method: 'PATCH', body: JSON.stringify({ switchDeal: { to, from: ym + '-01' }, _seen: m.updated || '' }) });
+        Object.assign(m, res.model); toast(`${m.name} is now ${toFree ? 'freelance' : 'exclusive'} · code ${m.modelCode}`); renderModels(); openModelEdit(m.id);
+      } catch (e) { if (e.message !== 'unauthorized') alert(e.message || 'Could not switch.'); }
     });
     if (m && role === 'master') document.querySelectorAll('.ag-del').forEach(b => b.addEventListener('click', async () => {
       const i = +b.getAttribute('data-i'); const t = m.terms[i];
@@ -4980,6 +4996,7 @@
           <input id="md-modelCode" value="${esc((m && m.modelCode) || '')}" placeholder="e.g. MP26-11-013" ${edit ? '' : 'readonly'} style="flex:1">
           ${edit && m && !m.modelCode ? '<button class="btn ghost" id="md-gencode" title="Mints the next running code for this model\'s category (MPyy-cat-nnn)">⚙ Auto code</button>' : ''}
         </div></div>
+      ${m && m.formerCode ? `<p style="margin:-8px 0 12px;color:var(--grey);font-size:11.5px">Former code: ${esc(m.formerCode)}</p>` : ''}
       ${m && !m.modelCode && m.modelNo ? `<p style="margin:-8px 0 12px;color:#b06a1a;font-size:11.5px">No real code yet — temporary ref MP-${String(m.modelNo).padStart(4, '0')}. Set the Category, then press ⚙ Auto code.</p>` : ''}
       <div class="field two">
         ${modelField('Name', 'name', m && m.name, 'as bookers type it')}
