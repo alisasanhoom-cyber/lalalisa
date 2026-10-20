@@ -997,11 +997,14 @@ async function handleApi(req, res) {
       .filter(m => String(m.scouter || '').toLowerCase() === String(user.email || '').toLowerCase())
       .map(m => String(m.name || '').trim().toLowerCase()).filter(Boolean));
 
-  // --- MODEL STATEMENT (read-only mirror of the finance app's model-facing statement) ---
+  // Who may open model statements (Lisa 2026-10-20: "just Tawa, Wolf and Aim" + the
+// Director). Aim works through the Admin login. Override with STATEMENT_USERS env (comma list).
+const STATEMENT_USERS = (process.env.STATEMENT_USERS || 'lisa@mpmodelsbkk.com,admin@mpmodelsbkk.com,mpbooker1@mpmodelsbkk.com,scouter@mpmodelsbkk.com').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+// --- MODEL STATEMENT (read-only mirror of the finance app's model-facing statement) ---
   // GET /api/models/<id>/statement?year=2026 — Director, Admin, bookers and the scouter
   // (his own models only). The designer does not see money.
   if (resource === 'models' && parts[3] === 'statement' && method === 'GET') {
-    if (!['master', 'admin', 'booker', 'scouter'].includes(user.role)) return reply(res, 403, { error: 'Not allowed.' });
+    if (user.role !== 'master' && !STATEMENT_USERS.includes(String(user.email || '').toLowerCase())) return reply(res, 403, { error: 'Not allowed.' });
     const m = load(MODELS_FILE).find(x => x.id === parts[2]);
     if (!m) return reply(res, 404, { error: 'Model not found.' });
     if (isScouter && !scouterModelNames().has(String(m.name || '').trim().toLowerCase())) return reply(res, 403, { error: 'Not your model.' });

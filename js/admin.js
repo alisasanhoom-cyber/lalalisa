@@ -4911,7 +4911,9 @@
   ];
   const canTerms = () => canEditModels();   // whole team adds agreements (Lisa 2026-10-14); history stays append-only
   // Model statement (read-only mirror from the finance app): Director, Admin, bookers, scouter.
-  const canSeeStatement = () => ['master', 'admin', 'booker', 'scouter'].includes(role);
+  // Lisa 2026-10-20: statements are for the Director, Tawa, Wolf and Aim (Admin login) only.
+  const STATEMENT_USERS = ['lisa@mpmodelsbkk.com', 'admin@mpmodelsbkk.com', 'mpbooker1@mpmodelsbkk.com', 'scouter@mpmodelsbkk.com'];
+  const canSeeStatement = () => role === 'master' || STATEMENT_USERS.includes((sessionStorage.getItem('mp_admin_email') || '').toLowerCase());
   let lastStatement = null;
   function statementTable(st) {
     const n2 = v => (v === undefined || v === null || v === 0) ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -4998,11 +5000,15 @@
         <span style="font-weight:700">${esc(m.name || '')}</span><span style="color:var(--grey);font-size:12.5px;font-weight:600">${split}</span>
         ${m.status === 'Left' ? '<span style="margin-left:auto;font-size:11px;color:var(--grey)">left</span>' : ''}</div>`; };
     const section = (title, list) => `<div style="background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden">
-      <div style="padding:10px 12px;font-weight:700;border-bottom:1px solid var(--line)">${esc(title)} · ${esc(year)} <span style="color:var(--grey);font-weight:500;font-size:12px">· ${list.length} models · code · name · split M/MA/MP · click a row for the statement</span></div>
+      <div style="padding:10px 12px;font-weight:700;border-bottom:1px solid var(--line)">${esc(title)} · ${esc(year)} <span style="color:var(--grey);font-weight:500;font-size:12px">· ${list.length} with jobs in ${esc(year)} · code · name · split M/MA/MP · click a row for the statement</span></div>
       ${list.map(row).join('') || '<div style="padding:12px;color:var(--grey)">—</div>'}</div>`;
     const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
-    const mp = models.filter(m => m.category === 'MP Models' && m.status !== 'Left').sort(byName);
-    const fl = models.filter(m => m.category === 'Freelancer' && m.status !== 'Left').sort(byName);
+    // Only models who WORKED in that year (a job in the tracker). Wolf has no job list,
+    // so he sees all of his models.
+    const worked = new Set(jobs.filter(j => (j.month || '').startsWith(year)).flatMap(jobNamesOf).map(n => n.toLowerCase()));
+    const inYear = m => !jobs.length || worked.has(String(m.name || '').toLowerCase()) || (m.nickname && worked.has(String(m.nickname).toLowerCase()));
+    const mp = models.filter(m => m.category === 'MP Models' && m.status !== 'Left' && inYear(m)).sort(byName);
+    const fl = models.filter(m => m.category === 'Freelancer' && m.status !== 'Left' && inYear(m)).sort(byName);
     box.innerHTML = section('MP Models', mp) + section('Freelance', fl);
     box.querySelectorAll('.st-row').forEach(r => r.addEventListener('click', () => { el('st-search').value = r.dataset.name; el('st-view').click(); }));
   }

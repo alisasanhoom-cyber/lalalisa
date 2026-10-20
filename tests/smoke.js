@@ -114,7 +114,9 @@ async function login(email, password) {
     const stDes = await api('/api/models/' + tmId + '/statement?year=2026', {}, designer);
     check('designer cannot open a model statement (403)', stDes.status === 403, stDes.status);
     const stBk = await api('/api/models/' + tmId + '/statement?year=2026', {}, booker);
-    check('booker statement route answers 200 or 502', stBk.status === 200 || stBk.status === 502, stBk.status);
+    check('a booker not on the statement list is refused (403)', stBk.status === 403, stBk.status);
+    const stMa = await api('/api/models/' + tmId + '/statement?year=2026', {}, master);
+    check('Director statement route answers 200 or 502', stMa.status === 200 || stMa.status === 502, stMa.status);
     const stNo = await api('/api/models/nope/statement', {}, master);
     check('statement for unknown model is 404', stNo.status === 404, stNo.status);
     const bkTerms = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 }] } }, booker);
