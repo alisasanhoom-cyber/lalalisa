@@ -2138,9 +2138,11 @@
     const colOf = c => c.rep.status === 'declined' ? 'declined'
       : c.rep.status === 'postponed' ? 'postponed' : c.stage;
     cards.forEach(c => { (groups[colOf(c)] || groups[lastKey]).push(c); });
-    // Order each column by time — earliest first, so bookers see what's first / next.
-    STAGE_KEYS.forEach(k => groups[k].sort((a, b) =>
-      parseTimeMin(a.rep.timeStart) - parseTimeMin(b.rep.timeStart) || (a.dates[0] || '').localeCompare(b.dates[0] || '')));
+    // One day: order each column by time, earliest first. All days (Lisa 2026-10-20,
+    // "count from 1 to 30"): by DATE first, then time — the month reads top to bottom.
+    STAGE_KEYS.forEach(k => groups[k].sort((a, b) => boardAll
+      ? ((a.dates[0] || '').localeCompare(b.dates[0] || '') || parseTimeMin(a.rep.timeStart) - parseTimeMin(b.rep.timeStart))
+      : (parseTimeMin(a.rep.timeStart) - parseTimeMin(b.rep.timeStart) || (a.dates[0] || '').localeCompare(b.dates[0] || ''))));
     const cols = BOARD_STAGES.map(([k, label, color]) => {
       const list = groups[k];
       if (k === 'priority' && !list.length) return '';   // Priority column only appears when there's an admin task that day
