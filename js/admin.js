@@ -4922,7 +4922,7 @@
     return `<div class="h2">MODEL: ${esc(String(st.name || '').toUpperCase())}${st.code ? '&nbsp;&nbsp; CODE: ' + esc(st.code) : ''}</div>
       <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Split: model ${pct(st.split.model)} / MA ${pct(st.split.ma)} / MP ${pct(st.split.mp)}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
       <table class="stmt"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
-      <div class="out">OUTSTANDING BALANCE: ${esc(st.owes)} ${n2(Math.abs(st.balance || 0))}</div>
+      <div class="out">OUTSTANDING BALANCE: ${(st.balance || 0) < 0 ? '- ' : ''}${n2(Math.abs(st.balance || 0))}</div>
       <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · Morgan &amp; Preston Models Bangkok</div>`;
   }
   const STMT_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:12mm 14mm 12mm 12mm;font-size:9.5px;font-variant-numeric:tabular-nums lining-nums}@page{size:A4;margin:0}' +
