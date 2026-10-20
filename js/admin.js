@@ -4967,7 +4967,13 @@
   async function openStatements() {
     if (!models.length) await loadModels();
     const dl = el('st-list'); if (dl) dl.innerHTML = models.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(m => `<option value="${esc(m.name || '')}">${esc(m.modelCode || '')}</option>`).join('');
-    const ys = el('st-year'); if (ys && !ys.options.length) { const y = new Date().getFullYear(); ys.innerHTML = [y, y - 1].map(v => `<option value="${v}">${v}</option>`).join(''); }
+    // Years = the years that actually have tracker rows (the 2025 tracker lives in the
+    // Drive sheets, not here, so offering 2025 only produced an empty roster — Lisa 2026-10-20).
+    const ys = el('st-year'); if (ys && !ys.options.length) {
+      const years = Array.from(new Set(jobs.map(j => String(j.month || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y)))).sort().reverse();
+      const cur = String(new Date().getFullYear()); if (!years.length) years.push(cur);
+      ys.innerHTML = years.map(v => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`).join('');
+    }
     if (stWired) return; stWired = true;
     const run = async () => {
       const q = el('st-search').value.trim().toLowerCase(); const box = el('st-box'); const pdf = el('st-pdf');
@@ -5019,6 +5025,8 @@
     const inYear = m => !jobs.length || worked.has(String(m.name || '').toLowerCase()) || (m.nickname && worked.has(String(m.nickname).toLowerCase()));
     const mp = models.filter(m => m.category === 'MP Models' && m.status !== 'Left' && inYear(m)).sort(byName);
     const fl = models.filter(m => m.category === 'Freelancer' && m.status !== 'Left' && inYear(m)).sort(byName);
+    const anyJobs = jobs.some(j => (j.month || '').startsWith(year));
+    if (jobs.length && !anyJobs) { box.innerHTML = `<div style="padding:14px;color:var(--grey);background:#fff;border:1px solid var(--line);border-radius:10px">No jobs in the tracker for ${esc(year)} — statements here start from the first year in the app (2026). Earlier years are in the Job Tracker sheets on Drive.</div>`; return; }
     box.innerHTML = section('MP Models', mp) + section('Freelance', fl);
     box.querySelectorAll('.st-row').forEach(r => r.addEventListener('click', () => { el('st-search').value = r.dataset.name; el('st-view').click(); }));
   }
