@@ -3837,6 +3837,8 @@
       if (el('view-requests')) el('view-requests').style.display = v === 'requests' ? 'block' : 'none';
       if (v === 'requests') loadRequests();
       el('view-models').style.display = v === 'models' ? 'block' : 'none';
+      if (el('view-statements')) el('view-statements').style.display = v === 'statements' ? 'block' : 'none';
+      if (v === 'statements') openStatements();
       el('view-activity').style.display = v === 'activity' ? 'block' : 'none';
       if (el('view-income')) el('view-income').style.display = v === 'income' ? 'block' : 'none';
       if (el('view-clients')) el('view-clients').style.display = v === 'clients' ? 'block' : 'none';
@@ -4944,12 +4946,39 @@
       } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; }
       btn.disabled = false;
     });
-    pdf.addEventListener('click', () => {
+    pdf.addEventListener('click', printStatement);
+  }
+  function printStatement() {
       if (!lastStatement) return;
       const w = window.open('', '_blank'); if (!w) { alert('Allow pop-ups to export the PDF.'); return; }
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Statement — ${esc(lastStatement.name)}</title><style>${STMT_CSS}</style></head><body><div class="h1">MP MODELS</div>${statementTable(lastStatement)}</body></html>`);
       w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 350);
-    });
+  }
+  // Statements tab (Lisa 2026-10-20: "live it on the bar") — same statement as the
+  // model record, reached from the main bar: type a name, pick the year, view / print.
+  let stWired = false;
+  async function openStatements() {
+    if (!models.length) await loadModels();
+    const dl = el('st-list'); if (dl) dl.innerHTML = models.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(m => `<option value="${esc(m.name || '')}">${esc(m.modelCode || '')}</option>`).join('');
+    const ys = el('st-year'); if (ys && !ys.options.length) { const y = new Date().getFullYear(); ys.innerHTML = [y, y - 1].map(v => `<option value="${v}">${v}</option>`).join(''); }
+    if (stWired) return; stWired = true;
+    const run = async () => {
+      const q = el('st-search').value.trim().toLowerCase(); const box = el('st-box'); const pdf = el('st-pdf');
+      if (!q) { box.innerHTML = '<span style="color:var(--grey);font-size:12.5px">Type a model\'s name first.</span>'; return; }
+      const m = models.find(x => String(x.name || '').toLowerCase() === q) || models.find(x => String(x.nickname || '').toLowerCase() === q) || models.filter(x => String(x.name || '').toLowerCase().startsWith(q))[0];
+      if (!m) { box.innerHTML = `<span style="color:var(--declined);font-size:12.5px">No model called “${esc(el('st-search').value)}” in the directory.</span>`; pdf.style.display = 'none'; return; }
+      el('st-view').disabled = true; box.innerHTML = '<span style="color:var(--grey);font-size:12px">Loading from the finance app…</span>';
+      try {
+        const st = await api(`/api/models/${m.id}/statement?year=${el('st-year').value}`);
+        lastStatement = st;
+        box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(st)}</div>`;
+        pdf.style.display = '';
+      } catch (e) { box.innerHTML = `<span style="color:var(--declined);font-size:12px">${esc(e.message || 'Could not load the statement.')}</span>`; pdf.style.display = 'none'; }
+      el('st-view').disabled = false;
+    };
+    el('st-view').addEventListener('click', run);
+    el('st-search').addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
+    el('st-pdf').addEventListener('click', printStatement);
   }
   const fmtTermFrom = t => t.from ? t.from : 'from the start';
   function agreementsHtml(m) {
@@ -5332,6 +5361,7 @@
   function start() {
     calMonth = todayLocal().slice(0, 7); showApp(); loadAll().catch(() => {});
     // Scouter's home is the Mother-Agency ledger (Job Tracker is hidden for them).
+    if (!canSeeStatement()) { const t = el('tab-statements'); if (t) t.style.display = 'none'; }
     if (role === 'scouter') { const t = document.querySelector('.tab[data-view="mac"]'); if (t) t.click(); }
   }
   if (token) api('/api/jobs').then(() => start()).catch(() => showLogin());

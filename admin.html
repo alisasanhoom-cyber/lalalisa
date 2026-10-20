@@ -580,6 +580,7 @@
       <button class="tab" data-view="schedule">Schedule</button>
       <button class="tab hide-scouter" data-view="requests">Requests<span id="req-badge" class="req-badge" style="display:none"></span></button>
       <button class="tab hide-scouter" data-view="models">Models</button>
+      <button class="tab" data-view="statements" id="tab-statements">Statements</button>
       <button class="tab revenue-only manager-only hide-scouter" data-view="clients">Clients</button>
       <button class="tab revenue-only manager-only hide-scouter" data-view="income">Other Income</button>
       <button class="tab mac-tab" data-view="mac">Mother Agency</button>
@@ -711,6 +712,17 @@
     </div>
 
     <!-- ACTIVITY (whole team) -->
+    <div class="wrap" id="view-statements" style="display:none">
+      <div class="controls">
+        <input type="search" id="st-search" list="st-list" placeholder="Type the model's name…" autocomplete="off" style="min-width:260px">
+        <datalist id="st-list"></datalist>
+        <select id="st-year"></select>
+        <button class="btn" id="st-view">📄 View statement</button>
+        <button class="btn ghost" id="st-pdf" style="display:none">🖨 Print / PDF</button>
+      </div>
+      <p style="color:var(--grey);font-size:12.5px;margin:6px 0 10px">What the model and her mother agency see — jobs, split, advances, running balance — live from the finance app. Same statement as inside the model's record.</p>
+      <div id="st-box"></div>
+    </div>
     <div class="wrap" id="view-activity" style="display:none">
       <div class="controls">
         <select id="a-type">
