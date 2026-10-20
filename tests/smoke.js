@@ -109,6 +109,14 @@ async function login(email, password) {
     const tm = await api('/api/models', { method: 'POST', body: { name: 'Terms Test Model', category: 'MP Models', terms: [{ from: '', status: 'exclusive', modelPct: 60, maPct: 0, mpPct: 40, wht: 5 }] } }, master);
     check('model created with its first agreement', tm.status === 201 && tm.body.model.terms.length === 1 && tm.body.model.deal === 'exclusive', tm.body);
     const tmId = tm.body.model && tm.body.model.id;
+    // Model statement mirror: money-free roles are refused; bookers get a reply from the finance
+    // link (200) or a clean 502 when the finance app is not reachable from the test box.
+    const stDes = await api('/api/models/' + tmId + '/statement?year=2026', {}, designer);
+    check('designer cannot open a model statement (403)', stDes.status === 403, stDes.status);
+    const stBk = await api('/api/models/' + tmId + '/statement?year=2026', {}, booker);
+    check('booker statement route answers 200 or 502', stBk.status === 200 || stBk.status === 502, stBk.status);
+    const stNo = await api('/api/models/nope/statement', {}, master);
+    check('statement for unknown model is 404', stNo.status === 404, stNo.status);
     const bkTerms = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'freelance', modelPct: 70, maPct: 0, mpPct: 30 }] } }, booker);
     check('booker cannot rewrite a past agreement (history rule)', bkTerms.status === 400, bkTerms.body);
     const edited = await api('/api/models/' + tmId, { method: 'PATCH', body: { terms: [{ from: '', status: 'exclusive', modelPct: 70, maPct: 0, mpPct: 30, wht: 5 }] } }, designer);

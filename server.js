@@ -56,6 +56,9 @@ function loadSettings() {
 const ASSET_VERSION = Date.now().toString(36);
 // Shared secret so the SEPARATE Finance app can read revenue + models read-only.
 const SERVICE_KEY = process.env.SERVICE_KEY || '';
+// The finance app serves each model's statement (jobs, split, advances, balance) to this
+// app so Aim, Tawa and Wolf can check it without seeing MP's internal costs (Lisa 2026-10-20).
+const FINANCE_URL = (process.env.FINANCE_URL || 'https://finance.mpmodelsbkk.com').replace(/\/$/, '');
 
 // Extra client / confirmation fields a booker fills in for the quotation,
 // contract and confirmation form (beyond the basic tracker columns).
@@ -993,6 +996,23 @@ async function handleApi(req, res) {
     load(MODELS_FILE)
       .filter(m => String(m.scouter || '').toLowerCase() === String(user.email || '').toLowerCase())
       .map(m => String(m.name || '').trim().toLowerCase()).filter(Boolean));
+
+  // --- MODEL STATEMENT (read-only mirror of the finance app's model-facing statement) ---
+  // GET /api/models/<id>/statement?year=2026 — Director, Admin, bookers and the scouter
+  // (his own models only). The designer does not see money.
+  if (resource === 'models' && parts[3] === 'statement' && method === 'GET') {
+    if (!['master', 'admin', 'booker', 'scouter'].includes(user.role)) return reply(res, 403, { error: 'Not allowed.' });
+    const m = load(MODELS_FILE).find(x => x.id === parts[2]);
+    if (!m) return reply(res, 404, { error: 'Model not found.' });
+    if (isScouter && !scouterModelNames().has(String(m.name || '').trim().toLowerCase())) return reply(res, 403, { error: 'Not your model.' });
+    const year = (new URL(req.url, 'http://x').searchParams.get('year') || String(new Date().getFullYear())).slice(0, 4);
+    if (!SERVICE_KEY) return reply(res, 502, { error: 'Finance link not configured.' });
+    try {
+      const r = await fetch(FINANCE_URL + '/api/statement/' + encodeURIComponent(m.name) + '?year=' + encodeURIComponent(year), { headers: { 'x-service-key': SERVICE_KEY } });
+      const data = await r.json().catch(() => ({ error: 'Bad reply from the finance app.' }));
+      return reply(res, r.ok ? 200 : 502, data);
+    } catch (e) { return reply(res, 502, { error: 'Cannot reach the finance app: ' + e.message }); }
+  }
 
   // --- MODEL DIRECTORY (contacts only, NO money) ----------------
   if (resource === 'models') {
