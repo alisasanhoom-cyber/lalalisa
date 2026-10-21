@@ -4918,16 +4918,18 @@
   function statementTable(st) {
     const n2 = v => (v === undefined || v === null || v === 0) ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const pct = v => (Math.round((+v || 0) * 10) / 10) + '%';
-    // No mother agency → no MA column (Lisa 2026-10-20).
+    // No mother agency → no MA column (Lisa 2026-10-20). MP's share is NEVER printed on the
+    // model-facing statement (Lisa 2026-10-21) — it reads as profit and starts arguments;
+    // our side stays in the finance app.
     const hasMA = !!st.motherAgency || (+st.split.ma || 0) > 0 || (+(st.totals || {}).ma || 0) > 0;
-    const head = `<tr><th>DATE</th><th>JOB ID</th><th>DETAILS</th><th class="r">GROSS<br>100%</th><th class="r">MODEL<br>${pct(st.split.model)}</th><th class="r">HOLDING TAX<br>${pct(st.wht)}</th><th class="r">MODEL<br>NET</th>${hasMA ? `<th class="r">MA<br>${pct(st.split.ma)}</th>` : ''}<th class="r">MP<br>${pct(st.split.mp)}</th><th class="r">EXPENSES /<br>ADVANCE</th><th class="r">BALANCE</th></tr>`;
-    const body = (st.rows || []).map(x => `<tr><td class="dt">${esc(x.date || '')}</td><td>${esc(x.jobId || '')}</td><td class="d">${esc(x.details || '')}</td><td class="r">${n2(x.gross)}</td><td class="r">${n2(x.model)}</td><td class="r">${n2(x.tax)}</td><td class="r">${n2(x.net)}</td>${hasMA ? `<td class="r">${n2(x.ma)}</td>` : ''}<td class="r">${n2(x.mp)}</td><td class="r">${n2(x.advance)}</td><td class="r${x.balance < 0 ? ' neg' : ''}">${n2(x.balance)}</td></tr>`).join('')
-      || `<tr><td colspan="${hasMA ? 11 : 10}" style="text-align:center;color:#888">No jobs or advances in this period</td></tr>`;
+    const head = `<tr><th>DATE</th><th>JOB ID</th><th>DETAILS</th><th class="r">GROSS<br>100%</th><th class="r">MODEL<br>${pct(st.split.model)}</th><th class="r">HOLDING TAX<br>${pct(st.wht)}</th><th class="r">MODEL<br>NET</th>${hasMA ? `<th class="r">MA<br>${pct(st.split.ma)}</th>` : ''}<th class="r">EXPENSES /<br>ADVANCE</th><th class="r">BALANCE</th></tr>`;
+    const body = (st.rows || []).map(x => `<tr><td class="dt">${esc(x.date || '')}</td><td>${esc(x.jobId || '')}</td><td class="d">${esc(x.details || '')}</td><td class="r">${n2(x.gross)}</td><td class="r">${n2(x.model)}</td><td class="r">${n2(x.tax)}</td><td class="r">${n2(x.net)}</td>${hasMA ? `<td class="r">${n2(x.ma)}</td>` : ''}<td class="r">${n2(x.advance)}</td><td class="r${x.balance < 0 ? ' neg' : ''}">${n2(x.balance)}</td></tr>`).join('')
+      || `<tr><td colspan="${hasMA ? 10 : 9}" style="text-align:center;color:#888">No jobs or advances in this period</td></tr>`;
     const t = st.totals || {};
-    const tot = `<tr class="tot"><td></td><td></td><td class="d">Total:</td><td class="r">${n2(t.gross)}</td><td class="r">${n2(t.model)}</td><td class="r">${n2(t.tax)}</td><td class="r">${n2(t.net)}</td>${hasMA ? `<td class="r">${n2(t.ma)}</td>` : ''}<td class="r">${n2(t.mp)}</td><td class="r">${n2(t.advance)}</td><td class="r${st.balance < 0 ? ' neg' : ''}">${n2(st.balance)}</td></tr>`;
+    const tot = `<tr class="tot"><td></td><td></td><td class="d">Total:</td><td class="r">${n2(t.gross)}</td><td class="r">${n2(t.model)}</td><td class="r">${n2(t.tax)}</td><td class="r">${n2(t.net)}</td>${hasMA ? `<td class="r">${n2(t.ma)}</td>` : ''}<td class="r">${n2(t.advance)}</td><td class="r${st.balance < 0 ? ' neg' : ''}">${n2(st.balance)}</td></tr>`;
     return `<div class="h2">MODEL: ${esc(String(st.name || '').toUpperCase())}${st.code ? '&nbsp;&nbsp; CODE: ' + esc(st.code) : ''}</div>
-      <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Split: model ${pct(st.split.model)}${hasMA ? ' / MA ' + pct(st.split.ma) : ''} / MP ${pct(st.split.mp)}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
-      <table class="stmt${hasMA ? '' : ' noma'}"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n">${hasMA ? '<col class="c-n">' : ''}<col class="c-n"><col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
+      <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Model's share ${pct(st.split.model)}${hasMA ? ' / MA ' + pct(st.split.ma) : ''}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
+      <table class="stmt${hasMA ? '' : ' noma'}"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n">${hasMA ? '<col class="c-n">' : ''}<col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
       <div class="out">OUTSTANDING BALANCE: ${(st.balance || 0) < 0 ? '- ' : ''}${n2(Math.abs(st.balance || 0))}</div>
       <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · Morgan &amp; Preston Models Bangkok</div>`;
   }
@@ -4935,8 +4937,8 @@
     '.h1{font-size:16px;font-weight:bold;margin:0 0 2px}.h2{font-size:12px;font-weight:bold;margin:0}.h3{font-size:11px;color:#333;margin:2px 0}' +
     'table.stmt{width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed}table.stmt th,table.stmt td{border:1px solid #bbb;padding:3px 4px;vertical-align:top;overflow-wrap:anywhere}' +
     'table.stmt th{background:#e8e8e8;font-size:7.5px;text-align:center;white-space:normal;overflow-wrap:normal;line-height:1.2;padding:3px 2px}td.r{text-align:right;white-space:nowrap}th.r{text-align:right}td.dt{white-space:normal;overflow-wrap:anywhere}' +
-    'col.c-date{width:10%}col.c-jid{width:10%}col.c-det{width:20%}col.c-n{width:7.5%}' +
-    'table.noma col.c-date{width:10.5%}table.noma col.c-jid{width:12.5%}table.noma col.c-det{width:21%}table.noma col.c-n{width:8%}' +
+    'col.c-date{width:10%}col.c-jid{width:10%}col.c-det{width:27.5%}col.c-n{width:7.5%}' +
+    'table.noma col.c-date{width:10.5%}table.noma col.c-jid{width:12.5%}table.noma col.c-det{width:29%}table.noma col.c-n{width:8%}' +
     'tr.tot td{font-weight:bold;background:#fff2cc}.neg{color:#b00000}.out{margin-top:12px;font-size:13px;font-weight:bold}.upd{font-size:10px;color:#555;margin-top:4px}';
   function wireStatement(m) {
     const btn = el('md-stmt'), pdf = el('md-stmt-pdf'), box = el('md-stmt-box');
