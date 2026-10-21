@@ -4915,7 +4915,12 @@
   const STATEMENT_USERS = ['lisa@mpmodelsbkk.com', 'admin@mpmodelsbkk.com', 'mpbooker1@mpmodelsbkk.com', 'scouter@mpmodelsbkk.com'];
   const canSeeStatement = () => role === 'master' || STATEMENT_USERS.includes((sessionStorage.getItem('mp_admin_email') || '').toLowerCase());
   let lastStatement = null;
-  function statementTable(st) {
+  // Two versions (Lisa 2026-10-21, to Wolf): 'todate' = facts to date only; 'full' = the same
+  // plus the CONTRACT OUTLOOK (expected expenses to the end of the contract).
+  let stmtMode = 'todate';
+  const stmtModeLabel = m => m === 'full' ? 'Full contract — expectation to the end of the contract' : 'Up to date';
+  function statementTable(st, mode) {
+    mode = mode || stmtMode;
     const n2 = v => (v === undefined || v === null || v === 0) ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const pct = v => (Math.round((+v || 0) * 10) / 10) + '%';
     // No mother agency → no MA column (Lisa 2026-10-20). MP's share is NEVER printed on the
@@ -4931,7 +4936,7 @@
       <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Model's share ${pct(st.split.model)}${hasMA ? ' / MA ' + pct(st.split.ma) : ''}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
       <table class="stmt${hasMA ? '' : ' noma'}"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n">${hasMA ? '<col class="c-n">' : ''}<col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
       <div class="out">OUTSTANDING BALANCE: ${(st.balance || 0) < 0 ? '- ' : ''}${n2(Math.abs(st.balance || 0))}</div>
-      ${st.outlook ? (ol => `<div class="olk"><div class="olk-h">CONTRACT OUTLOOK <span>estimate, as of ${esc(ol.asOf)} — the lines above are the facts</span></div>
+      ${st.outlook && mode === 'full' ? (ol => `<div class="olk"><div class="olk-h">CONTRACT OUTLOOK <span>estimate, as of ${esc(ol.asOf)} — the lines above are the facts</span></div>
         <table class="olk-t">
           <tr><td>Contract</td><td class="r">${esc(ol.contractStart)} → ${esc(ol.contractEnd)} · ${ol.weeksTotal} weeks, ${ol.weeksLeft} left</td></tr>
           <tr><td>Pocket money ahead</td><td class="r">${ol.weeksLeft} weeks × ${n2(ol.pocketRate)} = ${n2(ol.pocketAhead) || '0.00'}</td></tr>
@@ -4941,7 +4946,7 @@
           <tr><td>Earned so far (your net)</td><td class="r">${n2(ol.earnedNet) || '0.00'}</td></tr>
           <tr class="sum"><td>${ol.stillToCover > 0 ? 'Still to cover' : 'Covered — ahead by'}</td><td class="r">${n2(Math.abs(ol.stillToCover)) || '0.00'}${ol.stillToCover > 0 ? ` → about ${n2(ol.grossNeeded)} gross at ${pct(st.split.model)}` : ''}</td></tr>
         </table></div>`)(st.outlook) : ''}
-      <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · Morgan &amp; Preston Models Bangkok</div>`;
+      <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · ${esc(stmtModeLabel(mode))} · Morgan &amp; Preston Models Bangkok</div>`;
   }
   const STMT_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:12mm 14mm 12mm 12mm;font-size:9.5px;font-variant-numeric:tabular-nums lining-nums}' +
     '.h1{font-size:16px;font-weight:bold;margin:0 0 2px}.h2{font-size:12px;font-weight:bold;margin:0}.h3{font-size:11px;color:#333;margin:2px 0}' +
@@ -4955,6 +4960,8 @@
   function wireStatement(m) {
     const btn = el('md-stmt'), pdf = el('md-stmt-pdf'), box = el('md-stmt-box');
     if (!btn) return;
+    const modeSel = el('md-stmt-mode');
+    if (modeSel) { modeSel.value = stmtMode; modeSel.addEventListener('change', () => { stmtMode = modeSel.value; if (lastStatement && box.querySelector('.stmt-wrap')) box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(lastStatement)}</div>`; }); }
     btn.addEventListener('click', async () => {
       btn.disabled = true; box.innerHTML = '<span style="color:var(--grey);font-size:12px">Loading from the finance app…</span>';
       try {
@@ -5012,6 +5019,8 @@
     // Back to the roster (Lisa 2026-10-20: "need back button to go back see other models")
     const stB = el('st-back'); if (stB) stB.addEventListener('click', () => { el('st-search').value = ''; run(); });
     el('st-year').addEventListener('change', () => { if (!lastStatement) renderStatementRoster(); });
+    const sm = el('st-mode');
+    if (sm) { sm.value = stmtMode; sm.addEventListener('change', () => { stmtMode = sm.value; const box = el('st-box'); if (lastStatement && box.querySelector('.stmt-wrap')) box.innerHTML = `<div class="stmt-wrap" style="overflow:auto;border:1px solid var(--line2);border-radius:8px;padding:8px;background:#fff">${statementTable(lastStatement)}</div>`; }); }
     renderStatementRoster();
   }
   // Roster (Lisa 2026-10-20, like the finance app's "profit per model"): every MP model
@@ -5174,7 +5183,7 @@
       <div class="field"><label>Note</label><textarea id="md-note" rows="3" ${edit ? '' : 'readonly'}>${esc(m && m.note || '')}</textarea></div>
       ${canTerms() ? agreementsHtml(m) : (m && m.deal ? `<p style="font-size:12.5px;color:var(--grey)">Agreement on file: <b>${m.deal === 'freelance' ? 'Freelance' : 'Exclusive'}</b></p>` : '')}
       ${m && canSeeStatement() ? `<div class="field"><label>Model statement <span style="color:#999;font-weight:400;text-transform:none;letter-spacing:0">· what the model and her mother agency see — from the finance app</span></label>
-        <div style="display:flex;gap:8px;align-items:center"><select id="md-stmt-year" style="width:auto">${[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => `<option value="${y}">${y}</option>`).join('')}</select>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="md-stmt-mode" style="width:auto" title="Up to date = facts only · Full contract = adds the expected expenses to the end of the contract"><option value="todate">Up to date</option><option value="full">Full contract</option></select><select id="md-stmt-year" style="width:auto">${[new Date().getFullYear(), new Date().getFullYear() - 1].map(y => `<option value="${y}">${y}</option>`).join('')}</select>
         <button class="btn ghost" id="md-stmt">📄 View statement</button><button class="btn ghost" id="md-stmt-pdf" style="display:none">🖨 Print / PDF</button><button class="btn ghost" id="md-stmt-pdf-land" style="display:none">🖨 Landscape</button></div>
         <div id="md-stmt-box" style="margin-top:8px"></div></div>` : ''}
       ${edit ? `<div class="drawer-actions">
