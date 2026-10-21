@@ -4931,6 +4931,16 @@
       <div class="h3">${st.motherAgency ? 'Mother Agency: ' + esc(st.motherAgency) + '&nbsp;&nbsp; ' : ''}Model's share ${pct(st.split.model)}${hasMA ? ' / MA ' + pct(st.split.ma) : ''}&nbsp;&nbsp; Withholding ${pct(st.wht)} on the model's share${(st.arrival || st.departure) ? '<br>Arrival: ' + esc(st.arrival || '—') + '&nbsp;&nbsp; Departure: ' + esc(st.departure || '—') : ''}</div>
       <table class="stmt${hasMA ? '' : ' noma'}"><colgroup><col class="c-date"><col class="c-jid"><col class="c-det"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n">${hasMA ? '<col class="c-n">' : ''}<col class="c-n"><col class="c-n"></colgroup><thead>${head}</thead><tbody>${body}${tot}</tbody></table>
       <div class="out">OUTSTANDING BALANCE: ${(st.balance || 0) < 0 ? '- ' : ''}${n2(Math.abs(st.balance || 0))}</div>
+      ${st.outlook ? (ol => `<div class="olk"><div class="olk-h">CONTRACT OUTLOOK <span>estimate, as of ${esc(ol.asOf)} — the lines above are the facts</span></div>
+        <table class="olk-t">
+          <tr><td>Contract</td><td class="r">${esc(ol.contractStart)} → ${esc(ol.contractEnd)} · ${ol.weeksTotal} weeks, ${ol.weeksLeft} left</td></tr>
+          <tr><td>Pocket money ahead</td><td class="r">${ol.weeksLeft} weeks × ${n2(ol.pocketRate)} = ${n2(ol.pocketAhead) || '0.00'}</td></tr>
+          ${ol.accNightsAhead ? `<tr><td>Accommodation ahead</td><td class="r">${ol.accNightsAhead} nights × ${n2(ol.accRate)} = ${n2(ol.accAhead)}</td></tr>` : ''}
+          <tr><td>Expenses so far (advances + pocket money)</td><td class="r">${n2(ol.expensesToDate) || '0.00'}</td></tr>
+          <tr class="sum"><td>Total to cover by contract end</td><td class="r">${n2(ol.totalToCover) || '0.00'}</td></tr>
+          <tr><td>Earned so far (your net)</td><td class="r">${n2(ol.earnedNet) || '0.00'}</td></tr>
+          <tr class="sum"><td>${ol.stillToCover > 0 ? 'Still to cover' : 'Covered — ahead by'}</td><td class="r">${n2(Math.abs(ol.stillToCover)) || '0.00'}${ol.stillToCover > 0 ? ` → about ${n2(ol.grossNeeded)} gross at ${pct(st.split.model)}` : ''}</td></tr>
+        </table></div>`)(st.outlook) : ''}
       <div class="upd">UPDATE: ${esc(st.updated || '')}${st.year && st.year !== 'all' ? ' · statement period ' + esc(st.year) : ''} · Morgan &amp; Preston Models Bangkok</div>`;
   }
   const STMT_CSS = 'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:12mm 14mm 12mm 12mm;font-size:9.5px;font-variant-numeric:tabular-nums lining-nums}' +
@@ -4939,7 +4949,9 @@
     'table.stmt th{background:#e8e8e8;font-size:7.5px;text-align:center;white-space:normal;overflow-wrap:normal;line-height:1.2;padding:3px 2px}td.r{text-align:right;white-space:nowrap}th.r{text-align:right}td.dt{white-space:normal;overflow-wrap:anywhere}' +
     'col.c-date{width:10%}col.c-jid{width:10%}col.c-det{width:27.5%}col.c-n{width:7.5%}' +
     'table.noma col.c-date{width:10.5%}table.noma col.c-jid{width:12.5%}table.noma col.c-det{width:29%}table.noma col.c-n{width:8%}' +
-    'tr.tot td{font-weight:bold;background:#fff2cc}.neg{color:#b00000}.out{margin-top:12px;font-size:13px;font-weight:bold}.upd{font-size:10px;color:#555;margin-top:4px}';
+    'tr.tot td{font-weight:bold;background:#fff2cc}.neg{color:#b00000}.out{margin-top:12px;font-size:13px;font-weight:bold}.upd{font-size:10px;color:#555;margin-top:4px}' +
+    '.olk{margin-top:12px;font-style:italic;color:#333}.olk-h{font-size:11px;font-weight:bold;margin-bottom:4px}.olk-h span{font-weight:normal;color:#666;margin-left:8px}' +
+    'table.olk-t{border-collapse:collapse;width:60%;min-width:360px}table.olk-t td{padding:2px 6px;border-bottom:1px dotted #ccc;font-size:9.5px}table.olk-t td.r{text-align:right;white-space:nowrap}table.olk-t tr.sum td{font-weight:bold}';
   function wireStatement(m) {
     const btn = el('md-stmt'), pdf = el('md-stmt-pdf'), box = el('md-stmt-box');
     if (!btn) return;
