@@ -5027,7 +5027,7 @@
     const fl = models.filter(m => m.category === 'Freelancer' && m.status !== 'Left' && inYear(m)).sort(byName);
     const anyJobs = jobs.some(j => (j.month || '').startsWith(year));
     if (jobs.length && !anyJobs) { box.innerHTML = `<div style="padding:14px;color:var(--grey);background:#fff;border:1px solid var(--line);border-radius:10px">No jobs in the tracker for ${esc(year)} — statements here start from the first year in the app (2026). Earlier years are in the Job Tracker sheets on Drive.</div>`; return; }
-    box.innerHTML = section('MP Models', mp) + section('Freelance', fl);
+    box.innerHTML = `<div class="st-grid">${section('MP Models', mp)}${section('Freelance', fl)}</div>`;   // MP left, Freelance right (Lisa 2026-10-21)
     box.querySelectorAll('.st-row').forEach(r => r.addEventListener('click', () => { el('st-search').value = r.dataset.name; el('st-view').click(); }));
   }
   const fmtTermFrom = t => t.from ? t.from : 'from the start';
